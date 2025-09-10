@@ -1,0 +1,82 @@
+/* Tabs */
+"Home" = "首页";
+"Track" = "记录";
+"Trends" = "趋势";
+"Meds" = "用药";
+"More" = "更多";
+
+/* Dashboard */
+"Dashboard" = "概览";
+"Today's Medications" = "今日用药";
+"No scheduled medications" = "暂无用药计划";
+"Taken" = "已服用";
+"Logged" = "已记录";
+"Skipped" = "已跳过";
+"Snoozed" = "已延后";
+"Snoozed " = "已延后 ";
+"Skipped " = "已跳过 ";
+"Snooze 10m" = "延后10分钟";
+"Skip" = "跳过";
+"Recent Measurements" = "最近测量";
+"No measurements yet" = "暂无测量";
+"Add your first measurement" = "添加你的第一条测量";
+"Add" = "添加";
+"Adherence" = "依从率";
+"Taken %lld/%lld" = "已服用 %lld/%lld";
+"Taken " = "已服用 ";
+
+/* Trends */
+"No data in range" = "范围内没有数据";
+"Overview (" = "概览（";
+"Latest" = "最新";
+"Change" = "变化";
+"7d Avg" = "7日均值";
+"7d In‑Range" = "7日达标";
+"7d" = "7天";
+"30d" = "30天";
+"90d" = "90天";
+"Systolic" = "收缩压";
+"Diastolic" = "舒张压";
+
+/* Measurements */
+"Measurements" = "测量";
+"All" = "全部";
+"Delete" = "删除";
+"Copy" = "复制";
+"Value" = "数值";
+"Unit: %@" = "单位：%@";
+"Unit: %s" = "单位：%s";
+"Add Measurement" = "添加测量";
+"Cancel" = "取消";
+"Save" = "保存";
+"Systolic: %lld" = "收缩压：%lld";
+"Diastolic: %lld" = "舒张压：%lld";
+
+/* Medications */
+"Medications" = "用药";
+"No medications added" = "尚未添加药物";
+"Remind" = "提醒";
+"Add Medication" = "添加用药";
+"Edit Medication" = "编辑用药";
+"Basic" = "基本";
+"Schedule" = "时间表";
+
+/* Profile (More) */
+"Quick Actions" = "快捷操作";
+"Connect Health" = "连接健康";
+"Import 30d" = "导入30天";
+"Export 10" = "导出10条";
+"Export PDF" = "导出PDF";
+"Load Samples" = "加载示例";
+"Clear All" = "清空所有";
+"Preferences" = "偏好设置";
+"Haptics" = "触觉反馈";
+"About" = "关于";
+"Adherence (7d)" = "依从率（7天）";
+"Next Medication" = "下一次用药";
+"No schedule" = "暂无计划";
+"Clear all data?" = "清空所有数据？";
+"Clear" = "清空";
+
+/* PDF */
+"Ccare Health Report" = "Ccare 健康报告";

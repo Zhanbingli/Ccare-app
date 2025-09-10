@@ -1,0 +1,3 @@
+"NSHealthShareUsageDescription" = "Ccare 使用“健康”来读取你的健康数据（血压、血糖、心率、体重），用于趋势分析与洞察。";
+"NSHealthUpdateUsageDescription" = "Ccare 会将你添加的测量写入“健康”，以便安全存储并在其他 App 中使用。";
+"CFBundleDisplayName" = "Ccare";

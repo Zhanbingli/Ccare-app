@@ -6,12 +6,30 @@
 //
 
 import SwiftUI
+import UserNotifications
 
 @main
 struct ChronicCareApp: App {
+    @StateObject private var store = DataStore()
+    private let notifHandler = NotificationHandler()
+    init() {
+        // Setup notification delegate early to catch action taps before UI appears
+        let center = UNUserNotificationCenter.current()
+        center.delegate = notifHandler
+        // Default haptics ON if unset
+        if UserDefaults.standard.object(forKey: "hapticsEnabled") == nil {
+            Haptics.setEnabled(true)
+        }
+    }
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(store)
+                .onAppear {
+                    notifHandler.store = store
+                    NotificationManager.shared.requestAuthorization()
+                    NotificationManager.shared.registerCategories()
+                }
         }
     }
 }

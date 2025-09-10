@@ -1,0 +1,12 @@
+# macOS
+.DS_Store
+
+# Xcode user data (do not commit developer-specific state)
+*.xcuserdatad/
+xcuserdata/
+*.xcbkptlist
+
+# Derived data / build artifacts (if ever generated here)
+DerivedData/
+build/
+*.xcscmblueprint
