@@ -117,4 +117,14 @@ final class HealthKitManager: ObservableObject {
             }
         }
     }
+
+    // MARK: - Authorization Status Helpers
+    func isSharingAuthorized() -> Bool {
+        guard HKHealthStore.isHealthDataAvailable() else { return false }
+        let types: [HKObjectType] = [
+            systolicType, diastolicType, bpCorrelationType,
+            glucoseType, heartRateType, weightType
+        ]
+        return types.contains { healthStore.authorizationStatus(for: $0) == .sharingAuthorized }
+    }
 }

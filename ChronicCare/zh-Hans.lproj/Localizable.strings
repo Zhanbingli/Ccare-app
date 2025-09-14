@@ -12,10 +12,13 @@
 "Taken" = "已服用";
 "Logged" = "已记录";
 "Skipped" = "已跳过";
+"Overdue" = "已逾期";
 "Snoozed" = "已延后";
 "Snoozed " = "已延后 ";
 "Skipped " = "已跳过 ";
 "Snooze 10m" = "延后10分钟";
+"Snooze 30m" = "延后30分钟";
+"Snooze 60m" = "延后60分钟";
 "Skip" = "跳过";
 "Recent Measurements" = "最近测量";
 "No measurements yet" = "暂无测量";
@@ -23,7 +26,12 @@
 "Add" = "添加";
 "Adherence" = "依从率";
 "Taken %lld/%lld" = "已服用 %lld/%lld";
+"Adherence %lld%%" = "依从率 %lld%%";
 "Taken " = "已服用 ";
+"Dose: %@" = "剂量：%@";
+"Snoozed Reminder" = "延后提醒";
+"Time to take your medication" = "请按时服药";
+"Snoozed: %@" = "已延后：%@";
 
 /* Trends */
 "No data in range" = "范围内没有数据";
@@ -45,7 +53,10 @@
 "Copy" = "复制";
 "Value" = "数值";
 "Unit: %@" = "单位：%@";
-"Unit: %s" = "单位：%s";
+"Change Unit" = "更改单位";
+"Systolic:" = "收缩压：";
+"Diastolic:" = "舒张压：";
+"Value" = "数值";
 "Add Measurement" = "添加测量";
 "Cancel" = "取消";
 "Save" = "保存";
@@ -60,18 +71,67 @@
 "Edit Medication" = "编辑用药";
 "Basic" = "基本";
 "Schedule" = "时间表";
+"Category" = "类别";
+"Unspecified" = "未指定";
+"Antihypertensive" = "降压药";
+"Antidiabetic" = "降糖药";
+"Likely effective" = "可能有效";
+"Likely ineffective" = "可能无效";
+"Unclear" = "不确定";
+"N/A" = "无";
 
 /* Profile (More) */
 "Quick Actions" = "快捷操作";
 "Connect Health" = "连接健康";
 "Import 30d" = "导入30天";
-"Export 10" = "导出10条";
-"Export PDF" = "导出PDF";
+"Export Recent 10" = "导出最近10条";
+"Export Report (PDF)" = "导出报告（PDF）";
 "Load Samples" = "加载示例";
+"Export Data" = "导出数据";
+"Restore" = "恢复";
 "Clear All" = "清空所有";
 "Preferences" = "偏好设置";
+"Permissions" = "权限";
+"Notifications" = "通知";
+"Enable Notifications" = "开启通知";
+"Open Settings" = "打开设置";
+"Enabled" = "已开启";
+"Not Connected" = "未连接";
+"Enable notifications to get timely reminders" = "开启通知以准时收到提醒";
+"Notifications are off in Settings" = "通知已在系统设置中关闭";
+"Notifications enabled" = "通知已开启";
+"Overdue Grace" = "逾期宽限";
+"Effectiveness Settings" = "药效评估设置";
+"Mode" = "模式";
+"Conservative" = "保守";
+"Balanced" = "均衡";
+"Aggressive" = "积极";
+"Min Samples" = "最少样本数";
+"Confidence: %d%%" = "置信度：%d%%";
+"Units" = "单位";
+"Blood Glucose Unit" = "血糖单位";
 "Haptics" = "触觉反馈";
 "About" = "关于";
+"How It Works" = "工作原理";
+"Trends Calculations" = "趋势图如何计算";
+"Trends.Range" = "时间范围：支持 7/30/90 天；仅显示选中类型在该范围内的数据。";
+"Trends.BP" = "血压：按天聚合为“中位数”曲线（收缩压/舒张压），两者之间显示阴影带；阈值线来自“目标”。";
+"Trends.Other" = "其他类型：使用原始数据曲线；正常范围带来自“目标”或默认区间；异常点以红色高亮。";
+"Adherence Calculations" = "用药依从率如何计算";
+"Adherence.Def" = "近 7 天按“计划时段”为分母；分子为当天该时段的“最新状态”为“已服用”的次数。";
+"Adherence.Keys" = "多时段药物使用时段键（如 08:00）区分；单时段药物允许未标注时段的记录匹配。";
+"Overdue Reminders" = "逾期与提醒";
+"Overdue.Def" = "逾期：超过计划时间 + 宽限（偏好设置 15/30/60 分钟）且未记录为已服/跳过。";
+"Overdue.Suppress" = "抑制：当日该时段一旦已服/跳过，前台通知不再显示，避免重复。";
+"Units Goals" = "单位与目标";
+"Units.Glucose" = "血糖：内部以 mg/dL 存储；显示单位可在偏好设置切换，添加时可临时更改。";
+"Goals.Source" = "目标区间：趋势图正常带与异常点判定优先使用“目标”，未设置时使用默认区间。";
+"Data Privacy" = "数据与隐私";
+"Data.Stored" = "数据保存在本机（JSON，文件保护）；可在“数据”中备份/恢复；HealthKit 仅在授权后读写。";
+"No category" = "未设置类别";
+"Insufficient data" = "数据不足";
+"BP Δ: %.0f/%.0f, 14d Δ: %.0f • Confidence: %d%%" = "血压变化：%.0f/%.0f，14天变化：%.0f • 置信度：%d%%";
+"Glucose Δ: %.0f, 14d Δ: %.0f • Confidence: %d%%" = "血糖变化：%.0f，14天变化：%.0f • 置信度：%d%%";
 "Adherence (7d)" = "依从率（7天）";
 "Next Medication" = "下一次用药";
 "No schedule" = "暂无计划";
@@ -80,3 +140,18 @@
 
 /* PDF */
 "Ccare Health Report" = "Ccare 健康报告";
+"Generated: %@" = "生成时间：%@";
+"Adherence (7 days)" = "依从率（7天）";
+"Average: %.0f%%" = "平均：%.0f%%";
+
+/* Medications Add/Edit */
+"Enable Reminder" = "开启提醒";
+"Export recent 10 to Health?" = "是否将最近10条导出到健康？";
+"Export" = "导出";
+"Medication Effectiveness" = "药效评估";
+"No categorized medications" = "暂无已分类的药物";
+"Effectiveness How" = "药效评估如何计算/使用";
+"Effectiveness.How.1" = "在“用药”中为相关药物设置类别（降压药/降糖药）。";
+"Effectiveness.How.2" = "保持记录“已服用”并在前/后窗口内有对应测量（血压/血糖）。";
+"Effectiveness.How.3" = "在“趋势”选择血压或血糖，查看下方的“药效评估”统计卡片。";
+"Effectiveness.How.4" = "可在“偏好设置 > 药效评估设置”调整模式与最少样本数；卡片会显示置信度。";

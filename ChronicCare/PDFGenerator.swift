@@ -13,25 +13,26 @@ enum PDFGenerator {
 
         try renderer.writePDF(to: url) { ctx in
             ctx.beginPage()
-            let title = "Ccare Health Report"
+            let title = NSLocalizedString("Ccare Health Report", comment: "")
             title.draw(at: CGPoint(x: 40, y: 40), withAttributes: [.font: UIFont.boldSystemFont(ofSize: 20)])
 
             let dateStr = DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .short)
-            ("Generated: " + dateStr).draw(at: CGPoint(x: 40, y: 70), withAttributes: [.font: UIFont.systemFont(ofSize: 12)])
+            let gen = String(format: NSLocalizedString("Generated: %@", comment: ""), dateStr)
+            gen.draw(at: CGPoint(x: 40, y: 70), withAttributes: [.font: UIFont.systemFont(ofSize: 12)])
 
             var y: CGFloat = 110
             let sectionTitleAttrs: [NSAttributedString.Key: Any] = [.font: UIFont.boldSystemFont(ofSize: 16)]
             let bodyAttrs: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 12)]
 
             // Medications summary
-            "Medications".draw(at: CGPoint(x: 40, y: y), withAttributes: sectionTitleAttrs); y += 20
+            NSLocalizedString("Medications", comment: "").draw(at: CGPoint(x: 40, y: y), withAttributes: sectionTitleAttrs); y += 20
             for m in store.medications {
                 ("• \(m.name) — \(m.dose)").draw(at: CGPoint(x: 50, y: y), withAttributes: bodyAttrs); y += 16
             }
             y += 8
 
             // Last N days measurements summary (latest 20)
-            "Recent Measurements".draw(at: CGPoint(x: 40, y: y), withAttributes: sectionTitleAttrs); y += 20
+            NSLocalizedString("Recent Measurements", comment: "").draw(at: CGPoint(x: 40, y: y), withAttributes: sectionTitleAttrs); y += 20
             let start = Calendar.current.date(byAdding: .day, value: -days, to: Date())!
             let ms = store.measurements.filter { $0.date >= start }.sorted(by: { $0.date > $1.date }).prefix(20)
             let df = DateFormatter(); df.dateStyle = .short; df.timeStyle = .short
@@ -39,6 +40,10 @@ enum PDFGenerator {
                 let v: String
                 if m.type == .bloodPressure, let d = m.diastolic {
                     v = "\(Int(m.value))/\(Int(d)) \(m.type.unit)"
+                } else if m.type == .bloodGlucose {
+                    let val = UnitPreferences.mgdlToPreferred(m.value)
+                    let unit = UnitPreferences.glucoseUnit.rawValue
+                    v = UnitPreferences.glucoseUnit == .mgdL ? String(format: "%.0f %@", val, unit) : String(format: "%.1f %@", val, unit)
                 } else {
                     v = String(format: "%.1f %@", m.value, m.type.unit)
                 }
@@ -49,10 +54,10 @@ enum PDFGenerator {
 
             y += 8
             // Adherence summary (last 7 days)
-            "Adherence (7 days)".draw(at: CGPoint(x: 40, y: y), withAttributes: sectionTitleAttrs); y += 20
+            NSLocalizedString("Adherence (7 days)", comment: "").draw(at: CGPoint(x: 40, y: y), withAttributes: sectionTitleAttrs); y += 20
             let weekly = store.weeklyAdherence()
             let pct = weekly.map { $0.1 }.reduce(0, +) / Double(max(1, weekly.count))
-            (String(format: "Average: %.0f%%", pct * 100)).draw(at: CGPoint(x: 50, y: y), withAttributes: bodyAttrs); y += 18
+            (String(format: NSLocalizedString("Average: %.0f%%", comment: ""), pct * 100)).draw(at: CGPoint(x: 50, y: y), withAttributes: bodyAttrs); y += 18
             for (day, p) in weekly {
                 let ds = DateFormatter.localizedString(from: day, dateStyle: .short, timeStyle: .none)
                 ("• \(ds): \(Int(p * 100))%\n").draw(at: CGPoint(x: 50, y: y), withAttributes: bodyAttrs); y += 16

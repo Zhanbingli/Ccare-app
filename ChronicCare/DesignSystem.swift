@@ -118,11 +118,62 @@ struct ActionTile: View {
                     Circle().fill(color.opacity(0.18)).frame(width: 48, height: 48)
                     Image(systemName: systemImage).foregroundStyle(color).font(.system(size: 20, weight: .semibold))
                 }
-                Text(title).font(.footnote).foregroundStyle(.primary).multilineTextAlignment(.center)
+                Text(title)
+                    .font(.footnote)
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+                    .frame(height: 32) // ensure consistent label height across tiles
             }
             .frame(maxWidth: .infinity)
+            .frame(minHeight: 108) // unify overall tile height to align icons
             .padding(.vertical, 8)
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Rounded corners per-edge
+struct RoundedCornersShape: Shape {
+    var corners: UIRectCorner = .allCorners
+    var radius: CGFloat = 16
+    func path(in rect: CGRect) -> Path {
+        let path = UIBezierPath(roundedRect: rect, byRoundingCorners: corners, cornerRadii: CGSize(width: radius, height: radius))
+        return Path(path.cgPath)
+    }
+}
+
+extension View {
+    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
+        clipShape(RoundedCornersShape(corners: corners, radius: radius))
+    }
+}
+
+// MARK: - Collapsible Section Header
+struct SectionToggleHeader: View {
+    let title: String
+    let systemImage: String?
+    @Binding var isExpanded: Bool
+
+    init(_ title: String, systemImage: String? = nil, isExpanded: Binding<Bool>) {
+        self.title = title
+        self.systemImage = systemImage
+        self._isExpanded = isExpanded
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if let name = systemImage { Image(systemName: name).font(.headline) }
+            Text(title).font(.headline)
+            Spacer()
+            Image(systemName: "chevron.right")
+                .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                .foregroundStyle(.secondary)
+        }
+        .foregroundStyle(.primary)
+        .contentShape(Rectangle())
+        .onTapGesture { withAnimation(.easeInOut) { isExpanded.toggle() } }
+        .padding(.horizontal)
     }
 }

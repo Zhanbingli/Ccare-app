@@ -5,19 +5,11 @@ struct MeasurementsView: View {
     @EnvironmentObject var store: DataStore
     @State private var showAdd = false
     @State private var selectedType: MeasurementType? = nil
+    @AppStorage("units.glucose") private var glucoseUnitRaw: String = GlucoseUnit.mgdL.rawValue
 
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    Picker("Type", selection: $selectedType) {
-                        Text("All").tag(MeasurementType?.none)
-                        ForEach(MeasurementType.allCases) { t in
-                            Text(t.rawValue).tag(Optional(t))
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
                 if filteredMeasurements.isEmpty {
                     EmptyStateView(systemImage: "heart.text.square", title: "No measurements yet")
                         .listRowBackground(Color.clear)
@@ -33,9 +25,18 @@ struct MeasurementsView: View {
                                             .font(.headline)
                                             .foregroundStyle(m.valueForeground)
                                     } else {
-                                        Text("\(String(format: "%.1f", m.value)) \(m.type.unit)")
-                                            .font(.headline)
-                                            .foregroundStyle(m.valueForeground)
+                                        if m.type == .bloodGlucose {
+                                            let v = UnitPreferences.mgdlToPreferred(m.value)
+                                            let unit = UnitPreferences.glucoseUnit.rawValue
+                                            let formatted = UnitPreferences.glucoseUnit == .mgdL ? String(format: "%.0f", v) : String(format: "%.1f", v)
+                                            Text("\(formatted) \(unit)")
+                                                .font(.headline)
+                                                .foregroundStyle(m.valueForeground)
+                                        } else {
+                                            Text("\(String(format: "%.1f", m.value)) \(m.type.unit)")
+                                                .font(.headline)
+                                                .foregroundStyle(m.valueForeground)
+                                        }
                                     }
                                 }
                                 HStack(spacing: 8) {
@@ -49,9 +50,17 @@ struct MeasurementsView: View {
                                 }
                             }
                         }
+                        .cornerRadius(16, corners: [.topLeft, .bottomLeft])
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets())
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                if let i = store.measurements.firstIndex(where: { $0.id == m.id }) {
+                                    store.removeMeasurement(at: IndexSet(integer: i))
+                                }
+                            } label: { Label("Delete", systemImage: "trash") }
+                        }
                         .contextMenu {
                             Button(role: .destructive) { if let i = store.measurements.firstIndex(where: { $0.id == m.id }) { store.removeMeasurement(at: IndexSet(integer: i)) } } label: { Label("Delete", systemImage: "trash") }
                             Button { UIPasteboard.general.string = "\(m.type.rawValue): \(m.value)" } label: { Label("Copy", systemImage: "doc.on.doc") }
@@ -62,7 +71,25 @@ struct MeasurementsView: View {
                 }
             }
             .navigationTitle("Measurements")
+            .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .top) {
+                VStack(spacing: 8) {
+                    Picker("Type", selection: $selectedType) {
+                        Text("All").tag(MeasurementType?.none)
+                        ForEach(MeasurementType.allCases) { t in
+                            Text(t.rawValue).tag(Optional(t))
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .controlSize(.large)
+                    .padding(.horizontal)
+                }
+                .padding(.vertical, 8)
+                .background(.thinMaterial)
+                .overlay(Divider(), alignment: .bottom)
+            }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) { EditButton() }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showAdd = true } label: { Image(systemName: "plus") }
                 }
@@ -86,6 +113,8 @@ struct AddMeasurementView: View {
     @State private var diastolic: Double = 80
     @State private var note: String = ""
     @State private var date: Date = Date()
+    @State private var glucoseUnit: GlucoseUnit = UnitPreferences.glucoseUnit
+    @State private var overrideGlucoseUnit: Bool = false
 
     var body: some View {
         NavigationStack {
@@ -97,21 +126,50 @@ struct AddMeasurementView: View {
                 }
                 if type == .bloodPressure {
                     HStack {
-                        Stepper(value: $value, in: 60...240, step: 1) { Text("Systolic: \(Int(value))") }
+                        Text(NSLocalizedString("Systolic:", comment: ""))
+                        Spacer()
+                        TextField("120", value: $value, format: .number)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(maxWidth: 120)
                     }
                     HStack {
-                        Stepper(value: $diastolic, in: 40...140, step: 1) { Text("Diastolic: \(Int(diastolic))") }
+                        Text(NSLocalizedString("Diastolic:", comment: ""))
+                        Spacer()
+                        TextField("80", value: $diastolic, format: .number)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(maxWidth: 120)
                     }
                 } else {
                     HStack {
-                        Text("Value")
+                        Text(NSLocalizedString("Value", comment: ""))
                         Spacer()
                         TextField("0", value: $value, format: .number)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .frame(maxWidth: 120)
                     }
-                    Text("Unit: \(type.unit)").foregroundStyle(.secondary)
+                    if type == .bloodGlucose {
+                        if overrideGlucoseUnit {
+                            Picker("Unit", selection: $glucoseUnit) {
+                                ForEach(GlucoseUnit.allCases) { u in
+                                    Text(u.rawValue).tag(u)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                        } else {
+                            HStack {
+                                Text(String(format: NSLocalizedString("Unit: %@", comment: ""), UnitPreferences.glucoseUnit.rawValue))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Button(NSLocalizedString("Change Unit", comment: "")) { overrideGlucoseUnit = true }
+                            }
+                        }
+                    } else {
+                        Text(String(format: NSLocalizedString("Unit: %@", comment: ""), type.unit))
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 DatePicker("Date", selection: $date)
                 TextField("Note (optional)", text: $note)
@@ -123,9 +181,10 @@ struct AddMeasurementView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
+                        let chosenUnit: GlucoseUnit? = (type == .bloodGlucose) ? (overrideGlucoseUnit ? glucoseUnit : UnitPreferences.glucoseUnit) : nil
                         let m = Measurement(
                             type: type,
-                            value: value,
+                            value: type == .bloodGlucose ? UnitPreferences.convertToMgdl(value, from: chosenUnit ?? .mgdL) : value,
                             diastolic: type == .bloodPressure ? diastolic : nil,
                             date: date,
                             note: note.isEmpty ? nil : note
