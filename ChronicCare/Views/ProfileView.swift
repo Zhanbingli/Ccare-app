@@ -16,12 +16,6 @@ struct ProfileView: View {
     @AppStorage("prefs.graceMinutes") private var graceMinutes: Int = 30
     @AppStorage("eff.mode") private var effMode: String = "balanced"
     @AppStorage("eff.minSamples") private var effMinSamples: Int = 3
-    @AppStorage("ui.expand.quick") private var expandQuick: Bool = false
-    @AppStorage("ui.expand.goals") private var expandGoals: Bool = false
-    @AppStorage("ui.expand.about") private var expandAbout: Bool = false
-    @AppStorage("ui.expand.how") private var expandHow: Bool = false
-    @AppStorage("ui.expand.prefs") private var expandPrefs: Bool = false
-    @AppStorage("ui.expand.perms") private var expandPerms: Bool = true
     @State private var notifStatus: UNAuthorizationStatus = .notDetermined
     private let topCardHeight: CGFloat = 96
     // Goal preferences
@@ -36,7 +30,7 @@ struct ProfileView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    // Summary Cards
+                    // Summary row
                     HStack(spacing: 12) {
                         summaryCard(title: "Measurements", value: "\(store.measurements.count)", systemImage: "waveform.path.ecg", tint: .teal)
                             .frame(maxWidth: .infinity)
@@ -45,9 +39,8 @@ struct ProfileView: View {
                             .frame(maxWidth: .infinity)
                             .frame(height: topCardHeight)
                     }
-                    .padding(.horizontal)
 
-                    // Adherence + Next medication
+                    // Adherence + next medication
                     HStack(spacing: 12) {
                         adherenceCard
                             .frame(maxWidth: .infinity)
@@ -56,239 +49,17 @@ struct ProfileView: View {
                             .frame(maxWidth: .infinity)
                             .frame(height: topCardHeight)
                     }
-                    .padding(.horizontal)
 
-                    // Quick Actions (collapsible)
-                    SectionToggleHeader("Quick Actions", systemImage: "bolt.fill", isExpanded: $expandQuick)
-                    if expandQuick {
-                        Card {
-                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 12) {
-                                ActionTile(color: .green, title: "Connect Health", systemImage: "heart.fill") {
-                                    HealthKitManager.shared.requestAuthorization { success, error in
-                                        DispatchQueue.main.async { hkAuthorized = success }
-                                        if let error = error { print("HK auth error: \(error)") }
-                                    }
-                                }
-                                ActionTile(color: .orange, title: "Import 30d", systemImage: "arrow.down.doc.fill") {
-                                    importFromHealth()
-                                }
-                                ActionTile(color: .purple, title: "Export Report (PDF)", systemImage: "doc.richtext") { exportPDF() }
-                                #if DEBUG
-                                ActionTile(color: .blue, title: "Export Recent 10", systemImage: "arrow.up.doc.fill") {
-                                    showConfirmExportRecent = true
-                                }
-                                ActionTile(color: .teal, title: "Load Samples", systemImage: "tray.and.arrow.down") { loadSamples() }
-                                #endif
-                                ActionTile(color: .red, title: "Clear All", systemImage: "trash.fill") { showConfirmClear = true }
-                                ActionTile(color: .blue, title: "Export Data", systemImage: "externaldrive.fill") { exportBackup() }
-                                ActionTile(color: .orange, title: "Restore", systemImage: "arrow.down.doc") { showImporter = true }
-                            }
-                        }
-                        .padding(.horizontal)
-                    }
-
-                    // Permissions (collapsible)
-                    SectionToggleHeader("Permissions", systemImage: "bell.badge", isExpanded: $expandPerms)
-                    if expandPerms {
-                        Card {
-                            VStack(alignment: .leading, spacing: 12) {
-                                HStack(alignment: .center) {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(NSLocalizedString("Notifications", comment: "")).font(.subheadline)
-                                        Text(permissionHint())
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                    permissionButton()
-                                }
-                                Divider()
-                                HStack(alignment: .center) {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("Health").font(.subheadline)
-                                        Text(HealthKitManager.shared.isSharingAuthorized() ? NSLocalizedString("Enabled", comment: "") : NSLocalizedString("Not Connected", comment: ""))
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                    Button {
-                                        HealthKitManager.shared.requestAuthorization { success, error in
-                                            DispatchQueue.main.async { refreshPermissions() }
-                                            if let error = error { print("HK auth error: \(error)") }
-                                        }
-                                    } label: {
-                                        Image(systemName: "heart.fill")
-                                            .imageScale(.large)
-                                            .accessibilityLabel(NSLocalizedString("Connect Health", comment: ""))
-                                    }
-                                    .buttonStyle(.bordered)
-                                    .controlSize(.small)
-                                }
-                            }
-                        }
-                        .padding(.horizontal)
-                        .onAppear { refreshPermissions() }
-                    }
-
-                    // Preferences (collapsible)
-                    SectionToggleHeader("Preferences", systemImage: "gear", isExpanded: $expandPrefs)
-                    if expandPrefs {
-                        Card {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Toggle("Haptics", isOn: $hapticsEnabled)
-                                    .onChange(of: hapticsEnabled) { newValue in Haptics.setEnabled(newValue) }
-                                Divider()
-                                // Overdue grace window (minutes)
-                                HStack {
-                                    Text(NSLocalizedString("Overdue Grace", comment: ""))
-                                    Spacer()
-                                    Picker("Grace", selection: $graceMinutes) {
-                                        Text("15m").tag(15)
-                                        Text("30m").tag(30)
-                                        Text("60m").tag(60)
-                                    }
-                                    .pickerStyle(.segmented)
-                                    .frame(maxWidth: 220)
-                                }
-                                Divider()
-                                // Default glucose unit
-                                HStack {
-                                    Text(NSLocalizedString("Blood Glucose Unit", comment: ""))
-                                    Spacer()
-                                    Picker("Blood Glucose Unit", selection: $glucoseUnitRaw) {
-                                        Text(GlucoseUnit.mgdL.rawValue).tag(GlucoseUnit.mgdL.rawValue)
-                                        Text(GlucoseUnit.mmolL.rawValue).tag(GlucoseUnit.mmolL.rawValue)
-                                    }
-                                    .pickerStyle(.segmented)
-                                    .frame(maxWidth: 260)
-                                    .onChange(of: glucoseUnitRaw) { newValue in
-                                        if let u = GlucoseUnit(rawValue: newValue) { UnitPreferences.setGlucoseUnit(u) }
-                                    }
-                                }
-                                Divider()
-                                // Effectiveness settings
-                                Text(NSLocalizedString("Effectiveness Settings", comment: "")).font(.subheadline)
-                                HStack {
-                                    Text(NSLocalizedString("Mode", comment: ""))
-                                    Spacer()
-                                    Picker("Mode", selection: $effMode) {
-                                        Text(NSLocalizedString("Conservative", comment: "")).tag("conservative")
-                                        Text(NSLocalizedString("Balanced", comment: "")).tag("balanced")
-                                        Text(NSLocalizedString("Aggressive", comment: "")).tag("aggressive")
-                                    }
-                                    .pickerStyle(.segmented)
-                                    .frame(maxWidth: 320)
-                                }
-                                HStack {
-                                    Text(NSLocalizedString("Min Samples", comment: ""))
-                                    Spacer()
-                                    Picker("Min Samples", selection: $effMinSamples) {
-                                        Text("3").tag(3)
-                                        Text("5").tag(5)
-                                        Text("7").tag(7)
-                                    }
-                                    .pickerStyle(.segmented)
-                                    .frame(maxWidth: 220)
-                                }
-                            }
-                        }
-                        .padding(.horizontal)
-                    }
-
-                    // Goals (collapsible)
-                    SectionToggleHeader("Goals", systemImage: "target", isExpanded: $expandGoals)
-                    if expandGoals {
-                        Card {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Blood Glucose").font(.subheadline)
-                                HStack {
-                                    Stepper(value: glucoseLowDisplayBinding,
-                                            in: glucoseLowDisplayRange,
-                                            step: glucoseDisplayStep) {
-                                        Text(glucoseLowLabel)
-                                    }
-                                    Stepper(value: glucoseHighDisplayBinding,
-                                            in: glucoseHighDisplayRange,
-                                            step: glucoseDisplayStep) {
-                                        Text(glucoseHighLabel)
-                                    }
-                                }
-                                Divider()
-                                Text("Heart Rate").font(.subheadline)
-                                HStack {
-                                    Stepper(value: $hrLow, in: 30...100, step: 1) { Text("Low: \(Int(hrLow)) bpm") }
-                                    Stepper(value: $hrHigh, in: 80...180, step: 1) { Text("High: \(Int(hrHigh)) bpm") }
-                                }
-                                Divider()
-                                Text("Blood Pressure (High thresholds)").font(.subheadline)
-                                HStack {
-                                    Stepper(value: $bpSysHigh, in: 90...200, step: 1) { Text("Sys High: \(Int(bpSysHigh)) mmHg") }
-                                    Stepper(value: $bpDiaHigh, in: 50...130, step: 1) { Text("Dia High: \(Int(bpDiaHigh)) mmHg") }
-                                }
-                            }
-                        }
-                        .padding(.horizontal)
-                    }
-
-                    // About (collapsible)
-                    SectionToggleHeader("About", systemImage: "info.circle", isExpanded: $expandAbout)
-                    if expandAbout {
-                        Card {
-                            Text("Ccare keeps your data on device and uses Apple Health only with your permission. It is intended for wellness tracking and does not provide medical advice.")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.horizontal)
-                    }
-
-                    // How It Works (collapsible)
-                    SectionToggleHeader("How It Works", systemImage: "questionmark.circle", isExpanded: $expandHow)
-                    if expandHow {
-                        Card {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text(NSLocalizedString("Trends Calculations", comment: "")).font(.headline)
-                                VStack(alignment: .leading, spacing: 6) {
-                                    bullet(NSLocalizedString("Trends.Range", comment: ""))
-                                    bullet(NSLocalizedString("Trends.BP", comment: ""))
-                                    bullet(NSLocalizedString("Trends.Other", comment: ""))
-                                }
-                                Divider()
-                                Text(NSLocalizedString("Adherence Calculations", comment: "")).font(.headline)
-                                VStack(alignment: .leading, spacing: 6) {
-                                    bullet(NSLocalizedString("Adherence.Def", comment: ""))
-                                    bullet(NSLocalizedString("Adherence.Keys", comment: ""))
-                                }
-                                Divider()
-                                Text(NSLocalizedString("Effectiveness How", comment: "")).font(.headline)
-                                VStack(alignment: .leading, spacing: 6) {
-                                    bullet(NSLocalizedString("Effectiveness.How.1", comment: ""))
-                                    bullet(NSLocalizedString("Effectiveness.How.2", comment: ""))
-                                    bullet(NSLocalizedString("Effectiveness.How.3", comment: ""))
-                                    bullet(NSLocalizedString("Effectiveness.How.4", comment: ""))
-                                }
-                                Divider()
-                                Text(NSLocalizedString("Overdue Reminders", comment: "")).font(.headline)
-                                VStack(alignment: .leading, spacing: 6) {
-                                    bullet(NSLocalizedString("Overdue.Def", comment: ""))
-                                    bullet(NSLocalizedString("Overdue.Suppress", comment: ""))
-                                }
-                                Divider()
-                                Text(NSLocalizedString("Units Goals", comment: "")).font(.headline)
-                                VStack(alignment: .leading, spacing: 6) {
-                                    bullet(NSLocalizedString("Units.Glucose", comment: ""))
-                                    bullet(NSLocalizedString("Goals.Source", comment: ""))
-                                }
-                                Divider()
-                                Text(NSLocalizedString("Data Privacy", comment: "")).font(.headline)
-                                VStack(alignment: .leading, spacing: 6) {
-                                    bullet(NSLocalizedString("Data.Stored", comment: ""))
-                                }
-                            }
-                        }
-                        .padding(.horizontal)
-                    }
+                    statusOverviewCard
+                    quickActionsCard
+                    preferencesCard
+                    goalsCard
+                    dataManagementCard
+                    knowledgeCard
+                    aboutCard
                 }
-                .padding(.vertical)
+                .padding(.vertical, 24)
+                .padding(.horizontal)
             }
             .navigationTitle("More")
             .alert("Clear all data?", isPresented: $showConfirmClear) {
@@ -333,6 +104,7 @@ struct ProfileView: View {
                 }
             }
         }
+        .onAppear { refreshPermissions() }
     }
 
     @MainActor
@@ -437,8 +209,8 @@ struct ProfileView: View {
         let avg = weekly.map { $0.1 }.reduce(0, +) / Double(max(1, weekly.count))
         return Card {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Adherence (7d)").font(.headline)
-                Text("\(Int(avg * 100))% average").foregroundStyle(.secondary)
+                Text("Adherence (7d)").appFont(.headline)
+                Text("\(Int(avg * 100))% average").appFont(.footnote).foregroundStyle(.secondary)
             }
         }
     }
@@ -447,19 +219,23 @@ struct ProfileView: View {
         Card {
             if let (med, date) = nextMedication() {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Next Medication").font(.headline)
-                    HStack { Text(med.name).font(.subheadline); Spacer(); Text(date, style: .time).font(.subheadline) }
-                    Text(med.dose).font(.caption).foregroundStyle(.secondary)
+                    Text("Next Medication").appFont(.headline)
+                    HStack {
+                        Text(med.name).appFont(.subheadline)
+                        Spacer()
+                        Text(date, style: .time).appFont(.subheadline)
+                    }
+                    Text(med.dose).appFont(.caption).foregroundStyle(.secondary)
                 }
             } else {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Next Medication").font(.headline)
-                    Text("No schedule").foregroundStyle(.secondary)
+                    Text("Next Medication").appFont(.headline)
+                    Text("No schedule").appFont(.footnote).foregroundStyle(.secondary)
                 }
             }
         }
     }
-    
+
     private func summaryCard(title: String, value: String, systemImage: String, tint: Color) -> some View {
         Card {
             HStack(alignment: .center, spacing: 12) {
@@ -470,12 +246,249 @@ struct ProfileView: View {
                         .font(.system(size: 18, weight: .semibold))
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.caption).foregroundStyle(.secondary)
-                    Text(value).font(.title3).fontWeight(.semibold)
+                    Text(title).appFont(.caption).foregroundStyle(.secondary)
+                    Text(value).appFont(.title)
                 }
                 Spacer()
             }
         }
+    }
+
+    private var statusOverviewCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(NSLocalizedString("Status", comment: "")).appFont(.headline)
+                HStack(alignment: .center, spacing: 12) {
+                    Image(systemName: "bell.badge.fill").foregroundStyle(.orange)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(NSLocalizedString("Notifications", comment: "")).appFont(.subheadline)
+                        Text(permissionHint()).appFont(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    permissionButton()
+                }
+                Divider()
+                HStack(alignment: .center, spacing: 12) {
+                    Image(systemName: "heart.fill").foregroundStyle(.red)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Health").appFont(.subheadline)
+                        Text(HealthKitManager.shared.isSharingAuthorized() ? NSLocalizedString("Synced", comment: "") : NSLocalizedString("Not Connected", comment: ""))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button {
+                        HealthKitManager.shared.requestAuthorization { success, error in
+                            DispatchQueue.main.async { refreshPermissions() }
+                            if let error = error { print("HK auth error: \(error)") }
+                        }
+                    } label: {
+                        Text(HealthKitManager.shared.isSharingAuthorized() ? NSLocalizedString("Manage", comment: "") : NSLocalizedString("Connect", comment: ""))
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+    }
+
+    private var quickActionsCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Quick Actions").appFont(.headline)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        quickActionPill(title: "Connect Health", icon: "heart.fill", tint: .pink) {
+                            HealthKitManager.shared.requestAuthorization { success, error in
+                                DispatchQueue.main.async { hkAuthorized = success }
+                                if let error = error { print("HK auth error: \(error)") }
+                            }
+                        }
+                        quickActionPill(title: "Import 30d", icon: "arrow.down.doc.fill", tint: .orange) {
+                            importFromHealth()
+                        }
+                        quickActionPill(title: "Export Report", icon: "doc.richtext", tint: .purple) {
+                            exportPDF()
+                        }
+                        quickActionPill(title: "Export Data", icon: "externaldrive.fill", tint: .blue) {
+                            exportBackup()
+                        }
+                        quickActionPill(title: "Restore", icon: "arrow.down.doc", tint: .teal) {
+                            showImporter = true
+                        }
+                        quickActionPill(title: "Clear All", icon: "trash.fill", tint: .red) {
+                            showConfirmClear = true
+                        }
+                        #if DEBUG
+                        quickActionPill(title: "Export 10", icon: "arrow.up.doc.fill", tint: .gray) {
+                            showConfirmExportRecent = true
+                        }
+                        quickActionPill(title: "Load Samples", icon: "tray.and.arrow.down", tint: .mint) {
+                            loadSamples()
+                        }
+                        #endif
+                    }
+                }
+            }
+        }
+    }
+
+    private var preferencesCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(String(localized: "Preferences")).appFont(.headline)
+                Toggle(String(localized: "Haptics"), isOn: $hapticsEnabled)
+                    .onChange(of: hapticsEnabled) { newValue in Haptics.setEnabled(newValue) }
+                Divider()
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(String(localized: "Overdue Grace")).appFont(.subheadline)
+                    Picker("Grace", selection: $graceMinutes) {
+                        Text("15m").tag(15)
+                        Text("30m").tag(30)
+                        Text("60m").tag(60)
+                    }
+                    .pickerStyle(.segmented)
+                }
+                Divider()
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(String(localized: "Blood Glucose Unit")).appFont(.subheadline)
+                    Picker("Blood Glucose Unit", selection: $glucoseUnitRaw) {
+                        Text(GlucoseUnit.mgdL.rawValue).tag(GlucoseUnit.mgdL.rawValue)
+                        Text(GlucoseUnit.mmolL.rawValue).tag(GlucoseUnit.mmolL.rawValue)
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: glucoseUnitRaw) { newValue in
+                        if let u = GlucoseUnit(rawValue: newValue) { UnitPreferences.setGlucoseUnit(u) }
+                    }
+                }
+                Divider()
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(String(localized: "Effectiveness Settings")).appFont(.subheadline)
+                    Picker("Mode", selection: $effMode) {
+                        Text(String(localized: "Conservative")).tag("conservative")
+                        Text(String(localized: "Balanced")).tag("balanced")
+                        Text(String(localized: "Aggressive")).tag("aggressive")
+                    }
+                    .pickerStyle(.segmented)
+                    Picker("Min Samples", selection: $effMinSamples) {
+                        Text("3").tag(3)
+                        Text("5").tag(5)
+                        Text("7").tag(7)
+                    }
+                    .pickerStyle(.segmented)
+                }
+            }
+        }
+    }
+
+    private var goalsCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(String(localized: "Goals")).appFont(.headline)
+                DisclosureGroup(String(localized: "Blood Glucose")) {
+                    HStack {
+                        Stepper(value: glucoseLowDisplayBinding, in: glucoseLowDisplayRange, step: glucoseDisplayStep) {
+                            Text(glucoseLowLabel)
+                        }
+                        Stepper(value: glucoseHighDisplayBinding, in: glucoseHighDisplayRange, step: glucoseDisplayStep) {
+                            Text(glucoseHighLabel)
+                        }
+                    }
+                }
+                DisclosureGroup(String(localized: "Heart Rate")) {
+                    HStack {
+                        Stepper(value: $hrLow, in: 30...100, step: 1) { Text(String(format: String(localized: "Low: %d bpm"), Int(hrLow))) }
+                        Stepper(value: $hrHigh, in: 80...180, step: 1) { Text(String(format: String(localized: "High: %d bpm"), Int(hrHigh))) }
+                    }
+                }
+                DisclosureGroup(String(localized: "Blood Pressure")) {
+                    HStack {
+                        Stepper(value: $bpSysHigh, in: 90...200, step: 1) { Text(String(format: String(localized: "Sys High: %d mmHg"), Int(bpSysHigh))) }
+                        Stepper(value: $bpDiaHigh, in: 50...130, step: 1) { Text(String(format: String(localized: "Dia High: %d mmHg"), Int(bpDiaHigh))) }
+                    }
+                }
+            }
+        }
+    }
+
+    private var dataManagementCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Data & Backups").appFont(.headline)
+                VStack(spacing: 10) {
+                    dataActionRow(title: "Export Report", subtitle: "PDF summary", icon: "doc.richtext", tint: .purple, action: exportPDF)
+                    dataActionRow(title: "Export Data", subtitle: "Local backup", icon: "externaldrive.fill", tint: .blue, action: exportBackup)
+                    dataActionRow(title: "Restore", subtitle: "Import backup", icon: "arrow.down.doc", tint: .teal) { showImporter = true }
+                    dataActionRow(title: "Clear All", subtitle: "Remove measurements and meds", icon: "trash.fill", tint: .red) { showConfirmClear = true }
+                }
+            }
+        }
+    }
+
+private var knowledgeCard: some View {
+    Card {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(String(localized: "How.It.Works.Title", defaultValue: "How It Works"))
+                .appFont(.headline)
+            ForEach(knowledgeSections) { section in
+                    DisclosureGroup(section.title) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(section.bullets, id: \.self) { bulletText in
+                                bullet(bulletText)
+                            }
+                        }
+                        .padding(.top, 4)
+                    }
+                }
+            }
+        }
+}
+
+private var aboutCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("About").appFont(.headline)
+                Text("Ccare keeps your data on device and uses Apple Health only with your permission. It is intended for wellness tracking and does not provide medical advice.").appFont(.footnote).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func quickActionPill(title: LocalizedStringKey, icon: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 32, height: 32)
+                    .background(Circle().fill(tint))
+                    .foregroundStyle(.white)
+                Text(title).appFont(.subheadline)
+                    .foregroundStyle(.primary)
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 14)
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color(.systemBackground)))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.primary.opacity(0.08), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func dataActionRow(title: LocalizedStringKey, subtitle: LocalizedStringKey, icon: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(tint.opacity(0.2)))
+                    .foregroundStyle(tint)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).appFont(.subheadline)
+                    Text(subtitle).appFont(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+            }
+            .padding(.vertical, 6)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Glucose goals helpers (display in preferred unit, store in mg/dL)
@@ -524,7 +537,52 @@ struct ProfileView: View {
             Text(text)
                 .foregroundStyle(.secondary)
         }
-        .font(.footnote)
+        .appFont(.footnote)
+    }
+}
+
+private struct KnowledgeSection: Identifiable {
+    let id = UUID()
+    let title: String
+    let bullets: [String]
+}
+
+private extension ProfileView {
+    var knowledgeSections: [KnowledgeSection] {
+        [
+            KnowledgeSection(
+                title: String(localized: "How.Reminders.Title", defaultValue: "Reminders"),
+                bullets: [
+                    String(localized: "How.Reminders.1", defaultValue: "Allow notifications so Ccare can deliver time-sensitive alerts for every planned dose. Reminders now renew 14 days ahead."),
+                    String(localized: "How.Reminders.2", defaultValue: "Logging taken or skipped clears the badge and suppresses duplicate alerts for the rest of the day."),
+                    String(localized: "How.Reminders.3", defaultValue: "Use Preferences to adjust grace minutes and pick the snooze interval that matches your routine." )
+                ]
+            ),
+            KnowledgeSection(
+                title: String(localized: "How.Adherence.Title", defaultValue: "Adherence Tracking"),
+                bullets: [
+                    String(localized: "How.Adherence.1", defaultValue: "Seven-day adherence uses the latest status for every medication-time pair each day."),
+                    String(localized: "How.Adherence.2", defaultValue: "Single-dose medications accept unscheduled logs; multi-dose schedules need the matching time stamp."),
+                    String(localized: "How.Adherence.3", defaultValue: "Restore or clear data from the Data section—notifications reschedule automatically afterward.")
+                ]
+            ),
+            KnowledgeSection(
+                title: String(localized: "How.Trends.Title", defaultValue: "Trend Charts"),
+                bullets: [
+                    String(localized: "How.Trends.1", defaultValue: "Charts aggregate readings by day and highlight the goal ranges configured in Preferences."),
+                    String(localized: "How.Trends.2", defaultValue: "Blood pressure plots median systolic/diastolic values with a shaded band between them."),
+                    String(localized: "How.Trends.3", defaultValue: "Switch between 7/30/90-day windows to compare recent changes against longer histories.")
+                ]
+            ),
+            KnowledgeSection(
+                title: String(localized: "How.Effectiveness.Title", defaultValue: "Medication Effectiveness"),
+                bullets: [
+                    String(localized: "How.Effectiveness.1", defaultValue: "Analysis runs on categorized antihypertensive or antidiabetic meds once enough measurements exist."),
+                    String(localized: "How.Effectiveness.2", defaultValue: "Per-dose deltas blend with 14-day trends and adherence gates to produce verdict and confidence."),
+                    String(localized: "How.Effectiveness.3", defaultValue: "Fine-tune sensitivity and sample minimums under Preferences when clinical guidance differs.")
+                ]
+            )
+        ]
     }
 }
 

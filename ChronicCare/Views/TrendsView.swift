@@ -105,15 +105,26 @@ struct TrendsView: View {
 
     // MARK: - KPI Header
     private var kpiHeader: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                (Text("Overview (") + Text(selectedType.rawValue).bold() + Text(")"))
-                    .font(.title3)
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 12)], spacing: 12) {
-                    kpiTile(title: "Latest", value: latestText())
-                    kpiTile(title: "Change", value: deltaText())
-                    kpiTile(title: "7d Avg", value: sevenDayAverageText())
-                    kpiTile(title: "7d In‑Range", value: sevenDayInRangeText())
+        VStack(spacing: 12) {
+            Card {
+                VStack(alignment: .leading, spacing: 10) {
+                    (Text("Overview (") + Text(selectedType.rawValue).bold() + Text(")"))
+                        .appFont(.title)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 12)], spacing: 12) {
+                        kpiTile(title: "Latest", value: latestText())
+                        kpiTile(title: "Change", value: deltaText())
+                        kpiTile(title: "7d Avg", value: sevenDayAverageText())
+                        kpiTile(title: "7d In‑Range", value: sevenDayInRangeText())
+                    }
+                }
+            }
+
+            if let insight = insightSummary() {
+                Card {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(insight.title).appFont(.headline)
+                        Text(insight.detail).appFont(.footnote).foregroundStyle(.secondary)
+                    }
                 }
             }
         }
@@ -122,10 +133,10 @@ struct TrendsView: View {
     private func kpiTile(title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.subheadline)
+                .appFont(.subheadline)
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.title3).fontWeight(.semibold)
+                .appFont(.title)
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
@@ -267,13 +278,20 @@ struct TrendsView: View {
             let start = Calendar.current.date(byAdding: .day, value: -rangeDays, to: Date())!
             let end = Date()
             let daily = bpDaily
+            let thresholds = store.bpThresholds()
+            let systolicMax = daily.map { $0.systolic }.max() ?? thresholds.systolicHigh
+            let upperBound = max(systolicMax, thresholds.systolicHigh) + 10
+            let lowerCandidate = min(daily.compactMap { $0.diastolic }.min() ?? thresholds.diastolicHigh, thresholds.diastolicHigh)
+            let lowerBound = max(40, lowerCandidate - 10)
+            let roundedMin = max(0, floor(lowerBound / 10) * 10)
+            let roundedMax = ceil(upperBound / 10) * 10
+            let tickValues: [Double] = stride(from: roundedMin, through: roundedMax, by: 10).map { $0 }
             Chart {
                 // Threshold lines (guides)
-                let bp = store.bpThresholds()
-                RuleMark(y: .value("Systolic High", bp.systolicHigh))
+                RuleMark(y: .value("Systolic High", thresholds.systolicHigh))
                     .lineStyle(.init(dash: [4, 4]))
                     .foregroundStyle(.red.opacity(0.6))
-                RuleMark(y: .value("Diastolic High", bp.diastolicHigh))
+                RuleMark(y: .value("Diastolic High", thresholds.diastolicHigh))
                     .lineStyle(.init(dash: [4, 4]))
                     .foregroundStyle(.red.opacity(0.6))
 
@@ -312,8 +330,9 @@ struct TrendsView: View {
                 }
             }
             .chartYAxisLabel("mmHg")
-            .chartLegend(position: .overlay, alignment: .topTrailing)
+            .chartLegend(position: .bottom, alignment: .leading)
             .chartXScale(domain: start...end)
+            .chartYScale(domain: lowerBound...upperBound)
             .chartXAxis {
                 AxisMarks(values: xAxisValues) { value in
                     AxisGridLine()
@@ -321,12 +340,23 @@ struct TrendsView: View {
                     AxisValueLabel {
                         if let date = value.as(Date.self) {
                             Text(date, format: .dateTime.month(.twoDigits).day(.twoDigits))
-                                .font(.caption2)
+                                .appFont(.caption)
                         }
                     }
                 }
             }
-            .chartYAxis { AxisMarks(position: .leading) }
+            .chartYAxis {
+                AxisMarks(position: .leading, values: tickValues) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let doubleValue = value.as(Double.self) {
+                            Text("\(Int(doubleValue))")
+                                .appFont(.caption)
+                        }
+                    }
+                }
+            }
             .chartPlotStyle { plot in
                 plot
                     .background(Color(.secondarySystemBackground))
@@ -356,8 +386,8 @@ struct TrendsView: View {
         if meds.isEmpty {
             Card {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(NSLocalizedString("Medication Effectiveness", comment: "")).font(.headline)
-                    Text(NSLocalizedString("No categorized medications", comment: "")).font(.footnote).foregroundStyle(.secondary)
+                    Text(NSLocalizedString("Medication Effectiveness", comment: "")).appFont(.headline)
+                    Text(NSLocalizedString("No categorized medications", comment: "")).appFont(.footnote).foregroundStyle(.secondary)
                 }
             }
         } else {
@@ -369,7 +399,7 @@ struct TrendsView: View {
         )
         Card {
             VStack(alignment: .leading, spacing: 10) {
-                Text(NSLocalizedString("Medication Effectiveness", comment: "")).font(.headline)
+                Text(NSLocalizedString("Medication Effectiveness", comment: "")).appFont(.headline)
                 HStack(alignment: .top, spacing: 12) {
                     summaryTile(icon: "checkmark.circle.fill", tint: .green, title: "\(counts.effective) " + NSLocalizedString("Likely effective", comment: ""))
                     summaryTile(icon: "questionmark.circle", tint: .secondary, title: "\(counts.unclear) " + NSLocalizedString("Unclear", comment: ""))
@@ -380,17 +410,17 @@ struct TrendsView: View {
                     ForEach(results.prefix(3), id: \.0.id) { pair in
                         let med = pair.0; let res = pair.1
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(med.name).font(.subheadline)
+                            Text(med.name).appFont(.subheadline)
                             Spacer()
-                            Text(effectText(res)).font(.caption).foregroundStyle(effectColor(res))
+                            Text(effectText(res)).appFont(.caption).foregroundStyle(effectColor(res))
                             if res.confidence > 0 {
                                 Text(String(format: NSLocalizedString("Confidence: %d%%", comment: ""), res.confidence))
-                                    .font(.caption2)
+                                    .appFont(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         }
                         if !res.summary.isEmpty {
-                            Text(res.summary).font(.caption2).foregroundStyle(.secondary)
+                            Text(res.summary).appFont(.caption).foregroundStyle(.secondary)
                         }
                         Divider()
                     }
@@ -424,15 +454,40 @@ struct TrendsView: View {
     private func summaryTile(icon: String, tint: Color, title: String) -> some View {
         VStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.title3)
+                .font(AppFontStyle.title.font)
                 .foregroundStyle(tint)
             Text(title)
-                .font(.caption)
+                .appFont(.caption)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .minimumScaleFactor(0.9)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private func insightSummary() -> (title: String, detail: String)? {
+        guard !filtered.isEmpty else { return nil }
+        switch selectedType {
+        case .bloodPressure:
+            let latest = filtered.last!
+            let thresholds = store.bpThresholds()
+            if let dia = latest.diastolic, latest.value >= thresholds.systolicHigh || dia >= thresholds.diastolicHigh {
+                return (NSLocalizedString("Blood pressure is above goal", comment: ""), NSLocalizedString("Consider logging how you feel and ensure reminders are on for antihypertensive medications.", comment: ""))
+            }
+            return (NSLocalizedString("Blood pressure looks steady", comment: ""), NSLocalizedString("Keep following your schedule to stay within your targets.", comment: ""))
+        case .bloodGlucose:
+            let avg = sevenDayAverageText()
+            return (NSLocalizedString("7-day glucose average", comment: ""), String(format: NSLocalizedString("Your recent average is %@. Track meals that help stabilize readings.", comment: ""), avg))
+        case .weight:
+            let latest = filtered.last!.value
+            let baseline = filtered.first!.value
+            let diff = latest - baseline
+            let sign = diff >= 0 ? "+" : ""
+            return (NSLocalizedString("Weight trend", comment: ""), String(format: NSLocalizedString("%.1f %@ (%@%.1f since start)", comment: ""), latest, MeasurementType.weight.unit, sign, diff))
+        case .heartRate:
+            let latest = filtered.last!.value
+            return (NSLocalizedString("Recent heart rate", comment: ""), String(format: NSLocalizedString("Latest recorded value is %.0f bpm. Try adding a note when it deviates from normal.", comment: ""), latest))
+        }
     }
 
     private func lineChart(unit: String) -> some View {
@@ -507,7 +562,7 @@ struct TrendsView: View {
                 AxisValueLabel {
                     if let date = value.as(Date.self) {
                         Text(date, format: .dateTime.month(.twoDigits).day(.twoDigits))
-                            .font(.caption2)
+                            .appFont(.caption)
                     }
                 }
             }

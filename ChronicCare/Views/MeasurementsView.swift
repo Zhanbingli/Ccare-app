@@ -11,65 +11,75 @@ struct MeasurementsView: View {
         NavigationStack {
             List {
                 if filteredMeasurements.isEmpty {
-                    EmptyStateView(systemImage: "heart.text.square", title: "No measurements yet")
-                        .listRowBackground(Color.clear)
+                    EmptyStateView(systemImage: "heart.text.square", title: "No measurements yet", subtitle: NSLocalizedString("Add your first measurement", comment: ""), actionTitle: NSLocalizedString("Add", comment: "")) {
+                        showAdd = true
+                    }
+                    .listRowBackground(Color.clear)
                 } else {
-                    ForEach(filteredMeasurements) { m in
-                        TintedCard(tint: m.cardTint) {
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack(alignment: .firstTextBaseline) {
-                                    Text(m.type.rawValue).font(.headline)
-                                    Spacer()
-                                    if m.type == .bloodPressure, let d = m.diastolic {
-                                        Text("\(Int(m.value))/\(Int(d)) \(m.type.unit)")
-                                            .font(.headline)
-                                            .foregroundStyle(m.valueForeground)
-                                    } else {
-                                        if m.type == .bloodGlucose {
-                                            let v = UnitPreferences.mgdlToPreferred(m.value)
-                                            let unit = UnitPreferences.glucoseUnit.rawValue
-                                            let formatted = UnitPreferences.glucoseUnit == .mgdL ? String(format: "%.0f", v) : String(format: "%.1f", v)
-                                            Text("\(formatted) \(unit)")
-                                                .font(.headline)
-                                                .foregroundStyle(m.valueForeground)
-                                        } else {
-                                            Text("\(String(format: "%.1f", m.value)) \(m.type.unit)")
-                                                .font(.headline)
-                                                .foregroundStyle(m.valueForeground)
+                    ForEach(groupedMeasurements, id: \.day) { section in
+                        Section(header: Text(sectionHeaderTitle(for: section.day)).appFont(.subheadline).foregroundStyle(.secondary)) {
+                            ForEach(section.entries) { m in
+                                TintedCard(tint: m.cardTint) {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        HStack(alignment: .firstTextBaseline) {
+                                            Text(m.type.rawValue).appFont(.headline)
+                                            Spacer()
+                                            if m.type == .bloodPressure, let d = m.diastolic {
+                                                Text("\(Int(m.value))/\(Int(d)) \(m.type.unit)")
+                                                    .appFont(.headline)
+                                                    .foregroundStyle(m.valueForeground)
+                                            } else if m.type == .bloodGlucose {
+                                                let v = UnitPreferences.mgdlToPreferred(m.value)
+                                                let unit = UnitPreferences.glucoseUnit.rawValue
+                                                let formatted = UnitPreferences.glucoseUnit == .mgdL ? String(format: "%.0f", v) : String(format: "%.1f", v)
+                                                Text("\(formatted) \(unit)")
+                                                    .appFont(.headline)
+                                                    .foregroundStyle(m.valueForeground)
+                                            } else {
+                                                Text("\(String(format: "%.1f", m.value)) \(m.type.unit)")
+                                                    .appFont(.headline)
+                                                    .foregroundStyle(m.valueForeground)
+                                            }
+                                        }
+                                        Text(m.date, style: .time)
+                                            .appFont(.caption)
+                                            .foregroundStyle(.secondary)
+                                        if let note = m.note, !note.isEmpty {
+                                            Text(note).appFont(.footnote)
                                         }
                                     }
                                 }
-                                HStack(spacing: 8) {
-                                    Text(m.date, style: .date)
-                                    Text(m.date, style: .time)
+                                .cornerRadius(16, corners: [.topLeft, .bottomLeft])
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets())
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        if let i = store.measurements.firstIndex(where: { $0.id == m.id }) {
+                                            store.removeMeasurement(at: IndexSet(integer: i))
+                                        }
+                                    } label: { Label("Delete", systemImage: "trash") }
+                                    .tint(.red)
                                 }
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                if let note = m.note, !note.isEmpty {
-                                    Text(note).font(.footnote)
+                                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        if let i = store.measurements.firstIndex(where: { $0.id == m.id }) {
+                                            store.removeMeasurement(at: IndexSet(integer: i))
+                                        }
+                                    } label: { Label("Delete", systemImage: "trash") }
+                                    .tint(.red)
                                 }
+                                .contextMenu {
+                                    Button(role: .destructive) { if let i = store.measurements.firstIndex(where: { $0.id == m.id }) { store.removeMeasurement(at: IndexSet(integer: i)) } } label: { Label("Delete", systemImage: "trash") }
+                                    Button { UIPasteboard.general.string = "\(m.type.rawValue): \(m.value)" } label: { Label("Copy", systemImage: "doc.on.doc") }
+                                }
+                                .padding(.vertical, 2)
                             }
                         }
-                        .cornerRadius(16, corners: [.topLeft, .bottomLeft])
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets())
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                if let i = store.measurements.firstIndex(where: { $0.id == m.id }) {
-                                    store.removeMeasurement(at: IndexSet(integer: i))
-                                }
-                            } label: { Label("Delete", systemImage: "trash") }
-                        }
-                        .contextMenu {
-                            Button(role: .destructive) { if let i = store.measurements.firstIndex(where: { $0.id == m.id }) { store.removeMeasurement(at: IndexSet(integer: i)) } } label: { Label("Delete", systemImage: "trash") }
-                            Button { UIPasteboard.general.string = "\(m.type.rawValue): \(m.value)" } label: { Label("Copy", systemImage: "doc.on.doc") }
-                        }
-                        .padding(.vertical, 2)
                     }
-                    .onDelete(perform: delete)
                 }
             }
+            .applyListStyling()
             .navigationTitle("Measurements")
             .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .top) {
@@ -89,7 +99,6 @@ struct MeasurementsView: View {
                 .overlay(Divider(), alignment: .bottom)
             }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { EditButton() }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showAdd = true } label: { Image(systemName: "plus") }
                 }
@@ -109,8 +118,9 @@ struct AddMeasurementView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var type: MeasurementType = .bloodPressure
-    @State private var value: Double = 120
-    @State private var diastolic: Double = 80
+    @State private var systolicInput: String = ""
+    @State private var diastolicInput: String = ""
+    @State private var valueInput: String = ""
     @State private var note: String = ""
     @State private var date: Date = Date()
     @State private var glucoseUnit: GlucoseUnit = UnitPreferences.glucoseUnit
@@ -128,27 +138,27 @@ struct AddMeasurementView: View {
                     HStack {
                         Text(NSLocalizedString("Systolic:", comment: ""))
                         Spacer()
-                        TextField("120", value: $value, format: .number)
+                        TextField("", text: $systolicInput)
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.trailing)
-                            .frame(maxWidth: 120)
+                            .frame(maxWidth: 140)
                     }
                     HStack {
                         Text(NSLocalizedString("Diastolic:", comment: ""))
                         Spacer()
-                        TextField("80", value: $diastolic, format: .number)
+                        TextField("", text: $diastolicInput)
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.trailing)
-                            .frame(maxWidth: 120)
+                            .frame(maxWidth: 140)
                     }
                 } else {
                     HStack {
                         Text(NSLocalizedString("Value", comment: ""))
                         Spacer()
-                        TextField("0", value: $value, format: .number)
+                        TextField("", text: $valueInput)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
-                            .frame(maxWidth: 120)
+                            .frame(maxWidth: 140)
                     }
                     if type == .bloodGlucose {
                         if overrideGlucoseUnit {
@@ -181,25 +191,78 @@ struct AddMeasurementView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        let chosenUnit: GlucoseUnit? = (type == .bloodGlucose) ? (overrideGlucoseUnit ? glucoseUnit : UnitPreferences.glucoseUnit) : nil
-                        let m = Measurement(
-                            type: type,
-                            value: type == .bloodGlucose ? UnitPreferences.convertToMgdl(value, from: chosenUnit ?? .mgdL) : value,
-                            diastolic: type == .bloodPressure ? diastolic : nil,
-                            date: date,
-                            note: note.isEmpty ? nil : note
-                        )
-                        onSave(m)
+                        guard let measurement = makeMeasurement() else { return }
+                        onSave(measurement)
                         Haptics.success()
                         dismiss()
                     }
+                    .disabled(!canSave)
+                }
+            }
+            .onChange(of: type) { newType in
+                switch newType {
+                case .bloodPressure:
+                    valueInput = ""
+                default:
+                    systolicInput = ""
+                    diastolicInput = ""
                 }
             }
         }
     }
 }
 
+private extension AddMeasurementView {
+    var canSave: Bool {
+        switch type {
+        case .bloodPressure:
+            return Double(systolicInput) != nil && Double(diastolicInput) != nil
+        default:
+            return Double(valueInput) != nil
+        }
+    }
+
+    func makeMeasurement() -> Measurement? {
+        switch type {
+        case .bloodPressure:
+            guard let systolic = Double(systolicInput), let dia = Double(diastolicInput) else { return nil }
+            return Measurement(
+                type: .bloodPressure,
+                value: systolic,
+                diastolic: dia,
+                date: date,
+                note: note.isEmpty ? nil : note
+            )
+        case .bloodGlucose:
+            guard let input = Double(valueInput) else { return nil }
+            let unitToUse = overrideGlucoseUnit ? glucoseUnit : UnitPreferences.glucoseUnit
+            let mgdl = UnitPreferences.convertToMgdl(input, from: unitToUse)
+            return Measurement(
+                type: .bloodGlucose,
+                value: mgdl,
+                diastolic: nil,
+                date: date,
+                note: note.isEmpty ? nil : note
+            )
+        default:
+            guard let val = Double(valueInput) else { return nil }
+            return Measurement(
+                type: type,
+                value: val,
+                diastolic: nil,
+                date: date,
+                note: note.isEmpty ? nil : note
+            )
+        }
+    }
+}
+
 private extension MeasurementsView {
+    struct MeasurementSection {
+        let day: Date
+        let entries: [Measurement]
+    }
+
     var filteredMeasurements: [Measurement] {
         if let t = selectedType {
             return store.measurements.filter { $0.type == t }
@@ -207,15 +270,37 @@ private extension MeasurementsView {
             return store.measurements
         }
     }
-    func delete(at offsets: IndexSet) {
-        let ids = offsets.map { filteredMeasurements[$0].id }
-        var remove = IndexSet()
-        for id in ids {
-            if let idx = store.measurements.firstIndex(where: { $0.id == id }) {
-                remove.insert(idx)
-            }
+
+    var groupedMeasurements: [MeasurementSection] {
+        let cal = Calendar.current
+        let groups = Dictionary(grouping: filteredMeasurements) { entry in
+            cal.startOfDay(for: entry.date)
         }
-        if !remove.isEmpty { store.removeMeasurement(at: remove) }
+        return groups.keys.sorted(by: >).map { key in
+            MeasurementSection(day: key, entries: groups[key]!.sorted { $0.date > $1.date })
+        }
+    }
+
+    func sectionHeaderTitle(for date: Date) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(date) { return NSLocalizedString("Today", comment: "") }
+        if cal.isDateInYesterday(date) { return NSLocalizedString("Yesterday", comment: "") }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter.string(from: date)
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func applyListStyling() -> some View {
+        if #available(iOS 16.0, *) {
+            self
+                .scrollContentBackground(.hidden)
+                .background(Color(.systemGroupedBackground))
+        } else {
+            self
+        }
     }
 }
 

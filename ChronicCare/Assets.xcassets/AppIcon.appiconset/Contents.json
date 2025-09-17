@@ -1,7 +1,7 @@
 {
   "images" : [
     {
-      "filename" : "74B8DC81-0BCA-4B55-8960-D1B3C4B94B9F.png",
+      "filename" : "appstore.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -13,7 +13,7 @@
           "value" : "dark"
         }
       ],
-      "filename" : "74B8DC81-0BCA-4B55-8960-D1B3C4B94B9F 1.png",
+      "filename" : "appstore 1.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -25,7 +25,7 @@
           "value" : "tinted"
         }
       ],
-      "filename" : "74B8DC81-0BCA-4B55-8960-D1B3C4B94B9F 2.png",
+      "filename" : "appstore 2.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"

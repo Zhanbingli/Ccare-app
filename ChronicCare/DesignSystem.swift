@@ -45,8 +45,8 @@ struct TintedCard<Content: View>: View {
 extension View {
     func sectionHeader(_ title: String, systemImage: String? = nil) -> some View {
         HStack(spacing: 8) {
-            if let name = systemImage { Image(systemName: name).font(.headline) }
-            Text(title).font(.headline)
+            if let name = systemImage { Image(systemName: name).font(AppFontStyle.headline.font) }
+            Text(title).appFont(.headline)
             Spacer()
         }
         .foregroundStyle(.primary)
@@ -74,8 +74,8 @@ struct EmptyStateView: View {
             Image(systemName: systemImage)
                 .font(.system(size: 44, weight: .semibold))
                 .foregroundStyle(.secondary)
-            Text(title).font(.headline)
-            if let subtitle { Text(subtitle).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center) }
+            Text(title).appFont(.headline)
+            if let subtitle { Text(subtitle).appFont(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center) }
             if let actionTitle, let action {
                 Button(actionTitle, action: action)
                     .buttonStyle(.borderedProminent)
@@ -119,7 +119,7 @@ struct ActionTile: View {
                     Image(systemName: systemImage).foregroundStyle(color).font(.system(size: 20, weight: .semibold))
                 }
                 Text(title)
-                    .font(.footnote)
+                    .appFont(.footnote)
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -164,8 +164,8 @@ struct SectionToggleHeader: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            if let name = systemImage { Image(systemName: name).font(.headline) }
-            Text(title).font(.headline)
+            if let name = systemImage { Image(systemName: name).font(AppFontStyle.headline.font) }
+            Text(title).appFont(.headline)
             Spacer()
             Image(systemName: "chevron.right")
                 .rotationEffect(.degrees(isExpanded ? 90 : 0))
@@ -175,5 +175,9 @@ struct SectionToggleHeader: View {
         .contentShape(Rectangle())
         .onTapGesture { withAnimation(.easeInOut) { isExpanded.toggle() } }
         .padding(.horizontal)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(title))
+        .accessibilityValue(Text(isExpanded ? NSLocalizedString("Expanded", comment: "") : NSLocalizedString("Collapsed", comment: "")))
+        .accessibilityAddTraits(.isButton)
     }
 }

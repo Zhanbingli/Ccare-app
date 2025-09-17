@@ -114,7 +114,14 @@ extension DataStore {
         let adhFactor = goodAdh ? 1.0 : 0.8
         let conf = Int(round(100.0 * 0.5 * (doseScore + moveScore) * sampleScore * adhFactor))
         let summary = String(format: NSLocalizedString("BP Δ: %.0f/%.0f, 14d Δ: %.0f • Confidence: %d%%", comment: ""), medSys, medDia, avgDelta, conf)
-        return MedicationEffectResult(verdict: verdict, summary: summary, samples: samples, confidence: conf)
+        return MedicationEffectResult(verdict: verdict, summary: summary, samples: samples, confidence: smoothConfidence(raw: 0.5 * (max(0, -medSys) / cfg.bpDose + max(0, -avgDelta) / cfg.bpMove), samples: samples, threshold: cfg.minSamples))
+    }
+
+    private func smoothConfidence(raw: Double, samples: Int, threshold: Int) -> Int {
+        let base = max(0, min(1, raw))
+        let sampleFactor = min(1, Double(samples) / Double(max(1, threshold)))
+        let smooth = 0.6 * base + 0.4 * sampleFactor
+        return Int(round(smooth * 100))
     }
 
     // MARK: - Glucose evaluation

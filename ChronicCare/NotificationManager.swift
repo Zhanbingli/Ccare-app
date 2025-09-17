@@ -76,12 +76,40 @@ final class NotificationManager {
         UNUserNotificationCenter.current().setNotificationCategories([category])
     }
 
+    func ensureAuthorization() async -> Bool {
+        let settings = await fetchNotificationSettings()
+        switch settings.authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            return true
+        case .denied:
+            return false
+        case .notDetermined:
+            return await withCheckedContinuation { continuation in
+                UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+                    continuation.resume(returning: granted)
+                }
+            }
+        @unknown default:
+            return false
+        }
+    }
+
+    private func fetchNotificationSettings() async -> UNNotificationSettings {
+        await withCheckedContinuation { continuation in
+            UNUserNotificationCenter.current().getNotificationSettings { settings in
+                continuation.resume(returning: settings)
+            }
+        }
+    }
+
     private func timeKey(_ comps: DateComponents) -> String? {
         guard let h = comps.hour, let m = comps.minute else { return nil }
         return String(format: "%02d:%02d", h, m)
     }
 
-    func schedule(for medication: Medication) {
+    private let scheduleHorizonDays = 14
+
+    func schedule(for medication: Medication, now: Date = Date()) {
         let center = UNUserNotificationCenter.current()
         let prefix = medication.id.uuidString
         center.getPendingNotificationRequests { list in
@@ -91,26 +119,53 @@ final class NotificationManager {
 
             guard medication.remindersEnabled else { return }
             for t in medication.timesOfDay {
-                self.scheduleNextInstance(for: medication, timeComponents: t)
+                self.scheduleUpcomingInstances(for: medication, timeComponents: t, horizonDays: self.scheduleHorizonDays, now: now)
             }
         }
     }
 
     // MARK: - Instance-level scheduling (non-repeating)
-    private func nextFireDate(for time: DateComponents, from now: Date = Date(), calendar: Calendar = .current) -> Date? {
-        guard let h = time.hour, let m = time.minute else { return nil }
-        let today = calendar.date(bySettingHour: h, minute: m, second: 0, of: now)!
-        if today > now { return today }
-        return calendar.date(byAdding: .day, value: 1, to: today)
+    private func upcomingFireDates(for time: DateComponents, horizonDays: Int, from now: Date = Date(), calendar: Calendar = .current) -> [Date] {
+        guard let h = time.hour, let m = time.minute, horizonDays > 0 else { return [] }
+        let startOfToday = calendar.startOfDay(for: now)
+        var result: [Date] = []
+        for offset in 0..<horizonDays {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: startOfToday),
+                  let scheduled = calendar.date(bySettingHour: h, minute: m, second: 0, of: day),
+                  scheduled >= now else { continue }
+            result.append(scheduled)
+        }
+        return result
     }
 
-    private func makeContent(for medication: Medication, isSnooze: Bool = false) -> UNMutableNotificationContent {
+    private func scheduleUpcomingInstances(for medication: Medication, timeComponents: DateComponents, horizonDays: Int, now: Date = Date()) {
+        let fireDates = upcomingFireDates(for: timeComponents, horizonDays: horizonDays, from: now)
+        guard !fireDates.isEmpty else { return }
+        let calendar = Calendar.current
+        fireDates.forEach { fireDate in
+            let comps = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
+            let id = instanceId(for: medication.id, date: fireDate, comps: timeComponents)
+            let content = makeContent(for: medication, scheduleTime: timeComponents)
+            let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
+            let req = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+            UNUserNotificationCenter.current().add(req) { error in
+                if let error = error { print("Notification schedule error: \(error)") }
+            }
+        }
+    }
+
+    private func makeContent(for medication: Medication, scheduleTime: DateComponents?, isSnooze: Bool = false) -> UNMutableNotificationContent {
         let content = UNMutableNotificationContent()
         content.title = medication.name
         content.body = String(format: NSLocalizedString(isSnooze ? "Snoozed: %@" : "Dose: %@", comment: ""), medication.dose)
         content.sound = .default
         content.categoryIdentifier = Self.categoryId
-        content.userInfo = ["medicationID": medication.id.uuidString]
+        var info: [String: Any] = ["medicationID": medication.id.uuidString]
+        if let comps = scheduleTime, let h = comps.hour, let m = comps.minute {
+            info["scheduleHour"] = h
+            info["scheduleMinute"] = m
+        }
+        content.userInfo = info
         content.threadIdentifier = medication.id.uuidString
         if #available(iOS 15.0, *) { content.interruptionLevel = .timeSensitive }
         if #available(iOS 15.0, *) { content.relevanceScore = 0.9 }
@@ -122,18 +177,6 @@ final class NotificationManager {
         let h = String(format: "%02d", comps.hour ?? 0)
         let m = String(format: "%02d", comps.minute ?? 0)
         return "\(medID.uuidString)_\(day)_\(h)_\(m)"
-    }
-
-    func scheduleNextInstance(for medication: Medication, timeComponents: DateComponents) {
-        guard let fireDate = nextFireDate(for: timeComponents) else { return }
-        let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
-        let id = instanceId(for: medication.id, date: fireDate, comps: timeComponents)
-        let content = makeContent(for: medication)
-        let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
-        let req = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
-        UNUserNotificationCenter.current().add(req) { error in
-            if let error = error { print("Notification schedule error: \(error)") }
-        }
     }
 
     func cancelTodayInstance(for medicationID: UUID, timeComponents: DateComponents, now: Date = Date()) {
@@ -157,27 +200,39 @@ final class NotificationManager {
         let center = UNUserNotificationCenter.current()
         let prefix = medication.id.uuidString
         center.getPendingNotificationRequests { list in
-            let ids = list.map { $0.identifier }.filter { $0.hasPrefix(prefix) || $0 == "snooze_\(prefix)" }
+            let ids = list.map { $0.identifier }.filter { $0.hasPrefix(prefix) || $0.hasPrefix("snooze_\(prefix)") }
             center.removePendingNotificationRequests(withIdentifiers: ids)
         }
         // Remove delivered notifications with same prefix by enumerating
         center.getDeliveredNotifications { notes in
-            let ids = notes.map { $0.request.identifier }.filter { $0.hasPrefix(prefix) || $0 == "snooze_\(prefix)" }
+            let ids = notes.map { $0.request.identifier }.filter { $0.hasPrefix(prefix) || $0.hasPrefix("snooze_\(prefix)") }
             if !ids.isEmpty { center.removeDeliveredNotifications(withIdentifiers: ids) }
         }
     }
 
-    func scheduleSnooze(for medicationID: UUID, minutes: Int = 10) {
-        // Avoid stacking multiple snooze notifications for the same medication
-        let snoozeId = "snooze_\(medicationID.uuidString)"
+    static func snoozeIdentifier(for medicationID: UUID, scheduleTime: DateComponents?) -> String {
+        let base = "snooze_\(medicationID.uuidString)"
+        guard let h = scheduleTime?.hour, let m = scheduleTime?.minute else { return base }
+        return "\(base)_\(String(format: "%02d", h))_\(String(format: "%02d", m))"
+    }
+
+    func scheduleSnooze(for medicationID: UUID, minutes: Int = 10, scheduleTime: DateComponents? = nil) {
+        let snoozeId = Self.snoozeIdentifier(for: medicationID, scheduleTime: scheduleTime)
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [snoozeId])
+        // remove legacy identifier if it exists to avoid duplicates
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["snooze_\(medicationID.uuidString)"])
 
         let content = UNMutableNotificationContent()
         content.title = NSLocalizedString("Snoozed Reminder", comment: "")
         content.body = NSLocalizedString("Time to take your medication", comment: "")
         content.sound = .default
         content.categoryIdentifier = Self.categoryId
-        content.userInfo = ["medicationID": medicationID.uuidString]
+        var info: [String: Any] = ["medicationID": medicationID.uuidString]
+        if let h = scheduleTime?.hour, let m = scheduleTime?.minute {
+            info["scheduleHour"] = h
+            info["scheduleMinute"] = m
+        }
+        content.userInfo = info
         content.threadIdentifier = medicationID.uuidString
         if #available(iOS 15.0, *) { content.interruptionLevel = .timeSensitive }
         if #available(iOS 15.0, *) { content.relevanceScore = 0.8 }
@@ -187,11 +242,12 @@ final class NotificationManager {
         UNUserNotificationCenter.current().add(req, withCompletionHandler: nil)
     }
 
-    func scheduleSnooze(for medication: Medication, minutes: Int = 10) {
-        let snoozeId = "snooze_\(medication.id.uuidString)"
+    func scheduleSnooze(for medication: Medication, minutes: Int = 10, scheduleTime: DateComponents? = nil) {
+        let snoozeId = Self.snoozeIdentifier(for: medication.id, scheduleTime: scheduleTime)
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [snoozeId])
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["snooze_\(medication.id.uuidString)"])
 
-        let content = makeContent(for: medication, isSnooze: true)
+        let content = makeContent(for: medication, scheduleTime: scheduleTime, isSnooze: true)
 
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(minutes * 60), repeats: false)
         let req = UNNotificationRequest(identifier: snoozeId, content: content, trigger: trigger)
@@ -273,5 +329,20 @@ final class NotificationManager {
                 meds.filter({ $0.remindersEnabled }).forEach { self?.schedule(for: $0) }
             }
         }
+    }
+}
+
+extension NotificationManager {
+    static func scheduleComponents(from userInfo: [AnyHashable: Any]) -> DateComponents? {
+        guard let hour = userInfo["scheduleHour"] as? Int,
+              let minute = userInfo["scheduleMinute"] as? Int,
+              (0..<24).contains(hour),
+              (0..<60).contains(minute) else {
+            return nil
+        }
+        var comps = DateComponents()
+        comps.hour = hour
+        comps.minute = minute
+        return comps
     }
 }
