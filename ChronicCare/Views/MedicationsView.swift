@@ -118,6 +118,7 @@ struct AddMedicationView: View {
     @State private var times: [Date] = []
     @State private var remindersEnabled: Bool = true
     @State private var category: MedicationCategory = .unspecified
+    @State private var customCategoryName: String = ""
     @State private var pickedItem: PhotosPickerItem? = nil
     @State private var pickedImage: UIImage? = nil
 
@@ -130,6 +131,9 @@ struct AddMedicationView: View {
                     TextField("Notes (optional)", text: $notes)
                     Picker("Category", selection: $category) {
                         ForEach(MedicationCategory.allCases) { c in Text(c.displayName).tag(c) }
+                    }
+                    if category == .custom {
+                        TextField("Custom Category", text: $customCategoryName)
                     }
                     HStack {
                         if let img = pickedImage {
@@ -190,6 +194,7 @@ struct AddMedicationView: View {
                             timesOfDay: comps,
                             remindersEnabled: remindersEnabled,
                             category: category,
+                            customCategoryName: category == .custom ? customCategoryName.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
                             imagePath: imagePath
                         )
                         onSave(med)
@@ -218,6 +223,7 @@ struct EditMedicationView: View {
     @State private var pickedItem: PhotosPickerItem? = nil
     @State private var pickedImage: UIImage? = nil
     @State private var removePhoto: Bool = false
+    @State private var customCategoryName: String = ""
 
     init(medication: Medication, onSave: @escaping (Medication) -> Void, onDelete: (() -> Void)? = nil) {
         self.medication = medication
@@ -235,6 +241,9 @@ struct EditMedicationView: View {
                     TextField("Notes (optional)", text: $notes)
                     Picker("Category", selection: $category) {
                         ForEach(MedicationCategory.allCases) { c in Text(c.displayName).tag(c) }
+                    }
+                    if category == .custom {
+                        TextField("Custom Category", text: $customCategoryName)
                     }
                     HStack {
                         if let img = pickedImage {
@@ -259,11 +268,11 @@ struct EditMedicationView: View {
                             .onChange(of: pickedItem) { newItem in
                                 Task { if let data = try? await newItem?.loadTransferable(type: Data.self), let ui = UIImage(data: data) { pickedImage = ui; removePhoto = false } }
                             }
-                        if pickedImage != nil || (medication.imagePath != nil && !removePhoto) {
-                            Button(role: .destructive) { pickedImage = nil; removePhoto = true } label: { Text("Remove") }
-                        }
-                    }
+                if pickedImage != nil || (medication.imagePath != nil && !removePhoto) {
+                    Button(role: .destructive) { pickedImage = nil; removePhoto = true } label: { Text("Remove") }
                 }
+            }
+        }
                 Section("Schedule") {
                     ForEach(times.indices, id: \.self) { idx in
                         DatePicker("Time \(idx+1)", selection: $times[idx], displayedComponents: .hourAndMinute)
@@ -287,6 +296,7 @@ struct EditMedicationView: View {
                 if times.isEmpty { times = [Date()] }
                 remindersEnabled = medication.remindersEnabled
                 category = medication.category ?? .unspecified
+                customCategoryName = medication.customCategoryName ?? ""
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -302,6 +312,7 @@ struct EditMedicationView: View {
                         updated.timesOfDay = comps
                         updated.remindersEnabled = remindersEnabled
                         updated.category = category
+                        updated.customCategoryName = category == .custom ? customCategoryName.trimmingCharacters(in: .whitespacesAndNewlines) : nil
                         if removePhoto {
                             removeMedImage(path: updated.imagePath)
                             updated.imagePath = nil
@@ -635,7 +646,7 @@ private extension MedicationsView {
             if let category = med.category, category != .unspecified {
                 let result = store.effectiveness(for: med)
                 VStack(alignment: .trailing, spacing: 6) {
-                    Text(category.displayName)
+                    Text(med.displayCategoryName ?? category.displayName)
                         .appFont(.caption)
                         .foregroundStyle(.secondary)
                     HStack(spacing: 6) {

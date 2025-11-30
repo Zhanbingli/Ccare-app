@@ -5,17 +5,17 @@ struct Card<Content: View>: View {
     init(@ViewBuilder content: () -> Content) { self.content = content() }
     var body: some View {
         content
-            .padding(16)
+            .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(.ultraThinMaterial)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
             )
-            .shadow(color: Color.black.opacity(0.06), radius: 12, x: 0, y: 6)
+            .shadow(color: Color.black.opacity(0.04), radius: 16, x: 0, y: 8)
     }
 }
 
@@ -28,17 +28,17 @@ struct TintedCard<Content: View>: View {
     }
     var body: some View {
         content
-            .padding(16)
+            .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(LinearGradient(colors: [tint.opacity(0.18), tint.opacity(0.10)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(LinearGradient(colors: [tint.opacity(0.22), tint.opacity(0.12)], startPoint: .topLeading, endPoint: .bottomTrailing))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(tint.opacity(0.25), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(tint.opacity(0.3), lineWidth: 1.5)
             )
-            .shadow(color: tint.opacity(0.18), radius: 10, x: 0, y: 6)
+            .shadow(color: tint.opacity(0.2), radius: 16, x: 0, y: 8)
     }
 }
 

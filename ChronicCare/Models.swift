@@ -22,6 +22,7 @@ enum MedicationCategory: String, CaseIterable, Codable, Identifiable {
     case unspecified
     case antihypertensive
     case antidiabetic
+    case custom
     var id: String { rawValue }
 
     var displayName: String {
@@ -29,6 +30,7 @@ enum MedicationCategory: String, CaseIterable, Codable, Identifiable {
         case .unspecified: return NSLocalizedString("Unspecified", comment: "")
         case .antihypertensive: return NSLocalizedString("Antihypertensive", comment: "")
         case .antidiabetic: return NSLocalizedString("Antidiabetic", comment: "")
+        case .custom: return NSLocalizedString("Custom", comment: "")
         }
     }
 }
@@ -66,12 +68,13 @@ struct Medication: Identifiable, Codable {
     var timesOfDay: [DateComponents] // one or more times (hour & minute)
     var remindersEnabled: Bool
     var category: MedicationCategory? // optional for backward compatibility
+    var customCategoryName: String?
     var imagePath: String? // relative path under Documents (e.g., "med_images/<id>.jpg")
 
     // Backward compatibility decoder to support legacy `timeOfDay`
-    enum CodingKeys: String, CodingKey { case id, name, dose, notes, timesOfDay, timeOfDay, remindersEnabled, category, imagePath }
+    enum CodingKeys: String, CodingKey { case id, name, dose, notes, timesOfDay, timeOfDay, remindersEnabled, category, customCategoryName, imagePath }
 
-    init(id: UUID = UUID(), name: String, dose: String, notes: String? = nil, timesOfDay: [DateComponents], remindersEnabled: Bool, category: MedicationCategory? = nil, imagePath: String? = nil) {
+    init(id: UUID = UUID(), name: String, dose: String, notes: String? = nil, timesOfDay: [DateComponents], remindersEnabled: Bool, category: MedicationCategory? = nil, customCategoryName: String? = nil, imagePath: String? = nil) {
         self.id = id
         self.name = name
         self.dose = dose
@@ -79,6 +82,7 @@ struct Medication: Identifiable, Codable {
         self.timesOfDay = timesOfDay
         self.remindersEnabled = remindersEnabled
         self.category = category
+        self.customCategoryName = customCategoryName
         self.imagePath = imagePath
     }
 
@@ -90,6 +94,7 @@ struct Medication: Identifiable, Codable {
         self.notes = try c.decodeIfPresent(String.self, forKey: .notes)
         self.remindersEnabled = try c.decodeIfPresent(Bool.self, forKey: .remindersEnabled) ?? true
         self.category = try c.decodeIfPresent(MedicationCategory.self, forKey: .category)
+        self.customCategoryName = try c.decodeIfPresent(String.self, forKey: .customCategoryName)
         self.imagePath = try c.decodeIfPresent(String.self, forKey: .imagePath)
         if let times = try c.decodeIfPresent([DateComponents].self, forKey: .timesOfDay) {
             self.timesOfDay = times
@@ -109,7 +114,23 @@ struct Medication: Identifiable, Codable {
         try c.encode(timesOfDay, forKey: .timesOfDay)
         try c.encode(remindersEnabled, forKey: .remindersEnabled)
         try c.encodeIfPresent(category, forKey: .category)
+        try c.encodeIfPresent(customCategoryName, forKey: .customCategoryName)
         try c.encodeIfPresent(imagePath, forKey: .imagePath)
+    }
+}
+
+extension Medication {
+    var displayCategoryName: String? {
+        guard let cat = category else { return nil }
+        switch cat {
+        case .custom:
+            let trimmed = (customCategoryName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? MedicationCategory.custom.displayName : trimmed
+        case .unspecified:
+            return nil
+        default:
+            return cat.displayName
+        }
     }
 }
 

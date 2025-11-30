@@ -60,18 +60,6 @@ final class DataStore: ObservableObject {
             medications[idx] = item
         }
     }
-    func logIntake(medicationID: UUID, status: IntakeStatus, at date: Date = Date()) {
-        intakeLogs.append(IntakeLog(medicationID: medicationID, date: date, status: status, scheduleKey: nil))
-    }
-
-    func logIntake(medicationID: UUID, status: IntakeStatus, scheduleTime: DateComponents?, at date: Date = Date()) {
-        var key: String? = nil
-        if let h = scheduleTime?.hour, let m = scheduleTime?.minute {
-            key = String(format: "%02d:%02d", h, m)
-        }
-        intakeLogs.append(IntakeLog(medicationID: medicationID, date: date, status: status, scheduleKey: key))
-    }
-
     // Ensure one final status per day per medication per scheduleKey
     func upsertIntake(medicationID: UUID, status: IntakeStatus, scheduleTime: DateComponents?, at date: Date = Date()) {
         var key: String? = nil
@@ -148,7 +136,12 @@ final class DataStore: ObservableObject {
             do {
                 let encoder = JSONEncoder()
                 let data = try encoder.encode(payload)
-                try data.write(to: url, options: [.atomic, .completeFileProtection])
+                do {
+                    try data.write(to: url, options: [.atomic, .completeFileProtection])
+                } catch {
+                    // Fallback when file protection blocks writes (e.g., device locked)
+                    try data.write(to: url, options: [.atomic])
+                }
                 try? (url as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
             } catch {
                 print("Failed to save \(label): \(error)")
@@ -199,7 +192,7 @@ final class DataStore: ObservableObject {
             let dayKey = cal.startOfDay(for: day)
             var taken = 0
             var total = 0
-            for med in meds where med.remindersEnabled {
+            for med in meds {
                 let times = med.timesOfDay.compactMap { comps -> (Int, Int)? in
                     guard let h = comps.hour, let m = comps.minute else { return nil }
                     return (h, m)

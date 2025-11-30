@@ -125,6 +125,9 @@ struct AddMeasurementView: View {
     @State private var date: Date = Date()
     @State private var glucoseUnit: GlucoseUnit = UnitPreferences.glucoseUnit
     @State private var overrideGlucoseUnit: Bool = false
+    @State private var validationMessage: String?
+    @State private var showValidationAlert = false
+    @State private var validationIsWarning = false
 
     var body: some View {
         NavigationStack {
@@ -183,6 +186,21 @@ struct AddMeasurementView: View {
                 }
                 DatePicker("Date", selection: $date)
                 TextField("Note (optional)", text: $note)
+
+                if let message = validationMessage {
+                    Section {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: validationIsWarning ? "exclamationmark.triangle.fill" : "info.circle.fill")
+                                .foregroundStyle(validationIsWarning ? .orange : .blue)
+                                .font(.system(size: 20))
+                            Text(message)
+                                .font(.system(size: 14))
+                                .foregroundStyle(.primary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.vertical, 8)
+                    }
+                }
             }
             .navigationTitle("Add Measurement")
             .toolbar {
@@ -191,15 +209,27 @@ struct AddMeasurementView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        guard let measurement = makeMeasurement() else { return }
-                        onSave(measurement)
-                        Haptics.success()
-                        dismiss()
+                        validateAndSave()
                     }
                     .disabled(!canSave)
                 }
             }
+            .alert(validationIsWarning ? "Warning" : "Error", isPresented: $showValidationAlert) {
+                if validationIsWarning {
+                    Button("Save Anyway") {
+                        saveWithoutValidation()
+                    }
+                    Button("Cancel", role: .cancel) { }
+                } else {
+                    Button("OK", role: .cancel) { }
+                }
+            } message: {
+                if let message = validationMessage {
+                    Text(message)
+                }
+            }
             .onChange(of: type) { newType in
+                validationMessage = nil
                 switch newType {
                 case .bloodPressure:
                     valueInput = ""
@@ -208,7 +238,91 @@ struct AddMeasurementView: View {
                     diastolicInput = ""
                 }
             }
+            .onChange(of: systolicInput) { _ in validateInput() }
+            .onChange(of: diastolicInput) { _ in validateInput() }
+            .onChange(of: valueInput) { _ in validateInput() }
         }
+    }
+
+    private func validateInput() {
+        validationMessage = nil
+        validationIsWarning = false
+
+        switch type {
+        case .bloodPressure:
+            guard let sys = Double(systolicInput), let dia = Double(diastolicInput) else { return }
+            let result = DataValidator.validateBloodPressure(systolic: sys, diastolic: dia)
+            handleValidationResult(result)
+
+        case .bloodGlucose:
+            guard let val = Double(valueInput) else { return }
+            let unitToUse = overrideGlucoseUnit ? glucoseUnit : UnitPreferences.glucoseUnit
+            let result = DataValidator.validateBloodGlucose(value: val, unit: unitToUse)
+            handleValidationResult(result)
+
+        case .weight:
+            guard let val = Double(valueInput) else { return }
+            let result = DataValidator.validateWeight(value: val)
+            handleValidationResult(result)
+
+        case .heartRate:
+            guard let val = Double(valueInput) else { return }
+            let result = DataValidator.validateHeartRate(value: val)
+            handleValidationResult(result)
+        }
+    }
+
+    private func handleValidationResult(_ result: ValidationResult) {
+        switch result {
+        case .valid:
+            validationMessage = nil
+            validationIsWarning = false
+        case .warning(let message):
+            validationMessage = message
+            validationIsWarning = true
+        case .error(let message):
+            validationMessage = message
+            validationIsWarning = false
+        }
+    }
+
+    private func validateAndSave() {
+        guard let measurement = makeMeasurement() else { return }
+
+        // Perform final validation
+        var finalResult: ValidationResult = .valid
+
+        switch type {
+        case .bloodPressure:
+            finalResult = DataValidator.validateBloodPressure(systolic: measurement.value, diastolic: measurement.diastolic)
+        case .bloodGlucose:
+            finalResult = DataValidator.validateBloodGlucose(value: measurement.value, unit: .mgdL)
+        case .weight:
+            finalResult = DataValidator.validateWeight(value: measurement.value)
+        case .heartRate:
+            finalResult = DataValidator.validateHeartRate(value: measurement.value)
+        }
+
+        switch finalResult {
+        case .valid:
+            saveWithoutValidation()
+        case .warning(let message):
+            validationMessage = message
+            validationIsWarning = true
+            showValidationAlert = true
+        case .error(let message):
+            validationMessage = message
+            validationIsWarning = false
+            showValidationAlert = true
+            Haptics.error()
+        }
+    }
+
+    private func saveWithoutValidation() {
+        guard let measurement = makeMeasurement() else { return }
+        onSave(measurement)
+        Haptics.success()
+        dismiss()
     }
 }
 

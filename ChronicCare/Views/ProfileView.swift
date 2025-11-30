@@ -6,7 +6,6 @@ import UniformTypeIdentifiers
 struct ProfileView: View {
     @EnvironmentObject var store: DataStore
     @State private var showConfirmClear = false
-    @State private var hkAuthorized = false
     @State private var showShare = false
     @State private var shareURL: URL?
     @State private var showImporter = false
@@ -50,7 +49,6 @@ struct ProfileView: View {
                             .frame(height: topCardHeight)
                     }
 
-                    statusOverviewCard
                     quickActionsCard
                     preferencesCard
                     goalsCard
@@ -254,43 +252,6 @@ struct ProfileView: View {
         }
     }
 
-    private var statusOverviewCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(NSLocalizedString("Status", comment: "")).appFont(.headline)
-                HStack(alignment: .center, spacing: 12) {
-                    Image(systemName: "bell.badge.fill").foregroundStyle(.orange)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(NSLocalizedString("Notifications", comment: "")).appFont(.subheadline)
-                        Text(permissionHint()).appFont(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    permissionButton()
-                }
-                Divider()
-                HStack(alignment: .center, spacing: 12) {
-                    Image(systemName: "heart.fill").foregroundStyle(.red)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Health").appFont(.subheadline)
-                        Text(HealthKitManager.shared.isSharingAuthorized() ? NSLocalizedString("Synced", comment: "") : NSLocalizedString("Not Connected", comment: ""))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button {
-                        HealthKitManager.shared.requestAuthorization { success, error in
-                            DispatchQueue.main.async { refreshPermissions() }
-                            if let error = error { print("HK auth error: \(error)") }
-                        }
-                    } label: {
-                        Text(HealthKitManager.shared.isSharingAuthorized() ? NSLocalizedString("Manage", comment: "") : NSLocalizedString("Connect", comment: ""))
-                    }
-                    .buttonStyle(.bordered)
-                }
-            }
-        }
-    }
-
     private var quickActionsCard: some View {
         Card {
             VStack(alignment: .leading, spacing: 12) {
@@ -298,8 +259,7 @@ struct ProfileView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
                         quickActionPill(title: "Connect Health", icon: "heart.fill", tint: .pink) {
-                            HealthKitManager.shared.requestAuthorization { success, error in
-                                DispatchQueue.main.async { hkAuthorized = success }
+                            HealthKitManager.shared.requestAuthorization { _, error in
                                 if let error = error { print("HK auth error: \(error)") }
                             }
                         }
@@ -322,9 +282,6 @@ struct ProfileView: View {
                         quickActionPill(title: "Export 10", icon: "arrow.up.doc.fill", tint: .gray) {
                             showConfirmExportRecent = true
                         }
-                        quickActionPill(title: "Load Samples", icon: "tray.and.arrow.down", tint: .mint) {
-                            loadSamples()
-                        }
                         #endif
                     }
                 }
@@ -336,9 +293,26 @@ struct ProfileView: View {
         Card {
             VStack(alignment: .leading, spacing: 16) {
                 Text(String(localized: "Preferences")).appFont(.headline)
+
                 Toggle(String(localized: "Haptics"), isOn: $hapticsEnabled)
                     .onChange(of: hapticsEnabled) { newValue in Haptics.setEnabled(newValue) }
+
                 Divider()
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(NSLocalizedString("Notifications", comment: "")).appFont(.subheadline)
+                    HStack(alignment: .center, spacing: 12) {
+                        Image(systemName: "bell.badge.fill").foregroundStyle(.orange)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(permissionHint()).appFont(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        permissionButton()
+                    }
+                }
+
+                Divider()
+
                 VStack(alignment: .leading, spacing: 8) {
                     Text(String(localized: "Overdue Grace")).appFont(.subheadline)
                     Picker("Grace", selection: $graceMinutes) {
@@ -348,19 +322,9 @@ struct ProfileView: View {
                     }
                     .pickerStyle(.segmented)
                 }
+
                 Divider()
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(String(localized: "Blood Glucose Unit")).appFont(.subheadline)
-                    Picker("Blood Glucose Unit", selection: $glucoseUnitRaw) {
-                        Text(GlucoseUnit.mgdL.rawValue).tag(GlucoseUnit.mgdL.rawValue)
-                        Text(GlucoseUnit.mmolL.rawValue).tag(GlucoseUnit.mmolL.rawValue)
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: glucoseUnitRaw) { newValue in
-                        if let u = GlucoseUnit(rawValue: newValue) { UnitPreferences.setGlucoseUnit(u) }
-                    }
-                }
-                Divider()
+
                 VStack(alignment: .leading, spacing: 8) {
                     Text(String(localized: "Effectiveness Settings")).appFont(.subheadline)
                     Picker("Mode", selection: $effMode) {
@@ -385,25 +349,37 @@ struct ProfileView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text(String(localized: "Goals")).appFont(.headline)
                 DisclosureGroup(String(localized: "Blood Glucose")) {
-                    HStack {
-                        Stepper(value: glucoseLowDisplayBinding, in: glucoseLowDisplayRange, step: glucoseDisplayStep) {
-                            Text(glucoseLowLabel)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(String(format: String(localized: "Preferred unit: %@"), glucoseUnitLabel))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                        HStack {
+                            Stepper(value: glucoseLowDisplayBinding, in: glucoseLowDisplayRange, step: glucoseDisplayStep) {
+                                Text(glucoseLowLabel)
+                            }
+                            Stepper(value: glucoseHighDisplayBinding, in: glucoseHighDisplayRange, step: glucoseDisplayStep) {
+                                Text(glucoseHighLabel)
+                            }
                         }
-                        Stepper(value: glucoseHighDisplayBinding, in: glucoseHighDisplayRange, step: glucoseDisplayStep) {
-                            Text(glucoseHighLabel)
-                        }
+                        Text(String(localized: "Defaults: 70-180 mg/dL. Adjust to your care plan.")).appFont(.caption).foregroundStyle(.secondary)
                     }
                 }
                 DisclosureGroup(String(localized: "Heart Rate")) {
-                    HStack {
-                        Stepper(value: $hrLow, in: 30...100, step: 1) { Text(String(format: String(localized: "Low: %d bpm"), Int(hrLow))) }
-                        Stepper(value: $hrHigh, in: 80...180, step: 1) { Text(String(format: String(localized: "High: %d bpm"), Int(hrHigh))) }
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Stepper(value: $hrLow, in: 30...100, step: 1) { Text(String(format: String(localized: "Low: %d bpm"), Int(hrLow))) }
+                            Stepper(value: $hrHigh, in: 80...180, step: 1) { Text(String(format: String(localized: "High: %d bpm"), Int(hrHigh))) }
+                        }
+                        Text(String(localized: "Defaults: 50-110 bpm.")).appFont(.caption).foregroundStyle(.secondary)
                     }
                 }
                 DisclosureGroup(String(localized: "Blood Pressure")) {
-                    HStack {
-                        Stepper(value: $bpSysHigh, in: 90...200, step: 1) { Text(String(format: String(localized: "Sys High: %d mmHg"), Int(bpSysHigh))) }
-                        Stepper(value: $bpDiaHigh, in: 50...130, step: 1) { Text(String(format: String(localized: "Dia High: %d mmHg"), Int(bpDiaHigh))) }
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Stepper(value: $bpSysHigh, in: 90...200, step: 1) { Text(String(format: String(localized: "Sys High: %d mmHg"), Int(bpSysHigh))) }
+                            Stepper(value: $bpDiaHigh, in: 50...130, step: 1) { Text(String(format: String(localized: "Dia High: %d mmHg"), Int(bpDiaHigh))) }
+                        }
+                        Text(String(localized: "Defaults: 140/90.")).appFont(.caption).foregroundStyle(.secondary)
                     }
                 }
             }
@@ -424,13 +400,13 @@ struct ProfileView: View {
         }
     }
 
-private var knowledgeCard: some View {
-    Card {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(String(localized: "How.It.Works.Title", defaultValue: "How It Works"))
-                .appFont(.headline)
-            ForEach(knowledgeSections) { section in
-                    DisclosureGroup(section.title) {
+    private var knowledgeCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(String(localized: "How.It.Works.Title", defaultValue: "How It Works"))
+                    .appFont(.headline)
+                ForEach(knowledgeSections) { section in
+                    DisclosureGroup(LocalizedStringKey(section.title)) {
                         VStack(alignment: .leading, spacing: 6) {
                             ForEach(section.bullets, id: \.self) { bulletText in
                                 bullet(bulletText)
@@ -441,9 +417,9 @@ private var knowledgeCard: some View {
                 }
             }
         }
-}
+    }
 
-private var aboutCard: some View {
+    private var aboutCard: some View {
         Card {
             VStack(alignment: .leading, spacing: 8) {
                 Text("About").appFont(.headline)
@@ -518,127 +494,96 @@ private var aboutCard: some View {
         let max = UnitPreferences.convertFromMgdl(300, to: gluUnit)
         return min...max
     }
+
     private var glucoseLowLabel: String {
-        let v = UnitPreferences.convertFromMgdl(glucoseLow, to: gluUnit)
-        if gluUnit == .mgdL { return "Low: \(Int(v)) \(glucoseUnitLabel)" }
-        return String(format: "Low: %.1f %@", v, glucoseUnitLabel)
+        String(format: String(localized: "Low: %.0f %@"), glucoseLowDisplayBinding.wrappedValue, glucoseUnitLabel)
     }
     private var glucoseHighLabel: String {
-        let v = UnitPreferences.convertFromMgdl(glucoseHigh, to: gluUnit)
-        if gluUnit == .mgdL { return "High: \(Int(v)) \(glucoseUnitLabel)" }
-        return String(format: "High: %.1f %@", v, glucoseUnitLabel)
+        let fmt = gluUnit == .mgdL ? "%.0f" : "%.1f"
+        return String(format: String(localized: "High: \(fmt) %@"), glucoseHighDisplayBinding.wrappedValue, glucoseUnitLabel)
     }
 
-    // MARK: - Bulleted helper
-    @ViewBuilder
-    private func bullet(_ text: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Text("•")
-            Text(text)
-                .foregroundStyle(.secondary)
-        }
-        .appFont(.footnote)
+    // MARK: - Knowledge content
+    private struct KnowledgeSection: Identifiable {
+        let id = UUID()
+        let title: String
+        let bullets: [String]
     }
-}
 
-private struct KnowledgeSection: Identifiable {
-    let id = UUID()
-    let title: String
-    let bullets: [String]
-}
-
-private extension ProfileView {
-    var knowledgeSections: [KnowledgeSection] {
+    private var knowledgeSections: [KnowledgeSection] {
         [
             KnowledgeSection(
-                title: String(localized: "How.Reminders.Title", defaultValue: "Reminders"),
+                title: String(localized: "Reminders"),
                 bullets: [
-                    String(localized: "How.Reminders.1", defaultValue: "Allow notifications so Ccare can deliver time-sensitive alerts for every planned dose. Reminders now renew 14 days ahead."),
-                    String(localized: "How.Reminders.2", defaultValue: "Logging taken or skipped clears the badge and suppresses duplicate alerts for the rest of the day."),
-                    String(localized: "How.Reminders.3", defaultValue: "Use Preferences to adjust grace minutes and pick the snooze interval that matches your routine." )
+                    String(localized: "Schedules are regenerated for two weeks ahead when you open the app."),
+                    String(localized: "Snoozes are single-shot and won't stack."),
+                    String(localized: "Badge counts respect a grace period before showing overdue.")
                 ]
             ),
             KnowledgeSection(
-                title: String(localized: "How.Adherence.Title", defaultValue: "Adherence Tracking"),
+                title: String(localized: "Adherence Tracking"),
                 bullets: [
-                    String(localized: "How.Adherence.1", defaultValue: "Seven-day adherence uses the latest status for every medication-time pair each day."),
-                    String(localized: "How.Adherence.2", defaultValue: "Single-dose medications accept unscheduled logs; multi-dose schedules need the matching time stamp."),
-                    String(localized: "How.Adherence.3", defaultValue: "Restore or clear data from the Data section—notifications reschedule automatically afterward.")
+                    String(localized: "One log per med per time per day; latest action wins."),
+                    String(localized: "Overdue is calculated after your grace window.")
                 ]
             ),
             KnowledgeSection(
-                title: String(localized: "How.Trends.Title", defaultValue: "Trend Charts"),
+                title: String(localized: "Trend Charts"),
                 bullets: [
-                    String(localized: "How.Trends.1", defaultValue: "Charts aggregate readings by day and highlight the goal ranges configured in Preferences."),
-                    String(localized: "How.Trends.2", defaultValue: "Blood pressure plots median systolic/diastolic values with a shaded band between them."),
-                    String(localized: "How.Trends.3", defaultValue: "Switch between 7/30/90-day windows to compare recent changes against longer histories.")
+                    String(localized: "Goal ranges shade the charts to highlight outliers."),
+                    String(localized: "Recent measurements appear in reverse chronological order.")
                 ]
             ),
             KnowledgeSection(
-                title: String(localized: "How.Effectiveness.Title", defaultValue: "Medication Effectiveness"),
+                title: String(localized: "Medication Effectiveness"),
                 bullets: [
-                    String(localized: "How.Effectiveness.1", defaultValue: "Analysis runs on categorized antihypertensive or antidiabetic meds once enough measurements exist."),
-                    String(localized: "How.Effectiveness.2", defaultValue: "Per-dose deltas blend with 14-day trends and adherence gates to produce verdict and confidence."),
-                    String(localized: "How.Effectiveness.3", defaultValue: "Fine-tune sensitivity and sample minimums under Preferences when clinical guidance differs.")
+                    String(localized: "Heuristic verdicts depend on enough samples and adherence."),
+                    String(localized: "Sensitivity modes adjust thresholds; defaults are balanced.")
                 ]
             )
         ]
     }
-}
 
-// MARK: - Permissions helpers
-private extension ProfileView {
-    func refreshPermissions() {
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            DispatchQueue.main.async { self.notifStatus = settings.authorizationStatus }
+    private func bullet(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Circle().fill(Color.primary.opacity(0.15)).frame(width: 6, height: 6).padding(.top, 6)
+            Text(LocalizedStringKey(text)).appFont(.footnote).foregroundStyle(.secondary)
         }
     }
 
-    func permissionHint() -> String {
+    // MARK: - Permissions
+    private func refreshPermissions() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                self.notifStatus = settings.authorizationStatus
+            }
+        }
+    }
+
+    private func permissionHint() -> String {
         switch notifStatus {
-        case .notDetermined: return NSLocalizedString("Enable notifications to get timely reminders", comment: "")
+        case .notDetermined: return NSLocalizedString("Turn on notifications to get reminders.", comment: "")
         case .denied: return NSLocalizedString("Notifications are off in Settings", comment: "")
-        case .authorized, .provisional, .ephemeral: return NSLocalizedString("Notifications enabled", comment: "")
+        case .authorized, .provisional, .ephemeral: return NSLocalizedString("Notifications are on", comment: "")
         @unknown default: return ""
         }
     }
 
-    @ViewBuilder
-    func permissionButton() -> some View {
-        switch notifStatus {
-        case .notDetermined:
-            Button {
-                UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in
-                    DispatchQueue.main.async { refreshPermissions() }
+    private func permissionButton() -> some View {
+        Button {
+            if notifStatus == .denied {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
                 }
-            } label: {
-                Image(systemName: "bell.badge.fill")
-                    .imageScale(.large)
-                    .accessibilityLabel(NSLocalizedString("Enable Notifications", comment: ""))
+            } else {
+                NotificationManager.shared.requestAuthorization()
+                refreshPermissions()
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-        case .denied:
-            Button {
-                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
-            } label: {
-                Image(systemName: "gearshape.fill")
-                    .imageScale(.large)
-                    .accessibilityLabel(NSLocalizedString("Open Settings", comment: ""))
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-        case .authorized, .provisional, .ephemeral:
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
-                .imageScale(.large)
-                .accessibilityLabel(NSLocalizedString("Enabled", comment: ""))
-        @unknown default:
-            EmptyView()
+        } label: {
+            Text(notifStatus == .denied ? NSLocalizedString("Open Settings", comment: "") : NSLocalizedString("Enable", comment: ""))
         }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.small)
+        .accessibilityLabel(NSLocalizedString("Open Settings", comment: ""))
     }
-}
-
-#Preview {
-    ProfileView().environmentObject(DataStore())
 }

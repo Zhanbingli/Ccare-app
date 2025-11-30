@@ -20,4 +20,10 @@ enum Haptics {
         let generator = UIImpactFeedbackGenerator(style: style)
         generator.impactOccurred()
     }
+
+    static func error() {
+        guard isEnabled else { return }
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.error)
+    }
 }

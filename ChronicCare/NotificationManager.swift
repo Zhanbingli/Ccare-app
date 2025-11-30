@@ -19,9 +19,14 @@ final class NotificationManager {
     private let defaults = UserDefaults.standard
     private let suppressKey = "suppress.today.ids"
     private let suppressDateKey = "suppress.today.date"
+    private let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
 
-    private func todayKey() -> String {
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; return f.string(from: Date())
+    private func todayKey(for date: Date = Date()) -> String {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; return f.string(from: date)
     }
 
     private func loadSuppressedIds() -> Set<String> {
@@ -145,7 +150,7 @@ final class NotificationManager {
         fireDates.forEach { fireDate in
             let comps = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
             let id = instanceId(for: medication.id, date: fireDate, comps: timeComponents)
-            let content = makeContent(for: medication, scheduleTime: timeComponents)
+            let content = makeContent(for: medication, scheduleTime: timeComponents, scheduledDate: fireDate)
             let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
             let req = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
             UNUserNotificationCenter.current().add(req) { error in
@@ -154,7 +159,7 @@ final class NotificationManager {
         }
     }
 
-    private func makeContent(for medication: Medication, scheduleTime: DateComponents?, isSnooze: Bool = false) -> UNMutableNotificationContent {
+    private func makeContent(for medication: Medication, scheduleTime: DateComponents?, scheduledDate: Date? = nil, isSnooze: Bool = false) -> UNMutableNotificationContent {
         let content = UNMutableNotificationContent()
         content.title = medication.name
         content.body = String(format: NSLocalizedString(isSnooze ? "Snoozed: %@" : "Dose: %@", comment: ""), medication.dose)
@@ -164,6 +169,9 @@ final class NotificationManager {
         if let comps = scheduleTime, let h = comps.hour, let m = comps.minute {
             info["scheduleHour"] = h
             info["scheduleMinute"] = m
+        }
+        if let scheduledDate {
+            info["scheduledDate"] = isoFormatter.string(from: scheduledDate)
         }
         content.userInfo = info
         content.threadIdentifier = medication.id.uuidString
@@ -184,16 +192,6 @@ final class NotificationManager {
         let today = cal.startOfDay(for: now)
         let id = instanceId(for: medicationID, date: today, comps: timeComponents)
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id])
-    }
-
-    func cancel(for medication: Medication) {
-        // Remove any pending requests that match this med's prefix
-        let center = UNUserNotificationCenter.current()
-        let prefix = medication.id.uuidString
-        center.getPendingNotificationRequests { list in
-            let ids = list.map { $0.identifier }.filter { $0.hasPrefix(prefix) }
-            if !ids.isEmpty { center.removePendingNotificationRequests(withIdentifiers: ids) }
-        }
     }
 
     func cancelAll(for medication: Medication) {
@@ -232,6 +230,8 @@ final class NotificationManager {
             info["scheduleHour"] = h
             info["scheduleMinute"] = m
         }
+        let fireDate = Date().addingTimeInterval(TimeInterval(minutes * 60))
+        info["scheduledDate"] = isoFormatter.string(from: fireDate)
         content.userInfo = info
         content.threadIdentifier = medicationID.uuidString
         if #available(iOS 15.0, *) { content.interruptionLevel = .timeSensitive }
@@ -247,7 +247,7 @@ final class NotificationManager {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [snoozeId])
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["snooze_\(medication.id.uuidString)"])
 
-        let content = makeContent(for: medication, scheduleTime: scheduleTime, isSnooze: true)
+        let content = makeContent(for: medication, scheduleTime: scheduleTime, scheduledDate: Date().addingTimeInterval(TimeInterval(minutes * 60)), isSnooze: true)
 
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(minutes * 60), repeats: false)
         let req = UNNotificationRequest(identifier: snoozeId, content: content, trigger: trigger)
@@ -261,14 +261,24 @@ final class NotificationManager {
             let snapshot: ([Medication], [IntakeLog]) = await MainActor.run { (store.medications, store.intakeLogs) }
             let defaults = UserDefaults.standard
             let grace = defaults.object(forKey: "prefs.graceMinutes") as? Int ?? 30
-            let count = Self.computeOutstandingCount(medications: snapshot.0, intakeLogs: snapshot.1, graceMinutes: grace)
+            let activeSnoozes = await pendingSnoozeIdentifiers()
+            let count = Self.computeOutstandingCount(medications: snapshot.0, intakeLogs: snapshot.1, graceMinutes: grace, activeSnoozes: activeSnoozes)
             await MainActor.run {
                 UIApplication.shared.applicationIconBadgeNumber = count
             }
         }
     }
 
-    static func computeOutstandingCount(medications: [Medication], intakeLogs: [IntakeLog], graceMinutes: Int) -> Int {
+    private func pendingSnoozeIdentifiers() async -> Set<String> {
+        await withCheckedContinuation { continuation in
+            UNUserNotificationCenter.current().getPendingNotificationRequests { list in
+                let ids = list.map { $0.identifier }.filter { $0.hasPrefix("snooze_") }
+                continuation.resume(returning: Set(ids))
+            }
+        }
+    }
+
+    static func computeOutstandingCount(medications: [Medication], intakeLogs: [IntakeLog], graceMinutes: Int, activeSnoozes: Set<String> = []) -> Int {
         let cal = Calendar.current
         let now = Date()
         let todayStart = cal.startOfDay(for: now)
@@ -295,6 +305,11 @@ final class NotificationManager {
                     .sorted { $0.date > $1.date }
                 if let last = logs.first {
                     if last.status == .taken || last.status == .skipped { continue }
+                    if last.status == .snoozed {
+                        var comps = DateComponents(); comps.hour = h; comps.minute = m
+                        let snoozeId = snoozeIdentifier(for: med.id, scheduleTime: comps)
+                        if activeSnoozes.contains(snoozeId) { continue }
+                    }
                 }
                 total += 1
             }
@@ -344,5 +359,22 @@ extension NotificationManager {
         comps.hour = hour
         comps.minute = minute
         return comps
+    }
+
+    static func scheduledDate(from userInfo: [AnyHashable: Any]) -> Date? {
+        guard let str = userInfo["scheduledDate"] as? String else { return nil }
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f.date(from: str)
+    }
+
+    static func scheduledDate(fromIdentifier identifier: String) -> Date? {
+        let parts = identifier.split(separator: "_")
+        guard parts.count >= 3 else { return nil }
+        // Pattern: <medID>_yyyyMMdd_HH_MM
+        let maybeDate = parts[1]
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd"
+        return formatter.date(from: String(maybeDate))
     }
 }

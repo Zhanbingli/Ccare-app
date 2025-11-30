@@ -19,8 +19,8 @@ extension DataStore {
             return evaluateBP(med: med, now: now)
         case .antidiabetic:
             return evaluateGlucose(med: med, now: now)
-        case .unspecified:
-            return MedicationEffectResult(verdict: .notApplicable, summary: NSLocalizedString("No category", comment: ""), samples: 0, confidence: 0)
+        case .unspecified, .custom:
+            return MedicationEffectResult(verdict: .notApplicable, summary: NSLocalizedString("Category not supported for evaluation", comment: ""), samples: 0, confidence: 0)
         }
     }
 
@@ -72,14 +72,10 @@ extension DataStore {
             }
         }
 
-        func median(_ arr: [Double]) -> Double? {
-            guard !arr.isEmpty else { return nil }
-            let s = arr.sorted(); let n = s.count
-            if n % 2 == 1 { return s[n/2] }
-            return (s[n/2-1] + s[n/2]) / 2.0
-        }
-        let medSys = median(deltasSys) ?? 0
-        let medDia = median(deltasDia) ?? 0
+        let statsSys = robustStats(for: deltasSys)
+        let statsDia = robustStats(for: deltasDia)
+        let medSys = statsSys?.median ?? 0
+        let medDia = statsDia?.median ?? 0
 
         // Moving average delta: last 14d vs previous 14d (systolic)
         let last14Start = cal.date(byAdding: .day, value: -14, to: now)!
@@ -102,18 +98,33 @@ extension DataStore {
         let samples = deltasSys.count
         let minSamples = cfg.minSamples
         let verdict: MedicationEffectResult.Verdict
-        if samples >= minSamples && (improvedByDose || improvedMoving) && goodAdh { verdict = .likelyEffective }
-        else if samples < minSamples && !improvedMoving { verdict = .unclear }
-        else if (improvedByDose || improvedMoving) { verdict = .likelyEffective }
-        else { verdict = .likelyIneffective }
+        let ciSuggestsEffect = (statsSys?.ciHigh ?? 1) < 0
+        if samples >= minSamples && (improvedByDose || improvedMoving) && goodAdh && ciSuggestsEffect {
+            verdict = .likelyEffective
+        } else if samples < minSamples && !improvedMoving {
+            verdict = .unclear
+        } else if (improvedByDose || improvedMoving) && ciSuggestsEffect {
+            verdict = .likelyEffective
+        } else {
+            verdict = .likelyIneffective
+        }
         // Confidence
         func clip01(_ x: Double) -> Double { max(0, min(1, x)) }
         let doseScore = clip01(max(0, -medSys) / cfg.bpDose)
         let moveScore = clip01(max(0, -avgDelta) / cfg.bpMove)
         let sampleScore = clip01(Double(samples) / Double(max(1, minSamples)))
         let adhFactor = goodAdh ? 1.0 : 0.8
-        let conf = Int(round(100.0 * 0.5 * (doseScore + moveScore) * sampleScore * adhFactor))
-        let summary = String(format: NSLocalizedString("BP Δ: %.0f/%.0f, 14d Δ: %.0f • Confidence: %d%%", comment: ""), medSys, medDia, avgDelta, conf)
+        var conf = Int(round(100.0 * 0.5 * (doseScore + moveScore) * sampleScore * adhFactor))
+        if let stats = statsSys {
+            let significant = stats.ciHigh < 0 ? 1.0 : (stats.ciLow > 0 ? 0.3 : 0.6)
+            conf = Int(round(Double(conf) * significant))
+        }
+        let summary: String
+        if let stats = statsSys {
+            summary = String(format: NSLocalizedString("BP Δ: %.0f/%.0f (90%% CI %.0f..%.0f), 14d Δ: %.0f • n=%d • Confidence: %d%%", comment: ""), medSys, medDia, stats.ciLow, stats.ciHigh, avgDelta, samples, conf)
+        } else {
+            summary = String(format: NSLocalizedString("BP Δ: %.0f/%.0f, 14d Δ: %.0f • n=%d • Confidence: %d%%", comment: ""), medSys, medDia, avgDelta, samples, conf)
+        }
         return MedicationEffectResult(verdict: verdict, summary: summary, samples: samples, confidence: smoothConfidence(raw: 0.5 * (max(0, -medSys) / cfg.bpDose + max(0, -avgDelta) / cfg.bpMove), samples: samples, threshold: cfg.minSamples))
     }
 
@@ -151,13 +162,8 @@ extension DataStore {
                 deltas.append(post.value - pre.value)
             }
         }
-        func median(_ arr: [Double]) -> Double? {
-            guard !arr.isEmpty else { return nil }
-            let s = arr.sorted(); let n = s.count
-            if n % 2 == 1 { return s[n/2] }
-            return (s[n/2-1] + s[n/2]) / 2.0
-        }
-        let medDelta = median(deltas) ?? 0
+        let stats = robustStats(for: deltas)
+        let medDelta = stats?.median ?? 0
 
         // Moving average delta 14d vs prior 14d
         let last14Start = cal.date(byAdding: .day, value: -14, to: now)!
@@ -176,17 +182,66 @@ extension DataStore {
         let samples = deltas.count
         let minSamples = cfg.minSamples
         let verdict: MedicationEffectResult.Verdict
-        if samples >= minSamples && (improvedByDose || improvedMoving) && goodAdh { verdict = .likelyEffective }
-        else if samples < minSamples && !improvedMoving { verdict = .unclear }
-        else if (improvedByDose || improvedMoving) { verdict = .likelyEffective }
-        else { verdict = .likelyIneffective }
+        let ciSuggestsEffect = (stats?.ciHigh ?? 1) < 0
+        if samples >= minSamples && (improvedByDose || improvedMoving) && goodAdh && ciSuggestsEffect {
+            verdict = .likelyEffective
+        } else if samples < minSamples && !improvedMoving {
+            verdict = .unclear
+        } else if (improvedByDose || improvedMoving) && ciSuggestsEffect {
+            verdict = .likelyEffective
+        } else {
+            verdict = .likelyIneffective
+        }
         func clip01(_ x: Double) -> Double { max(0, min(1, x)) }
         let doseScore = clip01(max(0, -medDelta) / cfg.gluDose)
         let moveScore = clip01(max(0, -avgDelta) / cfg.gluMove)
         let sampleScore = clip01(Double(samples) / Double(max(1, minSamples)))
         let adhFactor = goodAdh ? 1.0 : 0.8
-        let conf = Int(round(100.0 * 0.5 * (doseScore + moveScore) * sampleScore * adhFactor))
-        let summary = String(format: NSLocalizedString("Glucose Δ: %.0f, 14d Δ: %.0f • Confidence: %d%%", comment: ""), medDelta, avgDelta, conf)
+        var conf = Int(round(100.0 * 0.5 * (doseScore + moveScore) * sampleScore * adhFactor))
+        if let stats = stats {
+            let significant = stats.ciHigh < 0 ? 1.0 : (stats.ciLow > 0 ? 0.3 : 0.6)
+            conf = Int(round(Double(conf) * significant))
+        }
+        let summary: String
+        if let stats = stats {
+            summary = String(format: NSLocalizedString("Glucose Δ: %.0f (90%% CI %.0f..%.0f), 14d Δ: %.0f • n=%d • Confidence: %d%%", comment: ""), medDelta, stats.ciLow, stats.ciHigh, avgDelta, samples, conf)
+        } else {
+            summary = String(format: NSLocalizedString("Glucose Δ: %.0f, 14d Δ: %.0f • n=%d • Confidence: %d%%", comment: ""), medDelta, avgDelta, samples, conf)
+        }
         return MedicationEffectResult(verdict: verdict, summary: summary, samples: samples, confidence: conf)
+    }
+
+    // MARK: - Robust helpers
+    private func median(_ arr: [Double]) -> Double? {
+        guard !arr.isEmpty else { return nil }
+        let s = arr.sorted(); let n = s.count
+        if n % 2 == 1 { return s[n/2] }
+        return (s[n/2-1] + s[n/2]) / 2.0
+    }
+
+    private func robustStats(for values: [Double], trim: Double = 0.1, iterations: Int = 200) -> (median: Double, ciLow: Double, ciHigh: Double)? {
+        guard !values.isEmpty else { return nil }
+        let sorted = values.sorted()
+        let drop = Int(Double(sorted.count) * trim)
+        let trimmed = Array(sorted.dropFirst(min(drop, sorted.count)).dropLast(min(drop, max(0, sorted.count - drop))))
+        guard let baseMedian = median(trimmed), !trimmed.isEmpty else { return nil }
+
+        // Bootstrap median for CI
+        guard trimmed.count >= 3 else { return (baseMedian, baseMedian, baseMedian) }
+        var medians: [Double] = []
+        medians.reserveCapacity(iterations)
+        for _ in 0..<iterations {
+            var sample: [Double] = []
+            sample.reserveCapacity(trimmed.count)
+            for _ in 0..<trimmed.count {
+                if let val = trimmed.randomElement() { sample.append(val) }
+            }
+            if let m = median(sample) { medians.append(m) }
+        }
+        guard !medians.isEmpty else { return (baseMedian, baseMedian, baseMedian) }
+        let ciSorted = medians.sorted()
+        let lowerIdx = max(0, Int(Double(ciSorted.count) * 0.05))
+        let upperIdx = min(ciSorted.count - 1, Int(Double(ciSorted.count) * 0.95))
+        return (baseMedian, ciSorted[lowerIdx], ciSorted[upperIdx])
     }
 }

@@ -47,20 +47,42 @@ struct DashboardView: View {
                     heroSection(next: nextMedication(), adherence: adherence, taken: takenCount, total: totalCount)
                         .padding(.horizontal)
 
-                    quickActionsSection
+                    // Smart insights
+                    let insights = MedicationInsightsEngine.generateInsights(
+                        medications: store.medications,
+                        intakeLogs: store.intakeLogs,
+                        store: store
+                    )
+                    if !insights.isEmpty {
+                        insightsSection(insights: insights)
+                    }
 
                     sectionHeader(NSLocalizedString("Today's Medications", comment: ""), systemImage: "pills.fill")
                     medsSection(items: schedules, statusCache: statusCache)
 
-                    sectionHeader(NSLocalizedString("Recent Measurements", comment: ""), systemImage: "waveform.path.ecg")
-                    measurementsSection
+                    sectionHeader(NSLocalizedString("Health Data", comment: ""), systemImage: "heart.text.square.fill")
+                    measurementsAndTrendsSection
                 }
                 .padding(.vertical, 24)
             }
             .navigationTitle("Dashboard")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showAddMeasurement = true } label: { Image(systemName: "plus") }
+                    Menu {
+                        Button {
+                            showAddMeasurement = true
+                        } label: {
+                            Label("Log Measurement", systemImage: "waveform.path.ecg")
+                        }
+                        Button {
+                            showTrendsPeek = true
+                        } label: {
+                            Label("View Trends", systemImage: "chart.line.uptrend.xyaxis")
+                        }
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                    }
                 }
             }
             .sheet(isPresented: $showAddMeasurement) {
@@ -80,7 +102,7 @@ struct DashboardView: View {
             }
             .sheet(isPresented: $showTrendsPeek) {
                 NavigationStack {
-                    TrendsView()
+                    EnhancedTrendsView()
                         .environmentObject(store)
                         .navigationTitle(NSLocalizedString("Trends", comment: ""))
                         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { showTrendsPeek = false } } }
@@ -197,26 +219,6 @@ private extension DashboardView {
         .shadow(color: Color.indigo.opacity(0.12), radius: 10, x: 0, y: 6)
     }
 
-    private var quickActionsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(String(localized: "Quick Actions"), systemImage: "bolt.fill")
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 14) {
-                    quickActionButton(title: String(localized: "Log Measurement"), icon: "waveform.path.ecg", tint: .teal) {
-                        showAddMeasurement = true
-                    }
-                    quickActionButton(title: String(localized: "Manage Meds"), icon: "pills.fill", tint: .indigo) {
-                        showMedManager = true
-                    }
-                    quickActionButton(title: String(localized: "View Trends"), icon: "chart.line.uptrend.xyaxis", tint: .orange) {
-                        showTrendsPeek = true
-                    }
-                }
-                .padding(.horizontal)
-                .padding(.bottom, 4)
-            }
-        }
-    }
 
     @ViewBuilder
     private func medsSection(items: [MedSchedule], statusCache: [String: TodayMedStatus]) -> some View {
@@ -279,43 +281,60 @@ private extension DashboardView {
         .padding(.horizontal)
     }
 
-    private var measurementsSection: some View {
-        Card {
-            if store.measurements.isEmpty {
-                EmptyStateView(systemImage: "heart.text.square", title: "No measurements yet", subtitle: "Add your first measurement", actionTitle: "Add") {
-                    showAddMeasurement = true
-                }
-            } else {
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(recentMeasurements()) { m in
-                        HStack(spacing: 10) {
-                            Circle().fill(m.cardTint).frame(width: 8, height: 8)
-                            Text(m.type.rawValue).appFont(.subheadline)
+    private var measurementsAndTrendsSection: some View {
+        VStack(spacing: 12) {
+            Card {
+                if store.measurements.isEmpty {
+                    EmptyStateView(systemImage: "heart.text.square", title: "No measurements yet", subtitle: "Add your first measurement", actionTitle: "Add") {
+                        showAddMeasurement = true
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text(NSLocalizedString("Recent Measurements", comment: "")).appFont(.headline)
                             Spacer()
-                            if m.type == .bloodPressure, let dia = m.diastolic {
-                                Text("\(Int(m.value))/\(Int(dia)) \(m.type.unit)")
-                                    .appFont(.label)
-                                    .foregroundStyle(m.valueForeground)
-                            } else if m.type == .bloodGlucose {
-                                let v = UnitPreferences.mgdlToPreferred(m.value)
-                                let unit = UnitPreferences.glucoseUnit.rawValue
-                                let formatted = UnitPreferences.glucoseUnit == .mgdL ? String(format: "%.0f", v) : String(format: "%.1f", v)
-                                Text("\(formatted) \(unit)")
-                                    .appFont(.label)
-                                    .foregroundStyle(m.valueForeground)
-                            } else {
-                                Text("\(String(format: "%.1f", m.value)) \(m.type.unit)")
-                                    .appFont(.label)
-                                    .foregroundStyle(m.valueForeground)
+                            Button { showTrendsPeek = true } label: {
+                                HStack(spacing: 4) {
+                                    Text("View Trends").appFont(.caption)
+                                    Image(systemName: "chart.line.uptrend.xyaxis")
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+                        Divider()
+                        ForEach(recentMeasurements(limit: 4)) { m in
+                            HStack(spacing: 10) {
+                                Circle().fill(m.cardTint).frame(width: 8, height: 8)
+                                Text(m.type.rawValue).appFont(.subheadline)
+                                Spacer()
+                                if m.type == .bloodPressure, let dia = m.diastolic {
+                                    Text("\(Int(m.value))/\(Int(dia)) \(m.type.unit)")
+                                        .appFont(.label)
+                                        .foregroundStyle(m.valueForeground)
+                                } else if m.type == .bloodGlucose {
+                                    let v = UnitPreferences.mgdlToPreferred(m.value)
+                                    let unit = UnitPreferences.glucoseUnit.rawValue
+                                    let formatted = UnitPreferences.glucoseUnit == .mgdL ? String(format: "%.0f", v) : String(format: "%.1f", v)
+                                    Text("\(formatted) \(unit)")
+                                        .appFont(.label)
+                                        .foregroundStyle(m.valueForeground)
+                                } else {
+                                    Text("\(String(format: "%.1f", m.value)) \(m.type.unit)")
+                                        .appFont(.label)
+                                        .foregroundStyle(m.valueForeground)
+                                }
+                            }
+                            .foregroundStyle(.primary)
+                            .padding(.vertical, 4)
+                            if m.id != recentMeasurements(limit: 4).last?.id {
+                                Divider()
                             }
                         }
-                        .foregroundStyle(.primary)
-                        .padding(.vertical, 4)
-                        Divider()
                     }
+                    .id(store.measurements.count)
+                    .animation(.easeInOut(duration: 0.2), value: store.measurements.count)
                 }
-                .id(store.intakeLogs.count)
-                .animation(.easeInOut(duration: 0.2), value: store.intakeLogs.count)
             }
         }
         .padding(.horizontal)
@@ -383,31 +402,73 @@ private extension DashboardView {
         }
     }
 
-    private func quickActionButton(title: String, icon: String, tint: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(alignment: .center, spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
-                    .background(Circle().fill(tint))
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(LocalizedStringKey(title)).appFont(.subheadline)
-                    Text(NSLocalizedString("Tap to open", comment: "")).appFont(.caption).foregroundStyle(.secondary)
+    @ViewBuilder
+    private func insightsSection(insights: [MedicationInsight]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader(NSLocalizedString("Smart Insights", comment: ""), systemImage: "lightbulb.fill")
+
+            ForEach(insights.prefix(3)) { insight in
+                Card {
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: iconForInsight(insight.type))
+                            .font(.system(size: 20))
+                            .foregroundStyle(colorForInsight(insight.type))
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(insight.message)
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundStyle(.primary)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            if let actionTitle = insight.actionTitle {
+                                Button(actionTitle) {
+                                    if let action = insight.action {
+                                        action()
+                                    }
+                                }
+                                .font(.system(size: 13, weight: .medium))
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                            }
+                        }
+                    }
+                    .padding(12)
                 }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .foregroundStyle(.secondary)
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color(.systemBackground).opacity(0.9))
-                    .shadow(color: tint.opacity(0.12), radius: 8, x: 0, y: 4)
-            )
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal)
     }
+
+    private func iconForInsight(_ type: MedicationInsight.InsightType) -> String {
+        switch type {
+        case .skippedFrequently:
+            return "exclamationmark.triangle.fill"
+        case .timeAdjustmentSuggestion:
+            return "clock.arrow.circlepath"
+        case .adherenceImprovement:
+            return "chart.line.uptrend.xyaxis"
+        case .effectivenessLow:
+            return "waveform.path.ecg"
+        case .reminderNotWorking:
+            return "bell.slash.fill"
+        }
+    }
+
+    private func colorForInsight(_ type: MedicationInsight.InsightType) -> Color {
+        switch type {
+        case .skippedFrequently:
+            return .orange
+        case .timeAdjustmentSuggestion:
+            return .blue
+        case .adherenceImprovement:
+            return .purple
+        case .effectivenessLow:
+            return .red
+        case .reminderNotWorking:
+            return .gray
+        }
+    }
+
 }
 
 #Preview {
