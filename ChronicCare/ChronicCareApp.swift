@@ -32,6 +32,7 @@ struct ChronicCareApp: App {
                     for med in store.medications where med.remindersEnabled {
                         NotificationManager.shared.schedule(for: med)
                     }
+                    NotificationManager.shared.cleanOrphanedRequests(validMedicationIDs: Set(store.medications.map { $0.id }))
                     // Start badge refresh observers and update once on launch
                     NotificationManager.shared.startBadgeAutoRefresh(store: store)
                     NotificationManager.shared.updateBadge(store: store)

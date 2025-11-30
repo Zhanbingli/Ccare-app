@@ -94,6 +94,7 @@ struct ProfileView: View {
                         for med in store.medications where med.remindersEnabled {
                             NotificationManager.shared.schedule(for: med)
                         }
+                        NotificationManager.shared.cleanOrphanedRequests(validMedicationIDs: Set(store.medications.map { $0.id }))
                     } catch {
                         print("Backup import error: \(error)")
                     }

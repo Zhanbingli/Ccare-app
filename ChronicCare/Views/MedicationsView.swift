@@ -5,6 +5,7 @@ import UserNotifications
 
 struct MedicationsView: View {
     @EnvironmentObject var store: DataStore
+    @State private var scrollProxy: ScrollViewProxy?
     @State private var showAdd = false
     @State private var editTarget: Medication? = nil
     @State private var showNotificationDeniedAlert = false
@@ -12,45 +13,51 @@ struct MedicationsView: View {
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var searchText: String = ""
     @State private var filter: MedFilter = .all
+    @State private var scrollToMedicationID: UUID? = nil
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    VStack(alignment: .leading, spacing: 12) {
-                        summaryCard
-                        filterChips
-                    }
-                }
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-
-                if notificationStatus == .denied {
+            ScrollViewReader { proxy in
+                List {
                     Section {
-                        HStack(alignment: .top, spacing: 12) {
-                            Image(systemName: "bell.slash.fill").foregroundStyle(.orange)
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(NSLocalizedString("Notifications Disabled", comment: "")).appFont(.subheadline)
-                                Text(NSLocalizedString("Turn notifications on in Settings to receive medication reminders.", comment: "")).appFont(.caption).foregroundStyle(.secondary)
-                            }
+                        VStack(alignment: .leading, spacing: 12) {
+                            summaryCard
+                            filterChips
                         }
                     }
+                    .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
-                }
-                if filteredMedications.isEmpty {
-                    Text("No medications added")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(filteredMedications) { med in
-                        medicationCard(for: med)
-                            .listRowSeparator(.hidden)
-                            .listRowBackground(Color.clear)
+
+                    if notificationStatus == .denied {
+                        Section {
+                            HStack(alignment: .top, spacing: 12) {
+                                Image(systemName: "bell.slash.fill").foregroundStyle(.orange)
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(NSLocalizedString("Notifications Disabled", comment: "")).appFont(.subheadline)
+                                    Text(NSLocalizedString("Turn notifications on in Settings to receive medication reminders.", comment: "")).appFont(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .listRowSeparator(.hidden)
+                    }
+                    if filteredMedications.isEmpty {
+                        Text("No medications added")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(filteredMedications) { med in
+                            medicationCard(for: med)
+                                .listRowSeparator(.hidden)
+                                .listRowBackground(Color.clear)
+                                .id(med.id)
+                        }
                     }
                 }
+                .listStyle(.plain)
+                .listRowSeparator(.hidden)
+                .listSectionSeparator(.hidden)
+                .onAppear { scrollProxy = proxy }
+                .onChange(of: store.medications.count) { _ in scrollProxy = proxy }
             }
-            .listStyle(.plain)
-            .listRowSeparator(.hidden)
-            .listSectionSeparator(.hidden)
             .navigationTitle("Medications")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -91,6 +98,14 @@ struct MedicationsView: View {
             }
             .onAppear(perform: refreshNotificationStatus)
             .onChange(of: store.medications.count) { _ in refreshNotificationStatus() }
+            .onChange(of: scrollToMedicationID) { target in
+                if let id = target {
+                    withAnimation {
+                        scrollProxy?.scrollTo(id, anchor: .top)
+                    }
+                    scrollToMedicationID = nil
+                }
+            }
             .alert(isPresented: $showNotificationDeniedAlert) {
                 let message = deniedMedName.map { String(format: NSLocalizedString("Enable notifications in Settings to get reminders for %@.", comment: ""), $0) } ?? NSLocalizedString("Enable notifications in Settings to get reminders.", comment: "")
                 return Alert(

@@ -231,11 +231,13 @@ private extension DashboardView {
                         let statusBase = statusCache[item.id] ?? .none
                         let status: TodayMedStatus = {
                             switch statusBase {
-                            case .none, .snoozed:
+                            case .none:
                                 let graceMin = Double(graceMinutes)
                                 if Date() > item.time.addingTimeInterval(graceMin * 60) {
                                     return .overdue
                                 } else { return statusBase }
+                            case .snoozed:
+                                return statusBase
                             default:
                                 return statusBase
                             }

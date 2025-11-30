@@ -67,7 +67,9 @@ class MedicationInsightsEngine {
                 type: .skippedFrequently,
                 message: String(format: NSLocalizedString("You've skipped %@ %d times in the past 30 days (%d%%). Consider adjusting the reminder time or discussing with your doctor.", comment: ""), medication.name, stats.skipped, Int(skipRate * 100)),
                 actionTitle: NSLocalizedString("Adjust Time", comment: ""),
-                action: nil
+                action: {
+                    NotificationCenter.default.post(name: Notification.Name("openMedicationDetail"), object: medication.id)
+                }
             )
         }
 
@@ -87,7 +89,9 @@ class MedicationInsightsEngine {
                 type: .adherenceImprovement,
                 message: String(format: NSLocalizedString("Your adherence to %@ is %d%% in the past week. Consistent use is important for best results.", comment: ""), medication.name, Int(adherenceRate * 100)),
                 actionTitle: NSLocalizedString("Set Reminder", comment: ""),
-                action: nil
+                action: {
+                    NotificationCenter.default.post(name: Notification.Name("openMedicationDetail"), object: medication.id)
+                }
             )
         }
 

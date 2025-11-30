@@ -121,6 +121,15 @@ final class NotificationManager {
             // Remove only base schedule IDs (not snooze_)
             let ids = list.map { $0.identifier }.filter { $0.hasPrefix(prefix + "_") }
             if !ids.isEmpty { center.removePendingNotificationRequests(withIdentifiers: ids) }
+            // Also remove lingering snoozes when regenerating full schedule
+            let snoozeIds = list.map { $0.identifier }.filter { $0.hasPrefix("snooze_\(prefix)") }
+            if !snoozeIds.isEmpty { center.removePendingNotificationRequests(withIdentifiers: snoozeIds) }
+
+            // Clean delivered notifications with same prefix to avoid stale banners/badges
+            center.getDeliveredNotifications { notes in
+                let delivered = notes.map { $0.request.identifier }.filter { $0.hasPrefix(prefix) || $0.hasPrefix("snooze_\(prefix)") }
+                if !delivered.isEmpty { center.removeDeliveredNotifications(withIdentifiers: delivered) }
+            }
 
             guard medication.remindersEnabled else { return }
             for t in medication.timesOfDay {
@@ -343,6 +352,32 @@ final class NotificationManager {
                 let meds = store.medications
                 meds.filter({ $0.remindersEnabled }).forEach { self?.schedule(for: $0) }
             }
+        }
+    }
+
+    // Remove pending/delivered notifications that no longer match current medications
+    func cleanOrphanedRequests(validMedicationIDs: Set<UUID>) {
+        let center = UNUserNotificationCenter.current()
+        center.getPendingNotificationRequests { list in
+            let orphanIds = list
+                .map { $0.identifier }
+                .filter { id in
+                    // identifiers use medID prefix before first "_"
+                    let prefix = id.split(separator: "_").first
+                    guard let pref = prefix, let uuid = UUID(uuidString: String(pref)) else { return false }
+                    return !validMedicationIDs.contains(uuid)
+                }
+            if !orphanIds.isEmpty { center.removePendingNotificationRequests(withIdentifiers: orphanIds) }
+        }
+        center.getDeliveredNotifications { notes in
+            let orphanIds = notes
+                .map { $0.request.identifier }
+                .filter { id in
+                    let prefix = id.split(separator: "_").first
+                    guard let pref = prefix, let uuid = UUID(uuidString: String(pref)) else { return false }
+                    return !validMedicationIDs.contains(uuid)
+                }
+            if !orphanIds.isEmpty { center.removeDeliveredNotifications(withIdentifiers: orphanIds) }
         }
     }
 }
