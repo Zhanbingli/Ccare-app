@@ -1,4 +1,5 @@
 # ChronicCare (Ccare)
+![aap dashbord](IMG_1594.jpg)
 
 ChronicCare is a SwiftUI app for medication reminders, health measurements, and actionable insights. It is offline-first, resilient to notification edge cases, and offers heuristic (non-clinical) effectiveness signals with clear confidence cues.
 
