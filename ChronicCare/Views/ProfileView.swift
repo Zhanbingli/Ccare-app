@@ -19,9 +19,10 @@ struct ProfileView: View {
     @AppStorage("units.glucose") private var glucoseUnitRaw: String = GlucoseUnit.mgdL.rawValue
     @AppStorage("prefs.graceMinutes") private var graceMinutes: Int = 30
     @AppStorage("prefs.refillThresholdDays") private var refillThresholdDays: Int = 7
-    @AppStorage("eff.mode") private var effMode: String = "balanced"
-    @AppStorage("eff.minSamples") private var effMinSamples: Int = 3
     @State private var notifStatus: UNAuthorizationStatus = .notDetermined
+    @State private var aiProvider: AIProvider = .openai
+    @State private var aiApiKey: String = ""
+    @State private var aiOptIn: Bool = false
     @AppStorage("goals.glucose.low") private var glucoseLow: Double = 70
     @AppStorage("goals.glucose.high") private var glucoseHigh: Double = 180
     @AppStorage("goals.hr.low") private var hrLow: Double = 50
@@ -140,33 +141,31 @@ struct ProfileView: View {
                     Text(NSLocalizedString("General", comment: ""))
                 }
 
-                // MARK: - Advanced
+                // MARK: - AI Analysis
                 Section {
-                    DisclosureGroup(NSLocalizedString("Effectiveness Tuning", comment: "")) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(NSLocalizedString("Sensitivity", comment: "")).appFont(.subheadline)
-                                Picker("", selection: $effMode) {
-                                    Text(NSLocalizedString("Conservative", comment: "")).tag("conservative")
-                                    Text(NSLocalizedString("Balanced", comment: "")).tag("balanced")
-                                    Text(NSLocalizedString("Aggressive", comment: "")).tag("aggressive")
-                                }
-                                .pickerStyle(.segmented)
-                            }
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(NSLocalizedString("Min Data Points", comment: "")).appFont(.subheadline)
-                                Picker("", selection: $effMinSamples) {
-                                    Text("3").tag(3)
-                                    Text("5").tag(5)
-                                    Text("7").tag(7)
-                                }
-                                .pickerStyle(.segmented)
-                            }
+                    Picker(NSLocalizedString("Provider", comment: ""), selection: $aiProvider) {
+                        ForEach(AIProvider.allCases, id: \.self) { p in
+                            Text(p.rawValue).tag(p)
                         }
-                        .padding(.vertical, 4)
                     }
+                    SecureField(NSLocalizedString("API Key", comment: ""), text: $aiApiKey)
+                        .textContentType(.password)
+                        .autocorrectionDisabled()
+                    Toggle(NSLocalizedString("Allow AI Analysis", comment: ""), isOn: $aiOptIn)
+                    if !aiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && aiOptIn {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                            Text(NSLocalizedString("AI insights enabled", comment: ""))
+                                .appFont(.caption)
+                                .foregroundStyle(.green)
+                        }
+                    }
+                    Text(NSLocalizedString("Used for drug interaction analysis and trend insights. Your API key is stored securely in Keychain.", comment: ""))
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
                 } header: {
-                    Text(NSLocalizedString("Advanced", comment: ""))
+                    Text(NSLocalizedString("AI Analysis", comment: ""))
                 }
 
                 // MARK: - Data
@@ -262,7 +261,16 @@ struct ProfileView: View {
                 Text(successMessage)
             }
         }
-        .onAppear { refreshPermissions() }
+        .onAppear {
+            refreshPermissions()
+            let config = AIService.shared.getConfiguration()
+            aiProvider = config.provider
+            aiApiKey = config.apiKey
+            aiOptIn = AIService.shared.hasUserConsent
+        }
+        .onChange(of: aiProvider) { _ in saveAIConfig() }
+        .onChange(of: aiApiKey) { _ in saveAIConfig() }
+        .onChange(of: aiOptIn) { newVal in AIService.shared.hasUserConsent = newVal }
     }
 
     // MARK: - Actions
@@ -332,6 +340,10 @@ struct ProfileView: View {
         }
     }
     #endif
+
+    private func saveAIConfig() {
+        AIService.shared.updateConfiguration(AIConfiguration(provider: aiProvider, apiKey: aiApiKey))
+    }
 
     // MARK: - Permissions
 

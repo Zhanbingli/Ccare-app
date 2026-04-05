@@ -27,9 +27,7 @@ Requirements: Xcode 15+, iOS 16+ deployment target. HealthKit entitlement must b
 
 - `NotificationHandler` (`UNUserNotificationCenterDelegate`) processes notification action responses (taken/snooze/skip) and holds a weak reference to `DataStore` set during `onAppear`.
 
-- `EffectivenessEvaluator` is implemented as a `DataStore` extension. It computes heuristic medication effectiveness using per-dose deltas, moving averages, trimmed medians, bootstrap CIs, and adherence gating. Thresholds are user-tunable via UserDefaults keys prefixed `eff.`.
-
-- **Views** follow the three-tab shell in `ContentView`: Home (DashboardView), Medications (MedicationsView), More (ProfileView). `EnhancedTrendsView` provides KPI grids and charts. Deep-linking from insights uses `NotificationCenter.default` posts with name `"openMedicationDetail"`.
+- **Views** follow the three-tab shell in `ContentView`: Home (DashboardView), Medications (MedicationsView), Settings (ProfileView). `EnhancedTrendsView` provides KPI grids and charts. Deep-linking from insights uses `NotificationCenter.default` posts with name `"openMedicationDetail"`.
 
 ## Data Flow
 
@@ -48,5 +46,5 @@ Tests use Swift Testing framework (`import Testing`, `@Test`, `#expect`), not XC
 - Notification IDs are deterministic: `"\(medID)_\(yyyyMMdd)_\(HH)_\(MM)"` for scheduled, with snooze variants appending `_snooze`.
 - `IntakeLog.scheduleKey` is `"HH:mm"` format, used to match logs to specific dose times.
 - `Medication.timesOfDay` is `[DateComponents]` with hour/minute only.
-- UserDefaults keys: `hapticsEnabled`, `gracePeriodMinutes`, `eff.mode`, `eff.*` for effectiveness tuning, goal keys for glucose/HR/BP ranges.
+- UserDefaults keys: `hapticsEnabled`, `gracePeriodMinutes`, goal keys for glucose/HR/BP ranges.
 - Backward compatibility: `Medication` decoder handles legacy single `timeOfDay` field migrating to `timesOfDay` array.

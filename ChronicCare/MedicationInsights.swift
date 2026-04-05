@@ -12,7 +12,6 @@ struct MedicationInsight: Identifiable {
         case skippedFrequently
         case timeAdjustmentSuggestion
         case adherenceImprovement
-        case effectivenessLow
         case reminderNotWorking
     }
 }
@@ -36,13 +35,6 @@ class MedicationInsightsEngine {
             // Check for low adherence
             if let adherenceInsight = checkLowAdherence(medication: medication, logs: intakeLogs) {
                 insights.append(adherenceInsight)
-            }
-
-            // Check for medication effectiveness
-            if let category = medication.category, category != .unspecified {
-                if let effectivenessInsight = checkEffectiveness(medication: medication, store: store) {
-                    insights.append(effectivenessInsight)
-                }
             }
 
             // Check for reminder time optimization
@@ -92,24 +84,6 @@ class MedicationInsightsEngine {
                 action: {
                     NotificationCenter.default.post(name: Notification.Name("openMedicationDetail"), object: medication.id)
                 }
-            )
-        }
-
-        return nil
-    }
-
-    // MARK: - Effectiveness Analysis
-
-    private static func checkEffectiveness(medication: Medication, store: DataStore) -> MedicationInsight? {
-        let result = store.effectiveness(for: medication)
-
-        if result.verdict == .likelyIneffective && result.confidence > 50 {
-            return MedicationInsight(
-                medicationID: medication.id,
-                type: .effectivenessLow,
-                message: String(format: NSLocalizedString("%@ may not be as effective as expected (confidence: %d%%). Consider discussing with your healthcare provider.", comment: ""), medication.name, result.confidence),
-                actionTitle: NSLocalizedString("View Details", comment: ""),
-                action: nil
             )
         }
 

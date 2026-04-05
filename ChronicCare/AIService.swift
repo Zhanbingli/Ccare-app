@@ -246,15 +246,15 @@ class AIService {
         let prompt = createAnalysisPrompt(medications: request.medications)
 
         let body: [String: Any] = [
-            "model": "claude-3-5-sonnet-20241022",
+            "model": "claude-sonnet-4-20250514",
             "max_tokens": 4096,
+            "system": "You are a medical expert specializing in pharmacology and drug interactions. Provide detailed analysis of medication interactions, focusing on therapeutic effects and side effects. Always respond in valid JSON format.",
             "messages": [
                 [
                     "role": "user",
-                    "content": "You are a medical expert specializing in pharmacology and drug interactions. Provide detailed analysis of medication interactions, focusing on therapeutic effects and side effects. Always respond in valid JSON format.\n\n\(prompt)"
+                    "content": prompt
                 ]
-            ],
-            "response_format": ["type": "json_object"]
+            ]
         ]
 
         urlRequest.httpBody = try JSONSerialization.data(withJSONObject: body)

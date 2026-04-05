@@ -91,7 +91,7 @@
 "Dose (e.g. 500mg)" = "剂量（如 500mg）";
 "Notes (optional)" = "备注（可选）";
 "Add Time" = "添加时间";
-"Tap Add Time to set when you take this" = "点击"添加时间"设定服药时段";
+"Tap Add Time to set when you take this" = "点击「添加时间」设定服药时段";
 "Add at least one time for reminders" = "至少添加一个时间才能设置提醒";
 "More Options" = "更多选项";
 "No Schedule Set" = "未设置时间";
@@ -134,19 +134,6 @@
 "No intake logs for this day." = "当天无服药记录。";
 "No Record" = "无记录";
 "Close" = "关闭";
-
-/* Effectiveness */
-"Likely effective" = "可能有效";
-"Likely ineffective" = "可能无效";
-"Unclear" = "不确定";
-"N/A" = "无";
-"Effectiveness Tuning" = "药效评估调整";
-"Sensitivity" = "敏感度";
-"Conservative" = "保守";
-"Balanced" = "均衡";
-"Aggressive" = "积极";
-"Min Data Points" = "最少数据点";
-"Confidence: %d%%" = "置信度：%d%%";
 
 /* Trends */
 "No data in range" = "范围内没有数据";
@@ -240,6 +227,20 @@
 
 /* About */
 "Ccare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice." = "Ccare 将数据保存在本地，仅在你授权后使用 Apple 健康。本应用不提供医疗建议。";
+
+/* AI Analysis */
+"AI Analysis" = "AI 分析";
+"Provider" = "服务商";
+"API Key" = "API 密钥";
+"Allow AI Analysis" = "允许 AI 分析";
+"AI insights enabled" = "AI 洞察已启用";
+"Used for drug interaction analysis and trend insights. Your API key is stored securely in Keychain." = "用于药物相互作用分析和趋势洞察。API 密钥安全存储在钥匙串中。";
+
+/* Empty States */
+"No medication data for this month." = "本月暂无用药数据。";
+"Start logging doses to see your adherence here." = "开始记录服药后即可查看依从率。";
+"Log your first dose to see stats here." = "记录第一次服药后即可查看统计。";
+"Log Measurement" = "记录测量";
 
 /* Misc */
 "Taken!" = "已服用！";

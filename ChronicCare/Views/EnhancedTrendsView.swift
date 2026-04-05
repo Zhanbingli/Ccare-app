@@ -74,7 +74,7 @@ struct EnhancedTrendsView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
+                VStack(spacing: 14) {
                     kpiHeader
                         .padding(.horizontal)
 
@@ -87,30 +87,22 @@ struct EnhancedTrendsView: View {
                         if let selected = selectedDataPoint {
                             dataPointDetailCard(measurement: selected)
                                 .padding(.horizontal)
-                                .transition(.asymmetric(
-                                    insertion: .move(edge: .bottom).combined(with: .opacity),
-                                    removal: .move(edge: .top).combined(with: .opacity)
-                                ))
+                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
                         }
 
                         aiInsightsSection
                             .padding(.horizontal)
-
-                        effectivenessCard
-                            .padding(.horizontal)
                     }
                 }
-                .padding(.vertical)
+                .padding(.vertical, 12)
             }
             .safeAreaInset(edge: .top) {
-                VStack(spacing: 8) {
-                    pickerSection
-                }
-                .padding(.vertical, 8)
-                .background(.ultraThinMaterial)
-                .overlay(Divider(), alignment: .bottom)
+                pickerSection
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .overlay(Divider(), alignment: .bottom)
             }
-            .navigationTitle("Trends")
+            .navigationTitle(NSLocalizedString("Trends", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
         }
     }
@@ -135,120 +127,83 @@ struct EnhancedTrendsView: View {
 
     // MARK: - KPI Header
     private var kpiHeader: some View {
-        VStack(spacing: 12) {
-            TintedCard(tint: selectedType.tint) {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(selectedType.rawValue)
-                                .appFont(.title)
-                                .foregroundStyle(.white)
-                            Text("\(rangeDays) Day Overview")
-                                .appFont(.subheadline)
-                                .foregroundStyle(.white.opacity(0.8))
-                        }
-                        Spacer()
-                        Image(systemName: selectedType.systemImage)
-                            .font(.system(size: 40))
-                            .foregroundStyle(.white.opacity(0.3))
-                    }
-
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 12)], spacing: 12) {
-                        kpiTile(title: "Latest", value: latestText(), icon: "arrow.up.right.circle.fill")
-                        kpiTile(title: "Change", value: deltaText(), icon: "arrow.triangle.2.circlepath")
-                        kpiTile(title: "7d Avg", value: sevenDayAverageText(), icon: "chart.bar.fill")
-                        kpiTile(title: "In Range", value: sevenDayInRangeText(), icon: "target")
-                    }
-                }
+        VStack(spacing: 10) {
+            // Compact KPI row
+            HStack(spacing: 0) {
+                kpiCell(label: NSLocalizedString("Latest", comment: ""), value: latestText(), unit: selectedType.unit)
+                kpiDivider
+                kpiCell(label: NSLocalizedString("Change", comment: ""), value: deltaText(), unit: "")
+                kpiDivider
+                kpiCell(label: NSLocalizedString("7d Avg", comment: ""), value: sevenDayAverageText(), unit: "")
+                kpiDivider
+                kpiCell(label: NSLocalizedString("7d In\u{2011}Range", comment: ""), value: sevenDayInRangeText(), unit: "")
             }
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color(.secondarySystemBackground))
+            )
 
+            // Insight banner (only if noteworthy)
             if let insight = insightSummary() {
-                Card {
-                    HStack(spacing: 12) {
-                        Image(systemName: "lightbulb.fill")
-                            .font(.title2)
-                            .foregroundStyle(.yellow)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(insight.title).appFont(.headline)
-                            Text(insight.detail).appFont(.footnote).foregroundStyle(.secondary)
-                        }
-                    }
+                HStack(spacing: 8) {
+                    Image(systemName: "lightbulb.fill")
+                        .font(.caption)
+                        .foregroundStyle(.yellow)
+                    Text(insight.title)
+                        .appFont(.caption)
+                        .foregroundStyle(.primary)
+                    Text("—")
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(insight.detail)
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.yellow.opacity(0.08))
+                )
             }
         }
     }
 
-    private func kpiTile(title: String, value: String, icon: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.7))
-                Text(title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.85))
-            }
+    private func kpiCell(label: String, value: String, unit: String) -> some View {
+        VStack(spacing: 4) {
             Text(value)
-                .font(.system(size: 22, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
+                .font(.system(size: 18, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.6)
+            Text(label)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.white.opacity(0.15))
-        )
+        .frame(maxWidth: .infinity)
+    }
+
+    private var kpiDivider: some View {
+        Rectangle()
+            .fill(Color.primary.opacity(0.08))
+            .frame(width: 1, height: 32)
     }
 
     // MARK: - Chart Section
     private var chartSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Data Visualization")
-                    .appFont(.headline)
-                Spacer()
-                if selectedDataPoint != nil {
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            selectedDataPoint = nil
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text("Clear")
-                                .appFont(.caption)
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.caption)
-                        }
-                        .foregroundStyle(.secondary)
-                    }
-                }
-            }
-
+        VStack(alignment: .leading, spacing: 8) {
             chart
-                .frame(height: 280)
+                .frame(height: 260)
                 .contentShape(Rectangle())
                 .onTapGesture {
                     if !filtered.isEmpty {
                         showDataPointPicker = true
                     }
                 }
-
-            if !filtered.isEmpty {
-                HStack(spacing: 8) {
-                    Text("Tap chart to select data points")
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    if selectedDataPoint != nil {
-                        Text("1 selected")
-                            .appFont(.caption)
-                            .foregroundStyle(.blue)
-                    }
-                }
-            }
         }
         .sheet(isPresented: $showDataPointPicker) {
             DataPointPickerView(
@@ -262,170 +217,117 @@ struct EnhancedTrendsView: View {
 
     // MARK: - Data Point Detail
     private func dataPointDetailCard(measurement: Measurement) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Selected Data Point")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.primary)
-                        HStack(spacing: 8) {
-                            Text(measurement.date, style: .date)
-                                .font(.system(size: 13, weight: .regular))
-                                .foregroundStyle(.secondary)
-                            Text("•")
-                                .foregroundStyle(.secondary)
-                            Text(measurement.date, style: .time)
-                                .font(.system(size: 13, weight: .regular))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            selectedDataPoint = nil
-                        }
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 22))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Divider()
-
-                HStack(spacing: 24) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Value")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.secondary)
-                            .textCase(.uppercase)
-                            .tracking(0.5)
-                        if measurement.type == .bloodPressure, let dia = measurement.diastolic {
-                            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                                Text("\(Int(measurement.value))/\(Int(dia))")
-                                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                                    .foregroundStyle(.primary)
-                                Text(measurement.type.unit)
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundStyle(.secondary)
-                            }
-                        } else if measurement.type == .bloodGlucose {
-                            let v = UnitPreferences.mgdlToPreferred(measurement.value)
-                            let unit = UnitPreferences.glucoseUnit.rawValue
-                            let formatted = UnitPreferences.glucoseUnit == .mgdL ? String(format: "%.0f", v) : String(format: "%.1f", v)
-                            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                                Text(formatted)
-                                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                                    .foregroundStyle(.primary)
-                                Text(unit)
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundStyle(.secondary)
-                            }
-                        } else {
-                            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                                Text(String(format: "%.1f", measurement.value))
-                                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                                    .foregroundStyle(.primary)
-                                Text(measurement.type.unit)
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-
-                    if let note = measurement.note, !note.isEmpty {
-                        Divider()
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Note")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(.secondary)
-                                .textCase(.uppercase)
-                                .tracking(0.5)
-                            Text(note)
-                                .font(.system(size: 15, weight: .regular))
-                                .foregroundStyle(.primary)
-                                .lineLimit(3)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+        HStack(spacing: 12) {
+            // Value
+            Group {
+                if measurement.type == .bloodPressure, let dia = measurement.diastolic {
+                    Text("\(Int(measurement.value))/\(Int(dia)) \(measurement.type.unit)")
+                } else if measurement.type == .bloodGlucose {
+                    let v = UnitPreferences.mgdlToPreferred(measurement.value)
+                    let formatted = UnitPreferences.glucoseUnit == .mgdL ? String(format: "%.0f", v) : String(format: "%.1f", v)
+                    Text("\(formatted) \(UnitPreferences.glucoseUnit.rawValue)")
+                } else {
+                    Text("\(String(format: "%.1f", measurement.value)) \(measurement.type.unit)")
                 }
             }
+            .font(.system(size: 16, weight: .bold, design: .rounded))
+
+            // Date
+            Text(measurement.date, style: .date)
+                .appFont(.caption)
+                .foregroundStyle(.secondary)
+            Text(measurement.date, style: .time)
+                .appFont(.caption)
+                .foregroundStyle(.secondary)
+
+            if let note = measurement.note, !note.isEmpty {
+                Text(note)
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { selectedDataPoint = nil }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundStyle(.secondary)
+            }
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
     }
 
     // MARK: - AI Insights Section
+    private var hasAIKey: Bool {
+        !AIService.shared.getConfiguration().apiKey.isEmpty
+    }
+
+    @ViewBuilder
     private var aiInsightsSection: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 14) {
+        if hasAIKey || aiInsights != nil {
+            VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    HStack(spacing: 8) {
-                        Image(systemName: "brain.head.profile")
-                            .font(.system(size: 16, weight: .semibold))
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.purple)
-                        Text("AI Insights")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.primary)
+                        Text(NSLocalizedString("AI Analysis", comment: ""))
+                            .appFont(.subheadline)
                     }
                     Spacer()
                     if !isLoadingInsights {
                         Button {
                             generateAIInsights()
                         } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "sparkles")
-                                    .font(.system(size: 11, weight: .semibold))
-                                Text(aiInsights == nil ? "Generate" : "Refresh")
-                                    .font(.system(size: 12, weight: .medium))
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
+                            Text(aiInsights == nil ? "Generate" : "Refresh")
+                                .font(.system(size: 12, weight: .medium))
                         }
                         .buttonStyle(.bordered)
-                        .controlSize(.small)
+                        .controlSize(.mini)
                     }
                 }
 
                 if isLoadingInsights {
-                    HStack(spacing: 12) {
+                    HStack(spacing: 10) {
                         ProgressView()
-                        Text("Analyzing your health data...")
-                            .font(.system(size: 14, weight: .regular))
+                            .controlSize(.small)
+                        Text("Analyzing...")
+                            .appFont(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
+                    .padding(.vertical, 12)
                 } else if let insights = aiInsights {
                     Text(insights)
-                        .font(.system(size: 15, weight: .regular))
+                        .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(.primary)
                         .lineSpacing(4)
-                } else {
-                    HStack(alignment: .top, spacing: 12) {
-                        Image(systemName: "wand.and.stars")
-                            .font(.system(size: 20))
-                            .foregroundStyle(.purple)
-                        Text("Tap Generate to get AI-powered insights about your health trends")
-                            .font(.system(size: 14, weight: .regular))
-                            .foregroundStyle(.secondary)
-                            .lineSpacing(2)
-                    }
-                    .padding(.vertical, 8)
                 }
             }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(.secondarySystemBackground))
+            )
         }
     }
 
     // MARK: - Pickers
     private var pickerSection: some View {
-        VStack(spacing: 8) {
+        HStack(spacing: 12) {
             Picker("Type", selection: $selectedType) {
                 ForEach(MeasurementType.allCases) { t in
                     Text(t.rawValue).tag(t)
                 }
             }
             .pickerStyle(.segmented)
-            .padding(.horizontal)
             .onChange(of: selectedType) { _ in
                 withAnimation {
                     selectedDataPoint = nil
@@ -434,18 +336,19 @@ struct EnhancedTrendsView: View {
             }
 
             Picker("Range", selection: $rangeDays) {
-                Text("7d").tag(7)
-                Text("30d").tag(30)
-                Text("90d").tag(90)
+                Text(NSLocalizedString("7d", comment: "")).tag(7)
+                Text(NSLocalizedString("30d", comment: "")).tag(30)
+                Text(NSLocalizedString("90d", comment: "")).tag(90)
             }
             .pickerStyle(.segmented)
-            .padding(.horizontal)
+            .frame(width: 140)
             .onChange(of: rangeDays) { _ in
                 withAnimation {
                     selectedDataPoint = nil
                 }
             }
         }
+        .padding(.horizontal)
     }
 
     // MARK: - Chart
@@ -705,102 +608,6 @@ struct EnhancedTrendsView: View {
         .chartYAxisLabel(unit)
     }
 
-    // MARK: - Effectiveness Card
-    @ViewBuilder
-    private var effectivenessCard: some View {
-        let category: MedicationCategory? = {
-            switch selectedType {
-            case .bloodPressure: return .antihypertensive
-            case .bloodGlucose: return .antidiabetic
-            default: return nil
-            }
-        }()
-
-        if let category {
-            let meds = store.medications.filter { $0.category == category }
-            if !meds.isEmpty {
-                let results: [(Medication, MedicationEffectResult)] = meds.map { ($0, store.effectiveness(for: $0)) }
-                let counts = (
-                    effective: results.filter { $0.1.verdict == .likelyEffective }.count,
-                    unclear: results.filter { $0.1.verdict == .unclear }.count,
-                    ineffective: results.filter { $0.1.verdict == .likelyIneffective }.count
-                )
-
-                Card {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(NSLocalizedString("Medication Effectiveness", comment: "")).appFont(.headline)
-
-                        HStack(spacing: 12) {
-                            effectBadge(count: counts.effective, label: "Effective", color: .green, icon: "checkmark.circle.fill")
-                            effectBadge(count: counts.unclear, label: "Unclear", color: .secondary, icon: "questionmark.circle")
-                            effectBadge(count: counts.ineffective, label: "Ineffective", color: .red, icon: "xmark.circle.fill")
-                        }
-
-                        Divider()
-
-                        VStack(spacing: 10) {
-                            ForEach(results.prefix(3), id: \.0.id) { pair in
-                                medicationEffectRow(medication: pair.0, result: pair.1)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func effectBadge(count: Int, label: String, color: Color, icon: String) -> some View {
-        VStack(spacing: 6) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.15))
-                    .frame(width: 44, height: 44)
-                Image(systemName: icon)
-                    .foregroundStyle(color)
-            }
-            Text("\(count)")
-                .appFont(.headline)
-            Text(label)
-                .appFont(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private func medicationEffectRow(medication: Medication, result: MedicationEffectResult) -> some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(medication.name)
-                    .appFont(.subheadline)
-                if !result.summary.isEmpty {
-                    Text(result.summary)
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(effectText(result))
-                    .appFont(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(effectColor(result).opacity(0.15)))
-                    .foregroundStyle(effectColor(result))
-                if result.confidence > 0 {
-                    Text("\(result.confidence)%")
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(.tertiarySystemBackground))
-        )
-    }
-
     // MARK: - Helpers
     private func latestText() -> String {
         guard let last = filtered.last else { return "—" }
@@ -895,24 +702,6 @@ struct EnhancedTrendsView: View {
             return (NSLocalizedString("Weight trend", comment: ""), String(format: "%.1f kg (%@%.1f since start)", latest.value, sign, diff))
         case .heartRate:
             return (NSLocalizedString("Heart rate monitoring", comment: ""), NSLocalizedString("Note any unusual patterns or symptoms.", comment: ""))
-        }
-    }
-
-    private func effectText(_ r: MedicationEffectResult) -> String {
-        switch r.verdict {
-        case .likelyEffective: return NSLocalizedString("Effective", comment: "")
-        case .unclear: return NSLocalizedString("Unclear", comment: "")
-        case .likelyIneffective: return NSLocalizedString("Ineffective", comment: "")
-        case .notApplicable: return NSLocalizedString("N/A", comment: "")
-        }
-    }
-
-    private func effectColor(_ r: MedicationEffectResult) -> Color {
-        switch r.verdict {
-        case .likelyEffective: return .green
-        case .unclear: return .secondary
-        case .likelyIneffective: return .red
-        case .notApplicable: return .secondary
         }
     }
 
@@ -1072,12 +861,13 @@ struct EnhancedTrendsView: View {
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
 
         let body: [String: Any] = [
-            "model": "claude-3-5-haiku-20241022",
+            "model": "claude-haiku-4-5-20251001",
             "max_tokens": 500,
+            "system": "You are a helpful medical assistant providing health insights. Be concise, supportive, and always recommend consulting healthcare providers for medical decisions.",
             "messages": [
                 [
                     "role": "user",
-                    "content": "You are a helpful medical assistant providing health insights. Be concise, supportive, and always recommend consulting healthcare providers for medical decisions.\n\n\(prompt)"
+                    "content": prompt
                 ]
             ]
         ]
@@ -1140,18 +930,6 @@ struct EnhancedTrendsView: View {
         }
 
         return insights
-    }
-}
-
-// MARK: - MeasurementType Extension
-private extension MeasurementType {
-    var systemImage: String {
-        switch self {
-        case .bloodPressure: return "heart.text.square.fill"
-        case .bloodGlucose: return "drop.fill"
-        case .weight: return "scalemass.fill"
-        case .heartRate: return "waveform.path.ecg"
-        }
     }
 }
 

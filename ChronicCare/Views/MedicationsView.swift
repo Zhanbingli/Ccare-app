@@ -564,24 +564,6 @@ struct EditMedicationView: View {
     }
 }
 
-private func effectLabel(for result: MedicationEffectResult) -> String {
-    switch result.verdict {
-    case .likelyEffective: return NSLocalizedString("Likely effective", comment: "")
-    case .unclear: return NSLocalizedString("Unclear", comment: "")
-    case .likelyIneffective: return NSLocalizedString("Likely ineffective", comment: "")
-    case .notApplicable: return NSLocalizedString("N/A", comment: "")
-    }
-}
-
-private func effectColor(for result: MedicationEffectResult) -> Color {
-    switch result.verdict {
-    case .likelyEffective: return .green
-    case .unclear: return .secondary
-    case .likelyIneffective: return .red
-    case .notApplicable: return .secondary
-    }
-}
-
 #Preview {
     MedicationsView().environmentObject(DataStore())
 }
@@ -592,7 +574,6 @@ private extension MedicationsView {
         case all
         case remindersOn
         case remindersOff
-        case needsAttention // low confidence or paused reminders
 
         var id: String { rawValue }
         var displayName: LocalizedStringKey {
@@ -600,7 +581,6 @@ private extension MedicationsView {
             case .all: return LocalizedStringKey("All")
             case .remindersOn: return LocalizedStringKey("Active")
             case .remindersOff: return LocalizedStringKey("Paused")
-            case .needsAttention: return LocalizedStringKey("Attention")
             }
         }
     }
@@ -612,9 +592,6 @@ private extension MedicationsView {
                 case .all: return true
                 case .remindersOn: return med.remindersEnabled
                 case .remindersOff: return !med.remindersEnabled
-                case .needsAttention:
-                    let eff = store.effectiveness(for: med)
-                    return !med.remindersEnabled || eff.confidence < 40 || eff.verdict == .likelyIneffective
                 }
             }()
             let matchesSearch: Bool
@@ -632,7 +609,6 @@ private extension MedicationsView {
         let total = store.medications.count
         let active = store.medications.filter { $0.remindersEnabled }.count
         let paused = max(total - active, 0)
-        let attention = store.medications.filter { !$0.remindersEnabled || store.effectiveness(for: $0).confidence < 40 }.count
         return TintedCard(tint: .blue) {
             HStack(alignment: .center, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
@@ -645,7 +621,6 @@ private extension MedicationsView {
                 VStack(alignment: .leading, spacing: 4) {
                     summaryBadge(title: "Active", value: active, icon: "bell.fill", tint: .white.opacity(0.95))
                     summaryBadge(title: "Paused", value: paused, icon: "bell.slash", tint: .white.opacity(0.85))
-                    summaryBadge(title: "Attention", value: attention, icon: "exclamationmark.triangle.fill", tint: .yellow.opacity(0.9))
                 }
             }
         }
@@ -689,8 +664,6 @@ private extension MedicationsView {
             return store.medications.filter { $0.remindersEnabled }.count
         case .remindersOff:
             return store.medications.filter { !$0.remindersEnabled }.count
-        case .needsAttention:
-            return store.medications.filter { !$0.remindersEnabled || store.effectiveness(for: $0).confidence < 40 }.count
         }
     }
 
@@ -705,25 +678,32 @@ private extension MedicationsView {
 
     @ViewBuilder
     private func medicationCard(for med: Medication) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // Row 1: thumbnail + name/dose + toggle
-            HStack(alignment: .center, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
+            // Row 1: thumbnail + name/dose + status/toggle
+            HStack(alignment: .center, spacing: 10) {
                 medicationThumbnail(for: med)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(med.name)
-                        .appFont(.headline)
-                        .lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text(med.dose)
-                            .appFont(.subheadline)
-                            .foregroundStyle(.secondary)
+                        Text(med.name)
+                            .appFont(.headline)
+                            .lineLimit(1)
                         if !med.remindersEnabled {
                             Text(NSLocalizedString("Paused", comment: ""))
-                                .appFont(.caption)
+                                .font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(.orange)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
                                 .background(Capsule().fill(Color.orange.opacity(0.12)))
+                        }
+                    }
+                    // Dose + times inline
+                    HStack(spacing: 4) {
+                        Text(med.dose)
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                        if !med.timesOfDay.isEmpty {
+                            Text("·").foregroundStyle(.secondary)
+                            timesText(for: med)
                         }
                     }
                 }
@@ -731,44 +711,37 @@ private extension MedicationsView {
                 reminderToggle(for: med)
             }
 
-            // Row 2: times + supply (compact inline)
-            HStack(spacing: 12) {
-                timesRow(for: med)
+            // Row 2: supply + status + quick-take (all inline)
+            HStack(spacing: 8) {
                 if let remaining = med.pillsRemaining {
-                    Spacer(minLength: 0)
                     compactSupplyLabel(remaining: remaining, med: med)
                 }
-            }
-
-            // Row 3: status + effectiveness (only if relevant)
-            compactSummaryRow(for: med)
-
-            // Row 4: quick-take (only if actionable)
-            if med.remindersEnabled {
-                quickTakeButton(for: med)
+                if let (status, date) = latestTodayAction(for: med) {
+                    inlineStatusLabel(status: status, date: date)
+                }
+                Spacer(minLength: 0)
+                if med.remindersEnabled {
+                    compactQuickTakeButton(for: med)
+                }
             }
         }
-        .padding(14)
+        .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Color(.secondarySystemBackground))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
         )
         .contentShape(Rectangle())
         .onTapGesture { editTarget = med }
-        .padding(.vertical, 3)
+        .padding(.vertical, 2)
     }
 
     @ViewBuilder
     private func compactSupplyLabel(remaining: Int, med: Medication) -> some View {
         let isLow = med.isLowSupply
-        HStack(spacing: 4) {
+        HStack(spacing: 3) {
             if isLow {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 11))
+                    .font(.system(size: 10))
                     .foregroundStyle(.red)
             }
             if let days = med.daysOfSupplyRemaining, days > 0 {
@@ -781,26 +754,43 @@ private extension MedicationsView {
                     .foregroundStyle(isLow ? .red : .secondary)
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(isLow ? Color.red.opacity(0.08) : Color.primary.opacity(0.04)))
+    }
+
+    private func inlineStatusLabel(status: IntakeStatus, date: Date) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: latestStatusIcon(status))
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(statusTint(for: status))
+            Text(statusPrefix(for: status))
+                .appFont(.caption)
+                .foregroundStyle(statusTint(for: status))
+        }
     }
 
     @ViewBuilder
-    private func compactSummaryRow(for med: Medication) -> some View {
-        let latest = latestTodayAction(for: med)
-        let hasEffect = med.category != nil && med.category != .unspecified
-
-        if latest != nil || hasEffect {
-            HStack(spacing: 12) {
-                if let (status, date) = latest {
-                    statusBadge(status: status, date: date)
+    private func compactQuickTakeButton(for med: Medication) -> some View {
+        if let dose = nextUntakenDose(for: med) {
+            Button {
+                store.upsertIntake(medicationID: med.id, status: .taken, scheduleTime: dose.comps)
+                store.decrementPills(for: med.id)
+                NotificationManager.shared.suppressToday(for: med.id, timeComponents: dose.comps)
+                NotificationManager.shared.cancelTodayInstance(for: med.id, timeComponents: dose.comps)
+                NotificationManager.shared.schedule(for: med)
+                NotificationManager.shared.updateBadge(store: store)
+                Haptics.success()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
+                    Text(dose.timeStr)
+                        .font(.system(size: 12, weight: .medium))
                 }
-                Spacer(minLength: 0)
-                if hasEffect {
-                    effectivenessRow(for: med)
-                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
             }
+            .buttonStyle(.borderedProminent)
+            .tint(.green)
+            .controlSize(.mini)
         }
     }
 
@@ -826,51 +816,26 @@ private extension MedicationsView {
     }
 
     @ViewBuilder
-    private func quickTakeButton(for med: Medication) -> some View {
-        if let dose = nextUntakenDose(for: med) {
-            Button {
-                store.upsertIntake(medicationID: med.id, status: .taken, scheduleTime: dose.comps)
-                store.decrementPills(for: med.id)
-                NotificationManager.shared.suppressToday(for: med.id, timeComponents: dose.comps)
-                NotificationManager.shared.cancelTodayInstance(for: med.id, timeComponents: dose.comps)
-                NotificationManager.shared.schedule(for: med)
-                NotificationManager.shared.updateBadge(store: store)
-                Haptics.success()
-            } label: {
-                HStack {
-                    Image(systemName: "checkmark.circle.fill")
-                    Text(String(format: NSLocalizedString("Take %@ dose", comment: ""), dose.timeStr))
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.green)
-            .controlSize(.regular)
-        }
-    }
-
-    @ViewBuilder
     private func medicationThumbnail(for med: Medication) -> some View {
         if let path = med.imagePath, let ui = loadMedImage(path: path) {
             Image(uiImage: ui)
                 .resizable()
                 .scaledToFill()
-                .frame(width: 52, height: 52)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .frame(width: 40, height: 40)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         } else {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.accentColor.opacity(0.12))
-                .frame(width: 52, height: 52)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.accentColor.opacity(0.10))
+                .frame(width: 40, height: 40)
                 .overlay(
                     Image(systemName: "pills.fill")
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(Color.accentColor)
                 )
         }
     }
 
-    @ViewBuilder
-    private func timesRow(for med: Medication) -> some View {
+    private func timesText(for med: Medication) -> some View {
         let formatter: DateFormatter = {
             let f = DateFormatter()
             f.timeStyle = .short
@@ -882,21 +847,10 @@ private extension MedicationsView {
                   let date = cal.date(bySettingHour: h, minute: m, second: 0, of: Date()) else { return nil }
             return formatter.string(from: date)
         }
-        if !times.isEmpty {
-            HStack(alignment: .center, spacing: 6) {
-                Image(systemName: "clock")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                ForEach(times, id: \.self) { time in
-                    Text(time)
-                        .appFont(.caption)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(Color.primary.opacity(0.06)))
-                        .foregroundStyle(.primary)
-                }
-            }
-        }
+        return Text(times.joined(separator: ", "))
+            .appFont(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
     }
 
     private func reminderToggle(for med: Medication) -> some View {
@@ -943,61 +897,6 @@ private extension MedicationsView {
         .labelsHidden()
     }
 
-    private func effectivenessRow(for med: Medication) -> some View {
-        Group {
-            if let category = med.category, category != .unspecified {
-                let result = store.effectiveness(for: med)
-                VStack(alignment: .trailing, spacing: 6) {
-                    Text(med.displayCategoryName ?? category.displayName)
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                    HStack(spacing: 6) {
-                        Text(effectLabel(for: result))
-                            .appFont(.footnote)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(effectColor(for: result).opacity(0.15)))
-                            .foregroundStyle(effectColor(for: result))
-                        if result.confidence > 0 {
-                            HStack(spacing: 4) {
-                                Image(systemName: "shield.fill")
-                                    .font(.system(size: 11, weight: .semibold))
-                                Text("\(result.confidence)%")
-                                    .appFont(.caption)
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.06)))
-                            .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .trailing)
-            }
-        }
-    }
-
-    private func statusBadge(status: IntakeStatus, date: Date) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: latestStatusIcon(status))
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(statusTint(for: status))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(statusPrefix(for: status))
-                    .appFont(.footnote)
-                    .foregroundStyle(.primary)
-                Text(date, style: .relative)
-                    .appFont(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(statusTint(for: status).opacity(0.12))
-        )
-    }
 
     private func latestStatusIcon(_ status: IntakeStatus) -> String {
         switch status {

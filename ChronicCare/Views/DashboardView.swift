@@ -73,6 +73,14 @@ struct DashboardView: View {
                 }
                 .padding(.vertical, 24)
             }
+            .refreshable {
+                let meds = store.medications.filter { $0.remindersEnabled }
+                let now = Date()
+                NotificationManager.shared.cleanOrphanedRequests(validMedicationIDs: Set(meds.map { $0.id }))
+                meds.forEach { NotificationManager.shared.schedule(for: $0, now: now) }
+                NotificationManager.shared.checkRefillReminders(medications: store.medications)
+                store.objectWillChange.send()
+            }
             .navigationTitle("Dashboard")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -86,21 +94,13 @@ struct DashboardView: View {
                     .accessibilityLabel(NSLocalizedString("Share today's status", comment: ""))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button {
-                            showAddMeasurement = true
-                        } label: {
-                            Label("Log Measurement", systemImage: "waveform.path.ecg")
-                        }
-                        Button {
-                            showTrendsPeek = true
-                        } label: {
-                            Label("View Trends", systemImage: "chart.line.uptrend.xyaxis")
-                        }
+                    Button {
+                        showAddMeasurement = true
                     } label: {
                         Image(systemName: "plus.circle.fill")
                             .font(.title3)
                     }
+                    .accessibilityLabel(NSLocalizedString("Add Measurement", comment: ""))
                 }
             }
             .sheet(isPresented: $showAddMeasurement) {
@@ -325,23 +325,34 @@ private extension DashboardView {
                     }
                 }
                 Spacer(minLength: 12)
-                NavigationLink {
-                    AdherenceCalendarView()
-                } label: {
-                    VStack(spacing: 10) {
-                        ProgressRing(value: adherence)
-                            .frame(width: 54, height: 54)
-                        Text(String(format: "%d%%", Int(adherence * 100)))
-                            .appFont(.caption)
-                            .foregroundStyle(.white.opacity(0.95))
-                        Text(String(localized: "Adherence"))
-                            .appFont(.footnote)
-                            .foregroundStyle(.white.opacity(0.8))
-                    }
+                VStack(spacing: 10) {
+                    ProgressRing(value: adherence)
+                        .frame(width: 54, height: 54)
+                    Text(String(format: "%d%%", Int(adherence * 100)))
+                        .appFont(.caption)
+                        .foregroundStyle(.white.opacity(0.95))
+                    Text(String(localized: "Adherence"))
+                        .appFont(.footnote)
+                        .foregroundStyle(.white.opacity(0.8))
                 }
             }
         }
         .shadow(color: Color.indigo.opacity(0.12), radius: 10, x: 0, y: 6)
+
+        if total > 0 {
+            NavigationLink {
+                AdherenceCalendarView()
+            } label: {
+                HStack(spacing: 4) {
+                    Text(NSLocalizedString("Adherence Calendar", comment: ""))
+                        .appFont(.caption)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                }
+                .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
     }
 
 
@@ -452,6 +463,19 @@ private extension DashboardView {
                     .animation(.easeInOut(duration: 0.2), value: store.measurements.count)
                 }
             }
+
+            Button {
+                showAddMeasurement = true
+            } label: {
+                HStack {
+                    Image(systemName: "plus.circle.fill")
+                    Text(NSLocalizedString("Log Measurement", comment: ""))
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.teal)
+            .controlSize(.regular)
         }
         .padding(.horizontal)
     }
@@ -629,8 +653,6 @@ private extension DashboardView {
             return "clock.arrow.circlepath"
         case .adherenceImprovement:
             return "chart.line.uptrend.xyaxis"
-        case .effectivenessLow:
-            return "waveform.path.ecg"
         case .reminderNotWorking:
             return "bell.slash.fill"
         }
@@ -644,8 +666,6 @@ private extension DashboardView {
             return .blue
         case .adherenceImprovement:
             return .purple
-        case .effectivenessLow:
-            return .red
         case .reminderNotWorking:
             return .gray
         }
