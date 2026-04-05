@@ -171,7 +171,20 @@ final class NotificationManager {
     private func makeContent(for medication: Medication, scheduleTime: DateComponents?, scheduledDate: Date? = nil, isSnooze: Bool = false) -> UNMutableNotificationContent {
         let content = UNMutableNotificationContent()
         content.title = medication.name
-        content.body = String(format: NSLocalizedString(isSnooze ? "Snoozed: %@" : "Dose: %@", comment: ""), medication.dose)
+        // Include scheduled time in body so elderly users know which dose this is
+        var bodyText: String
+        if isSnooze {
+            bodyText = String(format: NSLocalizedString("Snoozed: %@", comment: ""), medication.dose)
+        } else if let comps = scheduleTime, let h = comps.hour, let m = comps.minute,
+                  let timeDate = Calendar.current.date(bySettingHour: h, minute: m, second: 0, of: Date()) {
+            let formatter = DateFormatter()
+            formatter.timeStyle = .short
+            let timeStr = formatter.string(from: timeDate)
+            bodyText = String(format: NSLocalizedString("%@ — scheduled for %@", comment: "dose — scheduled for time"), medication.dose, timeStr)
+        } else {
+            bodyText = String(format: NSLocalizedString("Dose: %@", comment: ""), medication.dose)
+        }
+        content.body = bodyText
         content.sound = .default
         content.categoryIdentifier = Self.categoryId
         var info: [String: Any] = ["medicationID": medication.id.uuidString]
@@ -352,6 +365,59 @@ final class NotificationManager {
                 let meds = store.medications
                 meds.filter({ $0.remindersEnabled }).forEach { self?.schedule(for: $0) }
             }
+        }
+    }
+
+    // MARK: - Refill Reminders
+    private static let refillCategoryId = "MED_REFILL"
+
+    private func refillIdentifier(for medID: UUID) -> String {
+        "refill_\(medID.uuidString)"
+    }
+
+    func scheduleRefillReminder(for medication: Medication) {
+        guard let days = medication.daysOfSupplyRemaining else { return }
+        let threshold = UserDefaults.standard.object(forKey: "prefs.refillThresholdDays") as? Int ?? 7
+        let id = refillIdentifier(for: medication.id)
+        let center = UNUserNotificationCenter.current()
+
+        if days > threshold {
+            // Not low yet — cancel any existing refill reminder
+            center.removePendingNotificationRequests(withIdentifiers: [id])
+            return
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = NSLocalizedString("Refill Reminder", comment: "")
+        if days == 0 {
+            content.body = String(format: NSLocalizedString("%@ has run out. Time to refill!", comment: ""), medication.name)
+        } else {
+            content.body = String(format: NSLocalizedString("%@ has %lld days of supply left. Consider refilling soon.", comment: ""), medication.name, days)
+        }
+        content.sound = .default
+        content.userInfo = ["medicationID": medication.id.uuidString]
+
+        // Fire at 9 AM tomorrow to avoid spamming
+        var dateComps = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        if let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date()) {
+            dateComps = Calendar.current.dateComponents([.year, .month, .day], from: tomorrow)
+        }
+        dateComps.hour = 9
+        dateComps.minute = 0
+        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComps, repeats: false)
+
+        let req = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+        center.add(req, withCompletionHandler: nil)
+    }
+
+    func cancelRefillReminder(for medID: UUID) {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [refillIdentifier(for: medID)])
+    }
+
+    /// Check all medications for low supply and schedule refill reminders
+    func checkRefillReminders(medications: [Medication]) {
+        for med in medications {
+            scheduleRefillReminder(for: med)
         }
     }
 

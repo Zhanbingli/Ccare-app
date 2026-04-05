@@ -44,13 +44,19 @@ import UserNotifications
                 if Calendar.current.isDateInToday(logAt) {
                     NotificationManager.shared.suppressToday(for: medID, timeComponents: comps)
                 }
-                await MainActor.run { store?.upsertIntake(medicationID: medID, status: .taken, scheduleTime: comps, at: logAt) }
+                await MainActor.run {
+                    store?.upsertIntake(medicationID: medID, status: .taken, scheduleTime: comps, at: logAt)
+                    store?.decrementPills(for: medID)
+                }
                 if let med = store?.medications.first(where: { $0.id == medID }) {
                     NotificationManager.shared.cancelTodayInstance(for: medID, timeComponents: comps, now: logAt)
                     NotificationManager.shared.schedule(for: med)
                 }
             } else {
-                await MainActor.run { store?.upsertIntake(medicationID: medID, status: .taken, scheduleTime: nil) }
+                await MainActor.run {
+                    store?.upsertIntake(medicationID: medID, status: .taken, scheduleTime: nil)
+                    store?.decrementPills(for: medID)
+                }
             }
             if let store = store { NotificationManager.shared.updateBadge(store: store) }
         case NotificationManager.actionSkip:
@@ -76,6 +82,9 @@ import UserNotifications
             }
             if let comps = scheduleComps {
                 let logAt = logDate(from: comps)
+                if Calendar.current.isDateInToday(logAt) {
+                    NotificationManager.shared.suppressToday(for: medID, timeComponents: comps)
+                }
                 await MainActor.run { store?.upsertIntake(medicationID: medID, status: .snoozed, scheduleTime: comps, at: logAt) }
             } else {
                 await MainActor.run { store?.upsertIntake(medicationID: medID, status: .snoozed, scheduleTime: nil) }
@@ -89,6 +98,9 @@ import UserNotifications
             }
             if let comps = scheduleComps {
                 let logAt = logDate(from: comps)
+                if Calendar.current.isDateInToday(logAt) {
+                    NotificationManager.shared.suppressToday(for: medID, timeComponents: comps)
+                }
                 await MainActor.run { store?.upsertIntake(medicationID: medID, status: .snoozed, scheduleTime: comps, at: logAt) }
             } else {
                 await MainActor.run { store?.upsertIntake(medicationID: medID, status: .snoozed, scheduleTime: nil) }
@@ -102,6 +114,9 @@ import UserNotifications
             }
             if let comps = scheduleComps {
                 let logAt = logDate(from: comps)
+                if Calendar.current.isDateInToday(logAt) {
+                    NotificationManager.shared.suppressToday(for: medID, timeComponents: comps)
+                }
                 await MainActor.run { store?.upsertIntake(medicationID: medID, status: .snoozed, scheduleTime: comps, at: logAt) }
             } else {
                 await MainActor.run { store?.upsertIntake(medicationID: medID, status: .snoozed, scheduleTime: nil) }

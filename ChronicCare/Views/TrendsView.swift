@@ -466,10 +466,9 @@ struct TrendsView: View {
     }
 
     private func insightSummary() -> (title: String, detail: String)? {
-        guard !filtered.isEmpty else { return nil }
+        guard let latest = filtered.last, let first = filtered.first else { return nil }
         switch selectedType {
         case .bloodPressure:
-            let latest = filtered.last!
             let thresholds = store.bpThresholds()
             if let dia = latest.diastolic, latest.value >= thresholds.systolicHigh || dia >= thresholds.diastolicHigh {
                 return (NSLocalizedString("Blood pressure is above goal", comment: ""), NSLocalizedString("Consider logging how you feel and ensure reminders are on for antihypertensive medications.", comment: ""))
@@ -479,14 +478,11 @@ struct TrendsView: View {
             let avg = sevenDayAverageText()
             return (NSLocalizedString("7-day glucose average", comment: ""), String(format: NSLocalizedString("Your recent average is %@. Track meals that help stabilize readings.", comment: ""), avg))
         case .weight:
-            let latest = filtered.last!.value
-            let baseline = filtered.first!.value
-            let diff = latest - baseline
+            let diff = latest.value - first.value
             let sign = diff >= 0 ? "+" : ""
-            return (NSLocalizedString("Weight trend", comment: ""), String(format: NSLocalizedString("%.1f %@ (%@%.1f since start)", comment: ""), latest, MeasurementType.weight.unit, sign, diff))
+            return (NSLocalizedString("Weight trend", comment: ""), String(format: NSLocalizedString("%.1f %@ (%@%.1f since start)", comment: ""), latest.value, MeasurementType.weight.unit, sign, diff))
         case .heartRate:
-            let latest = filtered.last!.value
-            return (NSLocalizedString("Recent heart rate", comment: ""), String(format: NSLocalizedString("Latest recorded value is %.0f bpm. Try adding a note when it deviates from normal.", comment: ""), latest))
+            return (NSLocalizedString("Recent heart rate", comment: ""), String(format: NSLocalizedString("Latest recorded value is %.0f bpm. Try adding a note when it deviates from normal.", comment: ""), latest.value))
         }
     }
 

@@ -10,14 +10,18 @@ struct ProfileView: View {
     @State private var shareURL: URL?
     @State private var showImporter = false
     @State private var showConfirmExportRecent = false
+    @State private var showClearedConfirmation = false
+    @State private var showErrorAlert = false
+    @State private var errorMessage = ""
+    @State private var showSuccessAlert = false
+    @State private var successMessage = ""
     @AppStorage("hapticsEnabled") private var hapticsEnabled: Bool = true
     @AppStorage("units.glucose") private var glucoseUnitRaw: String = GlucoseUnit.mgdL.rawValue
     @AppStorage("prefs.graceMinutes") private var graceMinutes: Int = 30
+    @AppStorage("prefs.refillThresholdDays") private var refillThresholdDays: Int = 7
     @AppStorage("eff.mode") private var effMode: String = "balanced"
     @AppStorage("eff.minSamples") private var effMinSamples: Int = 3
     @State private var notifStatus: UNAuthorizationStatus = .notDetermined
-    private let topCardHeight: CGFloat = 96
-    // Goal preferences
     @AppStorage("goals.glucose.low") private var glucoseLow: Double = 70
     @AppStorage("goals.glucose.high") private var glucoseHigh: Double = 180
     @AppStorage("goals.hr.low") private var hrLow: Double = 50
@@ -27,48 +31,190 @@ struct ProfileView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    // Summary row
-                    HStack(spacing: 12) {
-                        summaryCard(title: "Measurements", value: "\(store.measurements.count)", systemImage: "waveform.path.ecg", tint: .teal)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: topCardHeight)
-                        summaryCard(title: "Medications", value: "\(store.medications.count)", systemImage: "pills.fill", tint: .indigo)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: topCardHeight)
+            List {
+                // MARK: - Apple Health
+                Section {
+                    Button {
+                        HealthKitManager.shared.requestAuthorization { granted, error in
+                            DispatchQueue.main.async {
+                                if let error = error {
+                                    errorMessage = String(format: NSLocalizedString("Could not connect to Health: %@", comment: ""), error.localizedDescription)
+                                    showErrorAlert = true
+                                } else if granted {
+                                    Haptics.success()
+                                    successMessage = NSLocalizedString("Connected to Apple Health.", comment: "")
+                                    showSuccessAlert = true
+                                }
+                            }
+                        }
+                    } label: {
+                        Label(NSLocalizedString("Connect Apple Health", comment: ""), systemImage: "heart.fill")
                     }
-
-                    // Adherence + next medication
-                    HStack(spacing: 12) {
-                        adherenceCard
-                            .frame(maxWidth: .infinity)
-                            .frame(height: topCardHeight)
-                        nextMedicationCard
-                            .frame(maxWidth: .infinity)
-                            .frame(height: topCardHeight)
+                    Button {
+                        importFromHealth()
+                    } label: {
+                        Label(NSLocalizedString("Import Last 30 Days", comment: ""), systemImage: "arrow.down.doc.fill")
                     }
-
-                    quickActionsCard
-                    preferencesCard
-                    goalsCard
-                    dataManagementCard
-                    knowledgeCard
-                    aboutCard
+                } header: {
+                    Text(NSLocalizedString("Apple Health", comment: ""))
                 }
-                .padding(.vertical, 24)
-                .padding(.horizontal)
+
+                // MARK: - Notifications
+                Section {
+                    HStack {
+                        Label(NSLocalizedString("Status", comment: ""), systemImage: "bell.badge.fill")
+                        Spacer()
+                        Text(permissionHint())
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                        if notifStatus != .authorized {
+                            permissionButton()
+                        }
+                    }
+                    HStack {
+                        Text(NSLocalizedString("Overdue Grace Period", comment: ""))
+                        Spacer()
+                        Picker("", selection: $graceMinutes) {
+                            Text("15m").tag(15)
+                            Text("30m").tag(30)
+                            Text("1h").tag(60)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 160)
+                    }
+                    HStack {
+                        Text(NSLocalizedString("Refill Reminder", comment: ""))
+                        Spacer()
+                        Picker("", selection: $refillThresholdDays) {
+                            Text("3d").tag(3)
+                            Text("7d").tag(7)
+                            Text("14d").tag(14)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 140)
+                    }
+                } header: {
+                    Text(NSLocalizedString("Notifications", comment: ""))
+                }
+
+                // MARK: - Goals
+                Section {
+                    DisclosureGroup(NSLocalizedString("Blood Glucose", comment: "")) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(String(format: NSLocalizedString("Unit: %@", comment: ""), glucoseUnitLabel))
+                                .appFont(.caption)
+                                .foregroundStyle(.secondary)
+                            Stepper(value: glucoseLowDisplayBinding, in: glucoseLowDisplayRange, step: glucoseDisplayStep) {
+                                Text(glucoseLowLabel).appFont(.subheadline)
+                            }
+                            Stepper(value: glucoseHighDisplayBinding, in: glucoseHighDisplayRange, step: glucoseDisplayStep) {
+                                Text(glucoseHighLabel).appFont(.subheadline)
+                            }
+                        }
+                    }
+                    DisclosureGroup(NSLocalizedString("Heart Rate", comment: "")) {
+                        Stepper(value: $hrLow, in: 30...100, step: 1) {
+                            Text(String(format: NSLocalizedString("Low: %d bpm", comment: ""), Int(hrLow))).appFont(.subheadline)
+                        }
+                        Stepper(value: $hrHigh, in: 80...180, step: 1) {
+                            Text(String(format: NSLocalizedString("High: %d bpm", comment: ""), Int(hrHigh))).appFont(.subheadline)
+                        }
+                    }
+                    DisclosureGroup(NSLocalizedString("Blood Pressure", comment: "")) {
+                        Stepper(value: $bpSysHigh, in: 90...200, step: 1) {
+                            Text(String(format: NSLocalizedString("Systolic High: %d", comment: ""), Int(bpSysHigh))).appFont(.subheadline)
+                        }
+                        Stepper(value: $bpDiaHigh, in: 50...130, step: 1) {
+                            Text(String(format: NSLocalizedString("Diastolic High: %d", comment: ""), Int(bpDiaHigh))).appFont(.subheadline)
+                        }
+                    }
+                } header: {
+                    Text(NSLocalizedString("Goals", comment: ""))
+                }
+
+                // MARK: - General
+                Section {
+                    Toggle(NSLocalizedString("Haptic Feedback", comment: ""), isOn: $hapticsEnabled)
+                        .onChange(of: hapticsEnabled) { newValue in Haptics.setEnabled(newValue) }
+                } header: {
+                    Text(NSLocalizedString("General", comment: ""))
+                }
+
+                // MARK: - Advanced
+                Section {
+                    DisclosureGroup(NSLocalizedString("Effectiveness Tuning", comment: "")) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(NSLocalizedString("Sensitivity", comment: "")).appFont(.subheadline)
+                                Picker("", selection: $effMode) {
+                                    Text(NSLocalizedString("Conservative", comment: "")).tag("conservative")
+                                    Text(NSLocalizedString("Balanced", comment: "")).tag("balanced")
+                                    Text(NSLocalizedString("Aggressive", comment: "")).tag("aggressive")
+                                }
+                                .pickerStyle(.segmented)
+                            }
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(NSLocalizedString("Min Data Points", comment: "")).appFont(.subheadline)
+                                Picker("", selection: $effMinSamples) {
+                                    Text("3").tag(3)
+                                    Text("5").tag(5)
+                                    Text("7").tag(7)
+                                }
+                                .pickerStyle(.segmented)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                } header: {
+                    Text(NSLocalizedString("Advanced", comment: ""))
+                }
+
+                // MARK: - Data
+                Section {
+                    Button { exportPDF() } label: {
+                        Label(NSLocalizedString("Export PDF Report", comment: ""), systemImage: "doc.richtext")
+                    }
+                    Button { exportBackup() } label: {
+                        Label(NSLocalizedString("Export Backup", comment: ""), systemImage: "externaldrive.fill")
+                    }
+                    Button { showImporter = true } label: {
+                        Label(NSLocalizedString("Restore from Backup", comment: ""), systemImage: "arrow.down.doc")
+                    }
+                    #if DEBUG
+                    Button { showConfirmExportRecent = true } label: {
+                        Label("Export 10 to Health", systemImage: "arrow.up.doc.fill")
+                    }
+                    #endif
+                    Button(role: .destructive) { showConfirmClear = true } label: {
+                        Label(NSLocalizedString("Clear All Data", comment: ""), systemImage: "trash.fill")
+                    }
+                } header: {
+                    Text(NSLocalizedString("Data", comment: ""))
+                }
+
+                // MARK: - About
+                Section {
+                    Text(NSLocalizedString("Ccare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice.", comment: ""))
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
-            .navigationTitle("More")
+            .navigationTitle(NSLocalizedString("Settings", comment: ""))
             .alert("Clear all data?", isPresented: $showConfirmClear) {
                 Button("Cancel", role: .cancel) {}
                 Button("Clear", role: .destructive) {
-                    // Cancel all existing reminders before clearing
                     let meds = store.medications
                     meds.forEach { NotificationManager.shared.cancelAll(for: $0) }
                     store.clearAll()
                     NotificationManager.shared.updateBadge(store: store)
+                    Haptics.success()
+                    showClearedConfirmation = true
                 }
+            }
+            .alert(NSLocalizedString("Data Cleared", comment: ""), isPresented: $showClearedConfirmation) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(NSLocalizedString("All measurements, medications, and logs have been removed.", comment: ""))
             }
             #if DEBUG
             .alert("Export recent 10 to Health?", isPresented: $showConfirmExportRecent) {
@@ -86,48 +232,40 @@ struct ProfileView: View {
                 case .success(let url):
                     do {
                         let backup = try BackupManager.loadBackup(from: url)
-                        // Cancel reminders for current meds to avoid leftovers
                         let current = store.medications
                         current.forEach { NotificationManager.shared.cancelAll(for: $0) }
                         store.importBackup(backup)
-                        // Reschedule reminders for restored meds
                         for med in store.medications where med.remindersEnabled {
                             NotificationManager.shared.schedule(for: med)
                         }
                         NotificationManager.shared.cleanOrphanedRequests(validMedicationIDs: Set(store.medications.map { $0.id }))
+                        Haptics.success()
+                        successMessage = NSLocalizedString("Backup restored successfully.", comment: "")
+                        showSuccessAlert = true
                     } catch {
-                        print("Backup import error: \(error)")
+                        errorMessage = String(format: NSLocalizedString("Could not restore backup: %@", comment: ""), error.localizedDescription)
+                        showErrorAlert = true
                     }
                 case .failure(let error):
-                    print("File import error: \(error)")
+                    errorMessage = String(format: NSLocalizedString("Could not open file: %@", comment: ""), error.localizedDescription)
+                    showErrorAlert = true
                 }
+            }
+            .alert(NSLocalizedString("Error", comment: ""), isPresented: $showErrorAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage)
+            }
+            .alert(NSLocalizedString("Success", comment: ""), isPresented: $showSuccessAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(successMessage)
             }
         }
         .onAppear { refreshPermissions() }
     }
 
-    @MainActor
-    private func loadSamples() {
-        let now = Date()
-        let cal = Calendar.current
-        // Measurements
-        let samples: [Measurement] = [
-            Measurement(type: .bloodPressure, value: 126, diastolic: 82, date: cal.date(byAdding: .day, value: -1, to: now)!, note: "AM"),
-            Measurement(type: .bloodGlucose, value: 108, diastolic: nil, date: cal.date(byAdding: .day, value: -2, to: now)!, note: nil),
-            Measurement(type: .weight, value: 72.3, diastolic: nil, date: cal.date(byAdding: .day, value: -3, to: now)!, note: nil),
-            Measurement(type: .heartRate, value: 68, diastolic: nil, date: cal.date(byAdding: .day, value: -1, to: now)!, note: "resting")
-        ]
-        samples.forEach { store.addMeasurement($0) }
-
-        // Medications
-        let comps1 = DateComponents(hour: 8, minute: 0)
-        let comps2 = DateComponents(hour: 20, minute: 0)
-        let meds = [
-            Medication(name: "Metformin", dose: "500mg", notes: nil, timesOfDay: [comps1], remindersEnabled: true),
-            Medication(name: "Amlodipine", dose: "5mg", notes: nil, timesOfDay: [comps2], remindersEnabled: false)
-        ]
-        meds.forEach { store.addMedication($0) }
-    }
+    // MARK: - Actions
 
     @MainActor
     private func exportPDF() {
@@ -136,7 +274,8 @@ struct ProfileView: View {
             self.shareURL = url
             self.showShare = true
         } catch {
-            print("PDF export error: \(error)")
+            errorMessage = String(format: NSLocalizedString("Could not create report: %@", comment: ""), error.localizedDescription)
+            showErrorAlert = true
         }
     }
 
@@ -147,7 +286,8 @@ struct ProfileView: View {
             self.shareURL = url
             self.showShare = true
         } catch {
-            print("Backup export error: \(error)")
+            errorMessage = String(format: NSLocalizedString("Could not create backup: %@", comment: ""), error.localizedDescription)
+            showErrorAlert = true
         }
     }
 
@@ -156,13 +296,21 @@ struct ProfileView: View {
         HealthKitManager.shared.fetchMeasurements(since: start) { list in
             let existing = store.measurements
             let fiveMin: TimeInterval = 5 * 60
+            var imported = 0
             for m in list {
                 let dup = existing.contains { e in
                     e.type == m.type && abs(e.date.timeIntervalSince(m.date)) < fiveMin &&
                     (e.diastolic ?? -1) == (m.diastolic ?? -2) && abs(e.value - m.value) < 0.0001
                 }
-                if !dup { store.addMeasurement(m) }
+                if !dup { store.addMeasurement(m); imported += 1 }
             }
+            Haptics.success()
+            if imported > 0 {
+                successMessage = String(format: NSLocalizedString("Imported %lld new measurements from Health.", comment: ""), imported)
+            } else {
+                successMessage = NSLocalizedString("No new measurements found in Health.", comment: "")
+            }
+            showSuccessAlert = true
         }
     }
 
@@ -173,302 +321,58 @@ struct ProfileView: View {
         let key = "exported.measurement.ids"
         var exported = Set(defaults.array(forKey: key) as? [String] ?? [])
         let toExport = recent.filter { !exported.contains($0.id.uuidString) }
-        guard !toExport.isEmpty else { print("No new items to export"); return }
+        guard !toExport.isEmpty else { return }
         for m in toExport {
             HealthKitManager.shared.saveMeasurement(m) { success, error in
-                if let error = error {
-                    print("HK save error: \(error)")
-                } else if success {
+                if success {
                     exported.insert(m.id.uuidString)
                     defaults.set(Array(exported), forKey: key)
-                    print("Saved to Health and marked exported: \(m.id)")
                 }
             }
         }
     }
     #endif
 
-    private func nextMedication() -> (Medication, Date)? {
-        let cal = Calendar.current
-        let now = Date()
-        var pairs: [(Medication, Date)] = []
-        for med in store.medications where med.remindersEnabled {
-            for t in med.timesOfDay {
-                guard let h = t.hour, let m = t.minute else { continue }
-                let today = cal.date(bySettingHour: h, minute: m, second: 0, of: now)!
-                let date = today < now ? cal.date(byAdding: .day, value: 1, to: today)! : today
-                pairs.append((med, date))
-            }
-        }
-        return pairs.sorted(by: { $0.1 < $1.1 }).first
-    }
+    // MARK: - Permissions
 
-    private var adherenceCard: some View {
-        let weekly = store.weeklyAdherence()
-        let avg = weekly.map { $0.1 }.reduce(0, +) / Double(max(1, weekly.count))
-        return Card {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Adherence (7d)").appFont(.headline)
-                Text("\(Int(avg * 100))% average").appFont(.footnote).foregroundStyle(.secondary)
+    private func refreshPermissions() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                self.notifStatus = settings.authorizationStatus
             }
         }
     }
 
-    private var nextMedicationCard: some View {
-        Card {
-            if let (med, date) = nextMedication() {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Next Medication").appFont(.headline)
-                    HStack {
-                        Text(med.name).appFont(.subheadline)
-                        Spacer()
-                        Text(date, style: .time).appFont(.subheadline)
-                    }
-                    Text(med.dose).appFont(.caption).foregroundStyle(.secondary)
+    private func permissionHint() -> String {
+        switch notifStatus {
+        case .notDetermined: return NSLocalizedString("Not set up", comment: "")
+        case .denied: return NSLocalizedString("Off", comment: "")
+        case .authorized, .provisional, .ephemeral: return NSLocalizedString("On", comment: "")
+        @unknown default: return ""
+        }
+    }
+
+    @ViewBuilder
+    private func permissionButton() -> some View {
+        Button {
+            if notifStatus == .denied {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
                 }
             } else {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Next Medication").appFont(.headline)
-                    Text("No schedule").appFont(.footnote).foregroundStyle(.secondary)
-                }
+                NotificationManager.shared.requestAuthorization()
+                refreshPermissions()
             }
+        } label: {
+            Text(notifStatus == .denied ? NSLocalizedString("Settings", comment: "") : NSLocalizedString("Enable", comment: ""))
+                .appFont(.caption)
         }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.mini)
     }
 
-    private func summaryCard(title: String, value: String, systemImage: String, tint: Color) -> some View {
-        Card {
-            HStack(alignment: .center, spacing: 12) {
-                ZStack {
-                    Circle().fill(tint.opacity(0.18)).frame(width: 40, height: 40)
-                    Image(systemName: systemImage)
-                        .foregroundStyle(tint)
-                        .font(.system(size: 18, weight: .semibold))
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).appFont(.caption).foregroundStyle(.secondary)
-                    Text(value).appFont(.title)
-                }
-                Spacer()
-            }
-        }
-    }
+    // MARK: - Glucose goals helpers
 
-    private var quickActionsCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Quick Actions").appFont(.headline)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        quickActionPill(title: "Connect Health", icon: "heart.fill", tint: .pink) {
-                            HealthKitManager.shared.requestAuthorization { _, error in
-                                if let error = error { print("HK auth error: \(error)") }
-                            }
-                        }
-                        quickActionPill(title: "Import 30d", icon: "arrow.down.doc.fill", tint: .orange) {
-                            importFromHealth()
-                        }
-                        quickActionPill(title: "Export Report", icon: "doc.richtext", tint: .purple) {
-                            exportPDF()
-                        }
-                        quickActionPill(title: "Export Data", icon: "externaldrive.fill", tint: .blue) {
-                            exportBackup()
-                        }
-                        quickActionPill(title: "Restore", icon: "arrow.down.doc", tint: .teal) {
-                            showImporter = true
-                        }
-                        quickActionPill(title: "Clear All", icon: "trash.fill", tint: .red) {
-                            showConfirmClear = true
-                        }
-                        #if DEBUG
-                        quickActionPill(title: "Export 10", icon: "arrow.up.doc.fill", tint: .gray) {
-                            showConfirmExportRecent = true
-                        }
-                        #endif
-                    }
-                }
-            }
-        }
-    }
-
-    private var preferencesCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 16) {
-                Text(String(localized: "Preferences")).appFont(.headline)
-
-                Toggle(String(localized: "Haptics"), isOn: $hapticsEnabled)
-                    .onChange(of: hapticsEnabled) { newValue in Haptics.setEnabled(newValue) }
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(NSLocalizedString("Notifications", comment: "")).appFont(.subheadline)
-                    HStack(alignment: .center, spacing: 12) {
-                        Image(systemName: "bell.badge.fill").foregroundStyle(.orange)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(permissionHint()).appFont(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        permissionButton()
-                    }
-                }
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(String(localized: "Overdue Grace")).appFont(.subheadline)
-                    Picker("Grace", selection: $graceMinutes) {
-                        Text("15m").tag(15)
-                        Text("30m").tag(30)
-                        Text("60m").tag(60)
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(String(localized: "Effectiveness Settings")).appFont(.subheadline)
-                    Picker("Mode", selection: $effMode) {
-                        Text(String(localized: "Conservative")).tag("conservative")
-                        Text(String(localized: "Balanced")).tag("balanced")
-                        Text(String(localized: "Aggressive")).tag("aggressive")
-                    }
-                    .pickerStyle(.segmented)
-                    Picker("Min Samples", selection: $effMinSamples) {
-                        Text("3").tag(3)
-                        Text("5").tag(5)
-                        Text("7").tag(7)
-                    }
-                    .pickerStyle(.segmented)
-                }
-            }
-        }
-    }
-
-    private var goalsCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(String(localized: "Goals")).appFont(.headline)
-                DisclosureGroup(String(localized: "Blood Glucose")) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(String(format: String(localized: "Preferred unit: %@"), glucoseUnitLabel))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                        HStack {
-                            Stepper(value: glucoseLowDisplayBinding, in: glucoseLowDisplayRange, step: glucoseDisplayStep) {
-                                Text(glucoseLowLabel)
-                            }
-                            Stepper(value: glucoseHighDisplayBinding, in: glucoseHighDisplayRange, step: glucoseDisplayStep) {
-                                Text(glucoseHighLabel)
-                            }
-                        }
-                        Text(String(localized: "Defaults: 70-180 mg/dL. Adjust to your care plan.")).appFont(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                DisclosureGroup(String(localized: "Heart Rate")) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Stepper(value: $hrLow, in: 30...100, step: 1) { Text(String(format: String(localized: "Low: %d bpm"), Int(hrLow))) }
-                            Stepper(value: $hrHigh, in: 80...180, step: 1) { Text(String(format: String(localized: "High: %d bpm"), Int(hrHigh))) }
-                        }
-                        Text(String(localized: "Defaults: 50-110 bpm.")).appFont(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                DisclosureGroup(String(localized: "Blood Pressure")) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Stepper(value: $bpSysHigh, in: 90...200, step: 1) { Text(String(format: String(localized: "Sys High: %d mmHg"), Int(bpSysHigh))) }
-                            Stepper(value: $bpDiaHigh, in: 50...130, step: 1) { Text(String(format: String(localized: "Dia High: %d mmHg"), Int(bpDiaHigh))) }
-                        }
-                        Text(String(localized: "Defaults: 140/90.")).appFont(.caption).foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
-    }
-
-    private var dataManagementCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Data & Backups").appFont(.headline)
-                VStack(spacing: 10) {
-                    dataActionRow(title: "Export Report", subtitle: "PDF summary", icon: "doc.richtext", tint: .purple, action: exportPDF)
-                    dataActionRow(title: "Export Data", subtitle: "Local backup", icon: "externaldrive.fill", tint: .blue, action: exportBackup)
-                    dataActionRow(title: "Restore", subtitle: "Import backup", icon: "arrow.down.doc", tint: .teal) { showImporter = true }
-                    dataActionRow(title: "Clear All", subtitle: "Remove measurements and meds", icon: "trash.fill", tint: .red) { showConfirmClear = true }
-                }
-            }
-        }
-    }
-
-    private var knowledgeCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(String(localized: "How.It.Works.Title", defaultValue: "How It Works"))
-                    .appFont(.headline)
-                ForEach(knowledgeSections) { section in
-                    DisclosureGroup(LocalizedStringKey(section.title)) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            ForEach(section.bullets, id: \.self) { bulletText in
-                                bullet(bulletText)
-                            }
-                        }
-                        .padding(.top, 4)
-                    }
-                }
-            }
-        }
-    }
-
-    private var aboutCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("About").appFont(.headline)
-                Text("Ccare keeps your data on device and uses Apple Health only with your permission. It is intended for wellness tracking and does not provide medical advice.").appFont(.footnote).foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private func quickActionPill(title: LocalizedStringKey, icon: String, tint: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .semibold))
-                    .frame(width: 32, height: 32)
-                    .background(Circle().fill(tint))
-                    .foregroundStyle(.white)
-                Text(title).appFont(.subheadline)
-                    .foregroundStyle(.primary)
-            }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 14)
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color(.systemBackground)))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.primary.opacity(0.08), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func dataActionRow(title: LocalizedStringKey, subtitle: LocalizedStringKey, icon: String, tint: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 18, weight: .semibold))
-                    .frame(width: 40, height: 40)
-                    .background(Circle().fill(tint.opacity(0.2)))
-                    .foregroundStyle(tint)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).appFont(.subheadline)
-                    Text(subtitle).appFont(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-                Image(systemName: "chevron.right").foregroundStyle(.tertiary)
-            }
-            .padding(.vertical, 6)
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Glucose goals helpers (display in preferred unit, store in mg/dL)
     private var gluUnit: GlucoseUnit { GlucoseUnit(rawValue: glucoseUnitRaw) ?? .mgdL }
     private var glucoseDisplayStep: Double { gluUnit == .mgdL ? 1.0 : 0.1 }
     private var glucoseUnitLabel: String { gluUnit.rawValue }
@@ -495,96 +399,11 @@ struct ProfileView: View {
         let max = UnitPreferences.convertFromMgdl(300, to: gluUnit)
         return min...max
     }
-
     private var glucoseLowLabel: String {
-        String(format: String(localized: "Low: %.0f %@"), glucoseLowDisplayBinding.wrappedValue, glucoseUnitLabel)
+        String(format: NSLocalizedString("Low: %.0f %@", comment: ""), glucoseLowDisplayBinding.wrappedValue, glucoseUnitLabel)
     }
     private var glucoseHighLabel: String {
         let fmt = gluUnit == .mgdL ? "%.0f" : "%.1f"
-        return String(format: String(localized: "High: \(fmt) %@"), glucoseHighDisplayBinding.wrappedValue, glucoseUnitLabel)
-    }
-
-    // MARK: - Knowledge content
-    private struct KnowledgeSection: Identifiable {
-        let id = UUID()
-        let title: String
-        let bullets: [String]
-    }
-
-    private var knowledgeSections: [KnowledgeSection] {
-        [
-            KnowledgeSection(
-                title: String(localized: "Reminders"),
-                bullets: [
-                    String(localized: "Schedules are regenerated for two weeks ahead when you open the app."),
-                    String(localized: "Snoozes are single-shot and won't stack."),
-                    String(localized: "Badge counts respect a grace period before showing overdue.")
-                ]
-            ),
-            KnowledgeSection(
-                title: String(localized: "Adherence Tracking"),
-                bullets: [
-                    String(localized: "One log per med per time per day; latest action wins."),
-                    String(localized: "Overdue is calculated after your grace window.")
-                ]
-            ),
-            KnowledgeSection(
-                title: String(localized: "Trend Charts"),
-                bullets: [
-                    String(localized: "Goal ranges shade the charts to highlight outliers."),
-                    String(localized: "Recent measurements appear in reverse chronological order.")
-                ]
-            ),
-            KnowledgeSection(
-                title: String(localized: "Medication Effectiveness"),
-                bullets: [
-                    String(localized: "Heuristic verdicts depend on enough samples and adherence."),
-                    String(localized: "Sensitivity modes adjust thresholds; defaults are balanced.")
-                ]
-            )
-        ]
-    }
-
-    private func bullet(_ text: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Circle().fill(Color.primary.opacity(0.15)).frame(width: 6, height: 6).padding(.top, 6)
-            Text(LocalizedStringKey(text)).appFont(.footnote).foregroundStyle(.secondary)
-        }
-    }
-
-    // MARK: - Permissions
-    private func refreshPermissions() {
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            DispatchQueue.main.async {
-                self.notifStatus = settings.authorizationStatus
-            }
-        }
-    }
-
-    private func permissionHint() -> String {
-        switch notifStatus {
-        case .notDetermined: return NSLocalizedString("Turn on notifications to get reminders.", comment: "")
-        case .denied: return NSLocalizedString("Notifications are off in Settings", comment: "")
-        case .authorized, .provisional, .ephemeral: return NSLocalizedString("Notifications are on", comment: "")
-        @unknown default: return ""
-        }
-    }
-
-    private func permissionButton() -> some View {
-        Button {
-            if notifStatus == .denied {
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(url)
-                }
-            } else {
-                NotificationManager.shared.requestAuthorization()
-                refreshPermissions()
-            }
-        } label: {
-            Text(notifStatus == .denied ? NSLocalizedString("Open Settings", comment: "") : NSLocalizedString("Enable", comment: ""))
-        }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.small)
-        .accessibilityLabel(NSLocalizedString("Open Settings", comment: ""))
+        return String(format: "High: \(fmt) %@", glucoseHighDisplayBinding.wrappedValue, glucoseUnitLabel)
     }
 }

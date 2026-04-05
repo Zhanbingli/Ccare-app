@@ -190,11 +190,11 @@ struct DataValidator {
         } else if isDecreasing {
             switch type {
             case .bloodPressure:
-                if values.last! < 90 {
+                if let last = values.last, last < 90 {
                     return NSLocalizedString("Your blood pressure has been decreasing and may be too low.", comment: "")
                 }
             case .bloodGlucose:
-                if values.last! < 70 {
+                if let last = values.last, last < 70 {
                     return NSLocalizedString("Your blood glucose has been decreasing. Be careful of hypoglycemia.", comment: "")
                 }
             default:

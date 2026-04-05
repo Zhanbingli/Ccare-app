@@ -879,10 +879,9 @@ struct EnhancedTrendsView: View {
     }
 
     private func insightSummary() -> (title: String, detail: String)? {
-        guard !filtered.isEmpty else { return nil }
+        guard let latest = filtered.last, let first = filtered.first else { return nil }
         switch selectedType {
         case .bloodPressure:
-            let latest = filtered.last!
             let thresholds = store.bpThresholds()
             if let dia = latest.diastolic, latest.value >= thresholds.systolicHigh || dia >= thresholds.diastolicHigh {
                 return (NSLocalizedString("Blood pressure is above goal", comment: ""), NSLocalizedString("Consider logging how you feel and ensure reminders are on for medications.", comment: ""))
@@ -891,11 +890,9 @@ struct EnhancedTrendsView: View {
         case .bloodGlucose:
             return (NSLocalizedString("7-day glucose trends", comment: ""), NSLocalizedString("Track meals and activities that affect your readings.", comment: ""))
         case .weight:
-            let latest = filtered.last!.value
-            let baseline = filtered.first!.value
-            let diff = latest - baseline
+            let diff = latest.value - first.value
             let sign = diff >= 0 ? "+" : ""
-            return (NSLocalizedString("Weight trend", comment: ""), String(format: "%.1f kg (%@%.1f since start)", latest, sign, diff))
+            return (NSLocalizedString("Weight trend", comment: ""), String(format: "%.1f kg (%@%.1f since start)", latest.value, sign, diff))
         case .heartRate:
             return (NSLocalizedString("Heart rate monitoring", comment: ""), NSLocalizedString("Note any unusual patterns or symptoms.", comment: ""))
         }

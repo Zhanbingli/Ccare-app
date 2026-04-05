@@ -70,11 +70,13 @@ struct Medication: Identifiable, Codable {
     var category: MedicationCategory? // optional for backward compatibility
     var customCategoryName: String?
     var imagePath: String? // relative path under Documents (e.g., "med_images/<id>.jpg")
+    var pillsRemaining: Int? // nil = not tracking supply
+    var pillsPerDose: Int? // how many pills per dose (default 1)
 
     // Backward compatibility decoder to support legacy `timeOfDay`
-    enum CodingKeys: String, CodingKey { case id, name, dose, notes, timesOfDay, timeOfDay, remindersEnabled, category, customCategoryName, imagePath }
+    enum CodingKeys: String, CodingKey { case id, name, dose, notes, timesOfDay, timeOfDay, remindersEnabled, category, customCategoryName, imagePath, pillsRemaining, pillsPerDose }
 
-    init(id: UUID = UUID(), name: String, dose: String, notes: String? = nil, timesOfDay: [DateComponents], remindersEnabled: Bool, category: MedicationCategory? = nil, customCategoryName: String? = nil, imagePath: String? = nil) {
+    init(id: UUID = UUID(), name: String, dose: String, notes: String? = nil, timesOfDay: [DateComponents], remindersEnabled: Bool, category: MedicationCategory? = nil, customCategoryName: String? = nil, imagePath: String? = nil, pillsRemaining: Int? = nil, pillsPerDose: Int? = nil) {
         self.id = id
         self.name = name
         self.dose = dose
@@ -84,6 +86,8 @@ struct Medication: Identifiable, Codable {
         self.category = category
         self.customCategoryName = customCategoryName
         self.imagePath = imagePath
+        self.pillsRemaining = pillsRemaining
+        self.pillsPerDose = pillsPerDose
     }
 
     init(from decoder: Decoder) throws {
@@ -96,6 +100,8 @@ struct Medication: Identifiable, Codable {
         self.category = try c.decodeIfPresent(MedicationCategory.self, forKey: .category)
         self.customCategoryName = try c.decodeIfPresent(String.self, forKey: .customCategoryName)
         self.imagePath = try c.decodeIfPresent(String.self, forKey: .imagePath)
+        self.pillsRemaining = try c.decodeIfPresent(Int.self, forKey: .pillsRemaining)
+        self.pillsPerDose = try c.decodeIfPresent(Int.self, forKey: .pillsPerDose)
         if let times = try c.decodeIfPresent([DateComponents].self, forKey: .timesOfDay) {
             self.timesOfDay = times
         } else if let legacy = try c.decodeIfPresent(DateComponents.self, forKey: .timeOfDay) {
@@ -116,10 +122,27 @@ struct Medication: Identifiable, Codable {
         try c.encodeIfPresent(category, forKey: .category)
         try c.encodeIfPresent(customCategoryName, forKey: .customCategoryName)
         try c.encodeIfPresent(imagePath, forKey: .imagePath)
+        try c.encodeIfPresent(pillsRemaining, forKey: .pillsRemaining)
+        try c.encodeIfPresent(pillsPerDose, forKey: .pillsPerDose)
     }
 }
 
 extension Medication {
+    /// How many days of supply remain (nil if not tracking)
+    var daysOfSupplyRemaining: Int? {
+        guard let remaining = pillsRemaining, remaining > 0 else { return pillsRemaining == 0 ? 0 : nil }
+        let perDose = pillsPerDose ?? 1
+        let dosesPerDay = max(timesOfDay.count, 1)
+        let pillsPerDay = perDose * dosesPerDay
+        guard pillsPerDay > 0 else { return nil }
+        return remaining / pillsPerDay
+    }
+
+    var isLowSupply: Bool {
+        guard let days = daysOfSupplyRemaining else { return false }
+        return days <= 7
+    }
+
     var displayCategoryName: String? {
         guard let cat = category else { return nil }
         switch cat {
@@ -148,4 +171,6 @@ struct IntakeLog: Identifiable, Codable {
     var status: IntakeStatus
     // Optional schedule key (e.g., "08:00") for multi-time medications
     var scheduleKey: String?
+    // Optional note for context (e.g., "felt dizzy", "took with food")
+    var note: String?
 }

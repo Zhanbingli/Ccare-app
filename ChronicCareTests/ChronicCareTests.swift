@@ -5,6 +5,7 @@
 //  Created by lizhanbing12 on 30/08/25.
 //
 
+import Foundation
 import Testing
 @testable import ChronicCare
 

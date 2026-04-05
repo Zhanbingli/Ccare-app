@@ -25,7 +25,7 @@ struct ContentView: View {
                     .tabItem { Label("Medications", systemImage: "pill.fill") }
                 ProfileView()
                     .tag(2)
-                    .tabItem { Label("More", systemImage: "ellipsis.circle") }
+                    .tabItem { Label(NSLocalizedString("Settings", comment: ""), systemImage: "gearshape") }
             }
         }
         .environment(\.font, AppFontStyle.body.font)
@@ -36,6 +36,7 @@ struct ContentView: View {
             let now = Date()
             NotificationManager.shared.cleanOrphanedRequests(validMedicationIDs: Set(meds.map { $0.id }))
             meds.forEach { NotificationManager.shared.schedule(for: $0, now: now) }
+            NotificationManager.shared.checkRefillReminders(medications: store.medications)
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("openMedicationDetail"))) { notif in
             if let id = notif.object as? UUID {
