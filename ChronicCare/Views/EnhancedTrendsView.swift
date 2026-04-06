@@ -175,12 +175,13 @@ struct EnhancedTrendsView: View {
     private func kpiCell(label: String, value: String, unit: String) -> some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .appFont(.subheadline)
+                .fontWeight(.bold)
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
             Text(label)
-                .font(.system(size: 10, weight: .medium))
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
@@ -230,7 +231,8 @@ struct EnhancedTrendsView: View {
                     Text("\(String(format: "%.1f", measurement.value)) \(measurement.type.unit)")
                 }
             }
-            .font(.system(size: 16, weight: .bold, design: .rounded))
+            .appFont(.subheadline)
+            .fontWeight(.bold)
 
             // Date
             Text(measurement.date, style: .date)
@@ -253,7 +255,7 @@ struct EnhancedTrendsView: View {
                 withAnimation(.easeInOut(duration: 0.2)) { selectedDataPoint = nil }
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 16))
+                    .font(.system(size: 20))
                     .foregroundStyle(.secondary)
             }
         }
@@ -277,7 +279,7 @@ struct EnhancedTrendsView: View {
                 HStack {
                     HStack(spacing: 6) {
                         Image(systemName: "sparkles")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(.purple)
                         Text(NSLocalizedString("AI Analysis", comment: ""))
                             .appFont(.subheadline)
@@ -288,10 +290,10 @@ struct EnhancedTrendsView: View {
                             generateAIInsights()
                         } label: {
                             Text(aiInsights == nil ? "Generate" : "Refresh")
-                                .font(.system(size: 12, weight: .medium))
+                                .appFont(.caption)
                         }
                         .buttonStyle(.bordered)
-                        .controlSize(.mini)
+                        .controlSize(.small)
                     }
                 }
 

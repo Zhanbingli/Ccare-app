@@ -99,41 +99,6 @@ extension MeasurementType {
     }
 }
 
-// MARK: - Action Tile
-struct ActionTile: View {
-    let color: Color
-    let title: String
-    let systemImage: String
-    let action: () -> Void
-    init(color: Color, title: String, systemImage: String, action: @escaping () -> Void) {
-        self.color = color
-        self.title = title
-        self.systemImage = systemImage
-        self.action = action
-    }
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                ZStack {
-                    Circle().fill(color.opacity(0.18)).frame(width: 48, height: 48)
-                    Image(systemName: systemImage).foregroundStyle(color).font(.system(size: 20, weight: .semibold))
-                }
-                Text(title)
-                    .appFont(.footnote)
-                    .foregroundStyle(.primary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.85)
-                    .frame(height: 32) // ensure consistent label height across tiles
-            }
-            .frame(maxWidth: .infinity)
-            .frame(minHeight: 108) // unify overall tile height to align icons
-            .padding(.vertical, 8)
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 // MARK: - Rounded corners per-edge
 struct RoundedCornersShape: Shape {
     var corners: UIRectCorner = .allCorners
@@ -150,34 +115,3 @@ extension View {
     }
 }
 
-// MARK: - Collapsible Section Header
-struct SectionToggleHeader: View {
-    let title: String
-    let systemImage: String?
-    @Binding var isExpanded: Bool
-
-    init(_ title: String, systemImage: String? = nil, isExpanded: Binding<Bool>) {
-        self.title = title
-        self.systemImage = systemImage
-        self._isExpanded = isExpanded
-    }
-
-    var body: some View {
-        HStack(spacing: 8) {
-            if let name = systemImage { Image(systemName: name).font(AppFontStyle.headline.font) }
-            Text(title).appFont(.headline)
-            Spacer()
-            Image(systemName: "chevron.right")
-                .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                .foregroundStyle(.secondary)
-        }
-        .foregroundStyle(.primary)
-        .contentShape(Rectangle())
-        .onTapGesture { withAnimation(.easeInOut) { isExpanded.toggle() } }
-        .padding(.horizontal)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(title))
-        .accessibilityValue(Text(isExpanded ? NSLocalizedString("Expanded", comment: "") : NSLocalizedString("Collapsed", comment: "")))
-        .accessibilityAddTraits(.isButton)
-    }
-}

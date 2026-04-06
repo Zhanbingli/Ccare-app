@@ -19,10 +19,10 @@ struct ContentView: View {
             TabView(selection: $selectedTab) {
                 DashboardView()
                     .tag(0)
-                    .tabItem { Label("Home", systemImage: "house.fill") }
+                    .tabItem { Label(NSLocalizedString("Today", comment: ""), systemImage: "checklist") }
                 MedicationsView()
                     .tag(1)
-                    .tabItem { Label("Medications", systemImage: "pill.fill") }
+                    .tabItem { Label(NSLocalizedString("Medications", comment: ""), systemImage: "pill.fill") }
                 ProfileView()
                     .tag(2)
                     .tabItem { Label(NSLocalizedString("Settings", comment: ""), systemImage: "gearshape") }

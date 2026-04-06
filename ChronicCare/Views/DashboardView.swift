@@ -3,8 +3,6 @@ import SwiftUI
 struct DashboardView: View {
     @EnvironmentObject var store: DataStore
     @State private var showAddMeasurement = false
-    @State private var showMedManager = false
-    @State private var showTrendsPeek = false
     @State private var showTakenConfirmation = false
     @State private var takenMedName: String = ""
     @State private var showShareSheet = false
@@ -41,38 +39,137 @@ struct DashboardView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                let schedules = todaySchedules()
-                let statusLookup = latestTodayLogMap()
-                let statusCache = Dictionary(uniqueKeysWithValues: schedules.map { item in
-                    (item.id, status(for: item.med, at: item.time, lookup: statusLookup))
-                })
-                let takenCount = statusCache.values.filter { if case .taken = $0 { return true } else { return false } }.count
-                let totalCount = schedules.count
-                let adherence = totalCount > 0 ? Double(takenCount) / Double(totalCount) : 0
+            let schedules = todaySchedules()
+            let statusLookup = latestTodayLogMap()
+            let statusCache = Dictionary(uniqueKeysWithValues: schedules.map { item in
+                (item.id, status(for: item.med, at: item.time, lookup: statusLookup))
+            })
+            let takenCount = statusCache.values.filter { if case .taken = $0 { return true } else { return false } }.count
+            let totalCount = schedules.count
+            let adherence = totalCount > 0 ? Double(takenCount) / Double(totalCount) : 0
 
-                VStack(spacing: 24) {
-                    heroSection(next: nextMedication(), adherence: adherence, taken: takenCount, total: totalCount)
-                        .padding(.horizontal)
+            List {
+                // MARK: - Today summary row
+                Section {
+                    todaySummaryRow(adherence: adherence, taken: takenCount, total: totalCount)
+                }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))
 
-                    sectionHeader(NSLocalizedString("Today's Medications", comment: ""), systemImage: "pills.fill")
-                    medsSection(items: schedules, statusCache: statusCache)
+                // MARK: - Medication checklist
+                if schedules.isEmpty {
+                    Section {
+                        HStack {
+                            Spacer()
+                            VStack(spacing: 8) {
+                                Image(systemName: "pill.fill")
+                                    .font(.system(size: 28))
+                                    .foregroundStyle(.secondary)
+                                Text(NSLocalizedString("No scheduled medications", comment: ""))
+                                    .appFont(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                        }
+                        .padding(.vertical, 20)
+                    }
+                    .listRowSeparator(.hidden)
+                } else {
+                    Section {
+                        ForEach(schedules) { item in
+                            let s = statusCache[item.id] ?? .none
+                            let resolvedStatus: TodayMedStatus = {
+                                switch s {
+                                case .none:
+                                    let now = Date()
+                                    let graceMin = Double(graceMinutes)
+                                    if now > item.time.addingTimeInterval(graceMin * 60) { return .overdue }
+                                    else if now > item.time { return .dueSoon }
+                                    else { return s }
+                                default: return s
+                                }
+                            }()
+                            medRow(item: item, status: resolvedStatus)
+                        }
+                    }
+                    .listRowSeparator(.visible)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                }
 
-                    sectionHeader(NSLocalizedString("Health Data", comment: ""), systemImage: "heart.text.square.fill")
-                    measurementsAndTrendsSection
+                // MARK: - Measurement
+                Section {
+                    if let latest = store.measurements.first {
+                        latestMeasurementRow(latest)
+                    }
 
-                    // Insights at the bottom — useful but not the primary focus
-                    let insights = MedicationInsightsEngine.generateInsights(
-                        medications: store.medications,
-                        intakeLogs: store.intakeLogs,
-                        store: store
-                    )
-                    if !insights.isEmpty {
-                        insightsSection(insights: insights)
+                    Button {
+                        showAddMeasurement = true
+                    } label: {
+                        Label(NSLocalizedString("Log Measurement", comment: ""), systemImage: "plus.circle.fill")
+                            .appFont(.subheadline)
+                    }
+                } header: {
+                    Text(NSLocalizedString("Measurements", comment: ""))
+                }
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+
+                // MARK: - Links
+                Section {
+                    if totalCount > 0 {
+                        NavigationLink {
+                            AdherenceCalendarView()
+                        } label: {
+                            Label(NSLocalizedString("Adherence Calendar", comment: ""), systemImage: "calendar")
+                                .appFont(.subheadline)
+                        }
+                    }
+
+                    NavigationLink {
+                        EnhancedTrendsView()
+                            .environmentObject(store)
+                    } label: {
+                        Label(NSLocalizedString("View Trends", comment: ""), systemImage: "chart.line.uptrend.xyaxis")
+                            .appFont(.subheadline)
+                    }
+
+                    Button {
+                        shareText = buildTodayStatusSummary()
+                        showShareSheet = true
+                    } label: {
+                        Label(NSLocalizedString("Share today's status", comment: ""), systemImage: "square.and.arrow.up")
+                            .appFont(.subheadline)
                     }
                 }
-                .padding(.vertical, 24)
+                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+
+                // MARK: - Insights (only when noteworthy)
+                let insights = MedicationInsightsEngine.generateInsights(
+                    medications: store.medications,
+                    intakeLogs: store.intakeLogs,
+                    store: store
+                )
+                if !insights.isEmpty {
+                    Section {
+                        ForEach(insights.prefix(2)) { insight in
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: iconForInsight(insight.type))
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(colorForInsight(insight.type))
+                                    .frame(width: 22)
+                                Text(insight.message)
+                                    .appFont(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    } header: {
+                        Text(NSLocalizedString("Smart Insights", comment: ""))
+                    }
+                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                }
             }
+            .listStyle(.insetGrouped)
             .refreshable {
                 let meds = store.medications.filter { $0.remindersEnabled }
                 let now = Date()
@@ -81,50 +178,13 @@ struct DashboardView: View {
                 NotificationManager.shared.checkRefillReminders(medications: store.medications)
                 store.objectWillChange.send()
             }
-            .navigationTitle("Dashboard")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        shareText = buildTodayStatusSummary()
-                        showShareSheet = true
-                    } label: {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.title3)
-                    }
-                    .accessibilityLabel(NSLocalizedString("Share today's status", comment: ""))
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showAddMeasurement = true
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
-                    }
-                    .accessibilityLabel(NSLocalizedString("Add Measurement", comment: ""))
-                }
-            }
+            .navigationTitle(NSLocalizedString("Today", comment: ""))
             .sheet(isPresented: $showAddMeasurement) {
                 AddMeasurementView { m in
                     store.addMeasurement(m)
                     Haptics.success()
                 }
                 .presentationDetents([.medium, .large])
-            }
-            .sheet(isPresented: $showMedManager) {
-                NavigationStack {
-                    MedicationsView()
-                        .environmentObject(store)
-                        .navigationTitle(NSLocalizedString("Medications", comment: ""))
-                        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { showMedManager = false } } }
-                }
-            }
-            .sheet(isPresented: $showTrendsPeek) {
-                NavigationStack {
-                    EnhancedTrendsView()
-                        .environmentObject(store)
-                        .navigationTitle(NSLocalizedString("Trends", comment: ""))
-                        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { showTrendsPeek = false } } }
-                }
             }
             .sheet(isPresented: $showShareSheet) {
                 ShareSheet(activityItems: [shareText])
@@ -234,21 +294,6 @@ private extension DashboardView {
         return lines.joined(separator: "\n")
     }
 
-    private func nextMedication() -> (Medication, Date)? {
-        let cal = Calendar.current
-        let now = Date()
-        var pairs: [(Medication, Date)] = []
-        for med in store.medications where med.remindersEnabled {
-            for t in med.timesOfDay {
-                guard let h = t.hour, let m = t.minute else { continue }
-                let today = cal.date(bySettingHour: h, minute: m, second: 0, of: now)!
-                let date = today < now ? cal.date(byAdding: .day, value: 1, to: today)! : today
-                pairs.append((med, date))
-            }
-        }
-        return pairs.sorted(by: { $0.1 < $1.1 }).first
-    }
-
     private func todaySchedules() -> [MedSchedule] {
         let cal = Calendar.current
         let now = Date()
@@ -263,10 +308,6 @@ private extension DashboardView {
             }
         }
         return items.sorted { $0.time < $1.time }
-    }
-
-    private func recentMeasurements(limit: Int = 5) -> [Measurement] {
-        Array(store.measurements.prefix(limit))
     }
 
     private func latestTodayLogMap(now: Date = Date()) -> [ScheduleLookupKey: IntakeLog] {
@@ -305,179 +346,97 @@ private extension DashboardView {
         }
     }
 
-    @ViewBuilder
-    private func heroSection(next: (Medication, Date)?, adherence: Double, taken: Int, total: Int) -> some View {
-        TintedCard(tint: .indigo) {
-            HStack(alignment: .top, spacing: 20) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(NSLocalizedString("Today", comment: "")).appFont(.caption).foregroundStyle(.secondary)
-                    if let (med, date) = next {
-                        Text(med.name).appFont(.title).foregroundStyle(.primary)
-                        Text(date, style: .time).appFont(.subheadline).foregroundStyle(.secondary)
-                        Text(med.dose).appFont(.caption).foregroundStyle(.secondary)
-                    } else {
-                        Text(NSLocalizedString("No scheduled medications", comment: "")).appFont(.subheadline).foregroundStyle(.secondary)
-                    }
-                    if total > 0 {
-                        Text(String(format: NSLocalizedString("Taken %lld/%lld", comment: ""), taken, total))
-                            .appFont(.footnote)
-                            .foregroundStyle(.primary)
+    // MARK: - Today Summary
+    private func todaySummaryRow(adherence: Double, taken: Int, total: Int) -> some View {
+        HStack(spacing: 12) {
+            // Progress bar
+            VStack(alignment: .leading, spacing: 4) {
+                Text(String(format: NSLocalizedString("Taken %lld/%lld", comment: ""), taken, total))
+                    .appFont(.subheadline)
+                    .foregroundStyle(.primary)
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.primary.opacity(0.08))
+                            .frame(height: 6)
+                        Capsule()
+                            .fill(adherence >= 1.0 ? Color.green : Color.accentColor)
+                            .frame(width: geo.size.width * CGFloat(min(max(adherence, 0), 1)), height: 6)
+                            .animation(.easeInOut(duration: 0.3), value: adherence)
                     }
                 }
-                Spacer(minLength: 12)
-                VStack(spacing: 10) {
-                    ProgressRing(value: adherence)
-                        .frame(width: 54, height: 54)
-                    Text(String(format: "%d%%", Int(adherence * 100)))
-                        .appFont(.caption)
-                        .foregroundStyle(.white.opacity(0.95))
-                    Text(String(localized: "Adherence"))
-                        .appFont(.footnote)
-                        .foregroundStyle(.white.opacity(0.8))
-                }
+                .frame(height: 6)
             }
-        }
-        .shadow(color: Color.indigo.opacity(0.12), radius: 10, x: 0, y: 6)
 
-        if total > 0 {
-            NavigationLink {
-                AdherenceCalendarView()
-            } label: {
-                HStack(spacing: 4) {
-                    Text(NSLocalizedString("Adherence Calendar", comment: ""))
-                        .appFont(.caption)
-                    Image(systemName: "chevron.right")
-                        .font(.caption2)
-                }
-                .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .trailing)
+            Text(String(format: "%d%%", Int(adherence * 100)))
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(adherence >= 1.0 ? .green : .primary)
         }
     }
 
-
+    // MARK: - Medication Row
     @ViewBuilder
-    private func medsSection(items: [MedSchedule], statusCache: [String: TodayMedStatus]) -> some View {
-        Card {
-            if items.isEmpty {
-                EmptyStateView(systemImage: "bell.slash", title: "No scheduled medications")
-            } else {
-                VStack(alignment: .leading, spacing: 16) {
-                    ForEach(items) { item in
-                        let statusBase = statusCache[item.id] ?? .none
-                        let status: TodayMedStatus = {
-                            switch statusBase {
-                            case .none:
-                                let now = Date()
-                                let graceMin = Double(graceMinutes)
-                                if now > item.time.addingTimeInterval(graceMin * 60) {
-                                    return .overdue
-                                } else if now > item.time {
-                                    return .dueSoon
-                                } else { return statusBase }
-                            case .snoozed:
-                                return statusBase
-                            default:
-                                return statusBase
-                            }
-                        }()
-                        VStack(alignment: .leading, spacing: 10) {
-                            // Top row: icon + name + time + status badge
-                            HStack(alignment: .center, spacing: 10) {
-                                statusDot(for: status)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(item.med.name).appFont(.headline)
-                                    HStack(spacing: 6) {
-                                        Text(item.med.dose).appFont(.caption).foregroundStyle(.secondary)
-                                        Text("  ")
-                                        Text(item.time, style: .time).appFont(.caption).foregroundStyle(.secondary)
-                                    }
-                                }
-                                Spacer(minLength: 4)
-                                statusLabel(for: status)
-                            }
-                            // Action buttons row (full width, only for actionable states)
-                            medsActionButtons(for: item, status: status)
-                        }
-                        .padding(.vertical, 6)
-                        if item.id != items.last?.id { Divider() }
+    private func medRow(item: MedSchedule, status: TodayMedStatus) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 10) {
+                statusDot(for: status)
+                    .frame(width: 22)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(item.med.name)
+                        .appFont(.body)
+                        .strikethrough(isFinalStatus(status), color: .secondary)
+                        .foregroundStyle(isFinalStatus(status) ? .secondary : .primary)
+                    HStack(spacing: 4) {
+                        Text(item.med.dose).appFont(.caption).foregroundStyle(.secondary)
+                        Text("·").foregroundStyle(.tertiary)
+                        Text(item.time, style: .time).appFont(.caption).foregroundStyle(.secondary)
                     }
                 }
+
+                Spacer(minLength: 4)
+                statusLabel(for: status)
             }
+
+            // Compact action buttons (only for actionable states)
+            medsActionButtons(for: item, status: status)
         }
-        .padding(.horizontal)
     }
 
-    private var measurementsAndTrendsSection: some View {
-        VStack(spacing: 12) {
-            Card {
-                if store.measurements.isEmpty {
-                    EmptyStateView(systemImage: "heart.text.square", title: "No measurements yet", subtitle: "Add your first measurement", actionTitle: "Add") {
-                        showAddMeasurement = true
-                    }
+    private func isFinalStatus(_ status: TodayMedStatus) -> Bool {
+        switch status {
+        case .taken, .skipped: return true
+        default: return false
+        }
+    }
+
+    // MARK: - Latest Measurement Row
+    @ViewBuilder
+    private func latestMeasurementRow(_ m: Measurement) -> some View {
+        HStack(spacing: 10) {
+            Circle().fill(m.type.tint).frame(width: 8, height: 8)
+            Text(m.type.rawValue)
+                .appFont(.subheadline)
+            Spacer()
+            Group {
+                if m.type == .bloodPressure, let dia = m.diastolic {
+                    Text("\(Int(m.value))/\(Int(dia)) \(m.type.unit)")
+                } else if m.type == .bloodGlucose {
+                    let v = UnitPreferences.mgdlToPreferred(m.value)
+                    let formatted = UnitPreferences.glucoseUnit == .mgdL ? String(format: "%.0f", v) : String(format: "%.1f", v)
+                    Text("\(formatted) \(UnitPreferences.glucoseUnit.rawValue)")
                 } else {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Text(NSLocalizedString("Recent Measurements", comment: "")).appFont(.headline)
-                            Spacer()
-                            Button { showTrendsPeek = true } label: {
-                                HStack(spacing: 4) {
-                                    Text("View Trends").appFont(.caption)
-                                    Image(systemName: "chart.line.uptrend.xyaxis")
-                                }
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                        }
-                        Divider()
-                        ForEach(recentMeasurements(limit: 4)) { m in
-                            HStack(spacing: 10) {
-                                Circle().fill(m.cardTint).frame(width: 8, height: 8)
-                                Text(m.type.rawValue).appFont(.subheadline)
-                                Spacer()
-                                if m.type == .bloodPressure, let dia = m.diastolic {
-                                    Text("\(Int(m.value))/\(Int(dia)) \(m.type.unit)")
-                                        .appFont(.label)
-                                        .foregroundStyle(m.valueForeground)
-                                } else if m.type == .bloodGlucose {
-                                    let v = UnitPreferences.mgdlToPreferred(m.value)
-                                    let unit = UnitPreferences.glucoseUnit.rawValue
-                                    let formatted = UnitPreferences.glucoseUnit == .mgdL ? String(format: "%.0f", v) : String(format: "%.1f", v)
-                                    Text("\(formatted) \(unit)")
-                                        .appFont(.label)
-                                        .foregroundStyle(m.valueForeground)
-                                } else {
-                                    Text("\(String(format: "%.1f", m.value)) \(m.type.unit)")
-                                        .appFont(.label)
-                                        .foregroundStyle(m.valueForeground)
-                                }
-                            }
-                            .foregroundStyle(.primary)
-                            .padding(.vertical, 4)
-                            if m.id != recentMeasurements(limit: 4).last?.id {
-                                Divider()
-                            }
-                        }
-                    }
-                    .id(store.measurements.count)
-                    .animation(.easeInOut(duration: 0.2), value: store.measurements.count)
+                    Text("\(String(format: "%.1f", m.value)) \(m.type.unit)")
                 }
             }
+            .appFont(.subheadline)
+            .fontWeight(.medium)
 
-            Button {
-                showAddMeasurement = true
-            } label: {
-                HStack {
-                    Image(systemName: "plus.circle.fill")
-                    Text(NSLocalizedString("Log Measurement", comment: ""))
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.teal)
-            .controlSize(.regular)
+            Text(m.date, style: .relative)
+                .appFont(.caption)
+                .foregroundStyle(.secondary)
         }
-        .padding(.horizontal)
     }
 
     private func commitTaken(note: String?) {
@@ -566,13 +525,13 @@ private extension DashboardView {
         case .taken, .skipped:
             EmptyView()
         default:
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Button {
                     pendingNoteItem = item
                     intakeNote = ""
                     showNoteInput = true
                 } label: {
-                    Label(NSLocalizedString("Taken", comment: ""), systemImage: "checkmark.circle.fill")
+                    Label(NSLocalizedString("Taken", comment: ""), systemImage: "checkmark")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -586,7 +545,7 @@ private extension DashboardView {
                     NotificationManager.shared.updateBadge(store: store)
                     Haptics.impact(.light)
                 } label: {
-                    Label(NSLocalizedString("Later", comment: ""), systemImage: "zzz")
+                    Text(NSLocalizedString("Later", comment: ""))
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.regular)
@@ -600,7 +559,7 @@ private extension DashboardView {
                     NotificationManager.shared.updateBadge(store: store)
                     Haptics.impact(.light)
                 } label: {
-                    Label(NSLocalizedString("Skip", comment: ""), systemImage: "xmark.circle")
+                    Text(NSLocalizedString("Skip", comment: ""))
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.regular)
@@ -608,42 +567,6 @@ private extension DashboardView {
         }
     }
 
-    @ViewBuilder
-    private func insightsSection(insights: [MedicationInsight]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(NSLocalizedString("Smart Insights", comment: ""), systemImage: "lightbulb.fill")
-
-            ForEach(insights.prefix(3)) { insight in
-                Card {
-                    HStack(alignment: .top, spacing: 12) {
-                        Image(systemName: iconForInsight(insight.type))
-                            .font(.system(size: 20))
-                            .foregroundStyle(colorForInsight(insight.type))
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(insight.message)
-                                .font(.system(size: 14, weight: .regular))
-                                .foregroundStyle(.primary)
-                                .fixedSize(horizontal: false, vertical: true)
-
-                            if let actionTitle = insight.actionTitle {
-                                Button(actionTitle) {
-                                    if let action = insight.action {
-                                        action()
-                                    }
-                                }
-                                .font(.system(size: 13, weight: .medium))
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                            }
-                        }
-                    }
-                    .padding(12)
-                }
-            }
-        }
-        .padding(.horizontal)
-    }
 
     private func iconForInsight(_ type: MedicationInsight.InsightType) -> String {
         switch type {
@@ -675,31 +598,4 @@ private extension DashboardView {
 
 #Preview {
     DashboardView().environmentObject(DataStore())
-}
-
-private struct ProgressRing: View {
-    var value: Double
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(Color.white.opacity(0.2), style: StrokeStyle(lineWidth: 6, lineCap: .round))
-            Circle()
-                .trim(from: 0, to: CGFloat(min(max(value, 0), 1)))
-                .stroke(
-                    AngularGradient(
-                        colors: [.white, .white.opacity(0.6)],
-                        center: .center
-                    ),
-                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
-                )
-                .rotationEffect(.degrees(-90))
-            Circle()
-                .fill(Color.white.opacity(0.15))
-                .frame(width: 32, height: 32)
-        }
-        .contentShape(Circle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(String(localized: "Adherence")))
-        .accessibilityValue(Text("\(Int(value * 100))%"))
-    }
 }

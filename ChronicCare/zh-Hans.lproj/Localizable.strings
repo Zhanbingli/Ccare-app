@@ -126,7 +126,6 @@
 "Adherence Calendar" = "依从日历";
 "All Taken" = "全部服用";
 "Partial" = "部分服用";
-"Missed" = "未服用";
 "No Data" = "无数据";
 "Avg" = "平均";
 "Perfect Days" = "完美天数";
@@ -240,7 +239,6 @@
 "No medication data for this month." = "本月暂无用药数据。";
 "Start logging doses to see your adherence here." = "开始记录服药后即可查看依从率。";
 "Log your first dose to see stats here." = "记录第一次服药后即可查看统计。";
-"Log Measurement" = "记录测量";
 
 /* Misc */
 "Taken!" = "已服用！";

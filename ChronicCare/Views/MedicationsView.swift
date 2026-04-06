@@ -609,21 +609,36 @@ private extension MedicationsView {
         let total = store.medications.count
         let active = store.medications.filter { $0.remindersEnabled }.count
         let paused = max(total - active, 0)
-        return TintedCard(tint: .blue) {
-            HStack(alignment: .center, spacing: 16) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(NSLocalizedString("Medication Overview", comment: "")).appFont(.headline)
-                    Text(String(format: NSLocalizedString("%lld total", comment: ""), total))
-                        .appFont(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                VStack(alignment: .leading, spacing: 4) {
-                    summaryBadge(title: "Active", value: active, icon: "bell.fill", tint: .white.opacity(0.95))
-                    summaryBadge(title: "Paused", value: paused, icon: "bell.slash", tint: .white.opacity(0.85))
-                }
-            }
+        return HStack(spacing: 0) {
+            summaryStat(value: "\(total)", label: NSLocalizedString("Medications", comment: ""))
+            summaryDivider
+            summaryStat(value: "\(active)", label: NSLocalizedString("Active", comment: ""), color: .green)
+            summaryDivider
+            summaryStat(value: "\(paused)", label: NSLocalizedString("Paused", comment: ""), color: paused > 0 ? .orange : .secondary)
         }
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
+    }
+
+    private func summaryStat(value: String, label: String, color: Color = .primary) -> some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .appFont(.headline)
+                .foregroundStyle(color)
+            Text(label)
+                .appFont(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var summaryDivider: some View {
+        Rectangle()
+            .fill(Color.primary.opacity(0.08))
+            .frame(width: 1, height: 32)
     }
 
     var filterChips: some View {
@@ -689,10 +704,10 @@ private extension MedicationsView {
                             .lineLimit(1)
                         if !med.remindersEnabled {
                             Text(NSLocalizedString("Paused", comment: ""))
-                                .font(.system(size: 10, weight: .medium))
+                                .appFont(.caption)
                                 .foregroundStyle(.orange)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
                                 .background(Capsule().fill(Color.orange.opacity(0.12)))
                         }
                     }
@@ -738,10 +753,10 @@ private extension MedicationsView {
     @ViewBuilder
     private func compactSupplyLabel(remaining: Int, med: Medication) -> some View {
         let isLow = med.isLowSupply
-        HStack(spacing: 3) {
+        HStack(spacing: 4) {
             if isLow {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 10))
+                    .font(.system(size: 13))
                     .foregroundStyle(.red)
             }
             if let days = med.daysOfSupplyRemaining, days > 0 {
@@ -757,9 +772,9 @@ private extension MedicationsView {
     }
 
     private func inlineStatusLabel(status: IntakeStatus, date: Date) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 5) {
             Image(systemName: latestStatusIcon(status))
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(statusTint(for: status))
             Text(statusPrefix(for: status))
                 .appFont(.caption)
@@ -779,18 +794,18 @@ private extension MedicationsView {
                 NotificationManager.shared.updateBadge(store: store)
                 Haptics.success()
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: 5) {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.system(size: 13, weight: .bold))
                     Text(dose.timeStr)
-                        .font(.system(size: 12, weight: .medium))
+                        .appFont(.caption)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
             }
             .buttonStyle(.borderedProminent)
             .tint(.green)
-            .controlSize(.mini)
+            .controlSize(.small)
         }
     }
 
@@ -922,17 +937,6 @@ private extension MedicationsView {
         }
     }
 
-    private func summaryBadge(title: String, value: Int, icon: String, tint: Color) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.caption)
-                .foregroundStyle(tint)
-            Text("\(title): \(value)")
-                .appFont(.footnote)
-                .foregroundStyle(.white.opacity(0.9))
-        }
-        .padding(.vertical, 2)
-    }
 
     private func latestTodayAction(for med: Medication) -> (IntakeStatus, Date)? {
         let cal = Calendar.current

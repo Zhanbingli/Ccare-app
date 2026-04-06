@@ -27,7 +27,7 @@ enum AppFontStyle {
         case .footnote:
             return Font.system(size: 16, weight: .regular, design: .rounded)
         case .caption:
-            return Font.system(size: 14, weight: .regular, design: .rounded)
+            return Font.system(size: 15, weight: .regular, design: .rounded)
         }
     }
 }

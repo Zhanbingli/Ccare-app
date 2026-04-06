@@ -6,7 +6,6 @@ struct AdherenceCalendarView: View {
 
     @State private var displayedMonth: Date = Date()
     @State private var selectedDay: Date?
-    @State private var showDayDetail = false
 
     private let calendar = Calendar.current
     private let weekdaySymbols: [String] = {
@@ -26,109 +25,104 @@ struct AdherenceCalendarView: View {
 
     var body: some View {
         let adherenceData = store.monthlyAdherence(for: medicationID, year: year, month: month)
+        let monthStats = computeMonthStats(adherenceData)
 
-        VStack(spacing: 16) {
-            // Month navigation
-            HStack {
-                Button { shiftMonth(-1) } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.title3.weight(.semibold))
-                        .frame(width: 44, height: 44)
-                }
-                Spacer()
-                Text(monthTitle)
-                    .appFont(.headline)
-                Spacer()
-                Button { shiftMonth(1) } label: {
-                    Image(systemName: "chevron.right")
-                        .font(.title3.weight(.semibold))
-                        .frame(width: 44, height: 44)
-                }
-                .disabled(isCurrentMonth)
-            }
-            .padding(.horizontal)
-
-            // Weekday headers
-            HStack(spacing: 0) {
-                ForEach(weekdaySymbols, id: \.self) { sym in
-                    Text(sym)
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
-                }
-            }
-
-            // Calendar grid
-            let days = calendarDays()
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 8) {
-                ForEach(days, id: \.self) { day in
-                    if let day = day {
-                        let data = adherenceData[calendar.startOfDay(for: day)]
-                        calendarCell(day: day, data: data)
-                            .onTapGesture {
-                                if data != nil {
-                                    selectedDay = day
-                                    showDayDetail = true
-                                }
-                            }
-                    } else {
-                        Color.clear.frame(height: 44)
+        ScrollView {
+            VStack(spacing: 14) {
+                // Month navigation
+                HStack {
+                    Button { shiftMonth(-1) } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.body.weight(.semibold))
+                            .frame(width: 36, height: 36)
                     }
-                }
-            }
-            .padding(.horizontal, 8)
-
-            // Legend
-            HStack(spacing: 16) {
-                legendDot(color: .green, label: NSLocalizedString("All Taken", comment: ""))
-                legendDot(color: .yellow, label: NSLocalizedString("Partial", comment: ""))
-                legendDot(color: .red, label: NSLocalizedString("Missed", comment: ""))
-                legendDot(color: Color(.systemGray4), label: NSLocalizedString("No Data", comment: ""))
-            }
-            .appFont(.caption)
-            .padding(.top, 4)
-
-            // Monthly summary
-            let monthStats = computeMonthStats(adherenceData)
-            if adherenceData.isEmpty {
-                VStack(spacing: 8) {
-                    Image(systemName: "calendar.badge.clock")
-                        .font(.system(size: 36))
-                        .foregroundStyle(.secondary)
-                    Text(NSLocalizedString("No medication data for this month.", comment: ""))
-                        .appFont(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Text(NSLocalizedString("Start logging doses to see your adherence here.", comment: ""))
-                        .appFont(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
-            }
-            if monthStats.totalDays > 0 {
-                VStack(spacing: 8) {
-                    HStack(spacing: 20) {
-                        statPill(label: NSLocalizedString("Avg", comment: ""), value: String(format: "%.0f%%", monthStats.avgPercent * 100), color: .blue)
-                        statPill(label: NSLocalizedString("Perfect Days", comment: ""), value: "\(monthStats.perfectDays)", color: .green)
-                        statPill(label: NSLocalizedString("Missed Days", comment: ""), value: "\(monthStats.missedDays)", color: .red)
+                    Spacer()
+                    Text(monthTitle)
+                        .appFont(.headline)
+                    Spacer()
+                    Button { shiftMonth(1) } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.body.weight(.semibold))
+                            .frame(width: 36, height: 36)
                     }
+                    .disabled(isCurrentMonth)
                 }
-                .padding()
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
                 .padding(.horizontal)
-            }
 
-            Spacer()
+                // Weekday headers
+                HStack(spacing: 0) {
+                    ForEach(weekdaySymbols, id: \.self) { sym in
+                        Text(sym)
+                            .appFont(.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .padding(.horizontal, 8)
+
+                // Calendar grid
+                let days = calendarDays()
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 8) {
+                    ForEach(days, id: \.self) { day in
+                        if let day = day {
+                            let data = adherenceData[calendar.startOfDay(for: day)]
+                            calendarCell(day: day, data: data)
+                                .onTapGesture {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        if selectedDay == day {
+                                            selectedDay = nil
+                                        } else if data != nil {
+                                            selectedDay = day
+                                        }
+                                    }
+                                }
+                        } else {
+                            Color.clear.frame(height: 44)
+                        }
+                    }
+                }
+                .padding(.horizontal, 8)
+
+                // Legend + stats in one line
+                if monthStats.totalDays > 0 {
+                    HStack(spacing: 8) {
+                        legendItem(color: .green, label: NSLocalizedString("All Taken", comment: ""))
+                        legendItem(color: .orange, label: NSLocalizedString("Partial", comment: ""))
+                        legendItem(color: .red, label: NSLocalizedString("Missed", comment: ""))
+                        Spacer()
+                        Text(String(format: "%.0f%%", monthStats.avgPercent * 100))
+                            .appFont(.caption)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.primary)
+                        Text(NSLocalizedString("Avg", comment: ""))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color(.secondarySystemBackground))
+                    )
+                    .padding(.horizontal)
+                } else {
+                    Text(NSLocalizedString("No medication data for this month.", comment: ""))
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 12)
+                }
+
+                // Inline day detail (no sheet)
+                if let day = selectedDay {
+                    dayDetailInline(date: day)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+            .padding(.vertical)
         }
-        .padding(.top)
         .navigationTitle(NSLocalizedString("Adherence Calendar", comment: ""))
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showDayDetail) {
-            if let day = selectedDay {
-                DayDetailView(store: store, date: day, medicationID: medicationID)
-                    .presentationDetents([.medium, .large])
-            }
-        }
     }
 
     // MARK: - Helpers
@@ -139,7 +133,10 @@ struct AdherenceCalendarView: View {
 
     private func shiftMonth(_ offset: Int) {
         if let newDate = calendar.date(byAdding: .month, value: offset, to: displayedMonth) {
-            withAnimation(.easeInOut(duration: 0.2)) { displayedMonth = newDate }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                displayedMonth = newDate
+                selectedDay = nil
+            }
         }
     }
 
@@ -155,45 +152,78 @@ struct AdherenceCalendarView: View {
         return days
     }
 
+    // MARK: - Calendar Cell
+
     @ViewBuilder
     private func calendarCell(day: Date, data: (taken: Int, total: Int)?) -> some View {
         let dayNum = calendar.component(.day, from: day)
         let isToday = calendar.isDateInToday(day)
+        let isSelected = selectedDay == day
 
         ZStack {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(cellColor(data: data))
+            // Background fill based on adherence
+            RoundedRectangle(cornerRadius: 10)
+                .fill(cellFill(data: data))
                 .frame(height: 44)
 
+            // Today ring
             if isToday {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: 10)
                     .strokeBorder(Color.accentColor, lineWidth: 2)
                     .frame(height: 44)
             }
 
-            Text("\(dayNum)")
-                .appFont(.body)
-                .fontWeight(isToday ? .bold : .regular)
-                .foregroundStyle(data != nil ? .primary : .secondary)
+            // Selected highlight
+            if isSelected {
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(Color.primary.opacity(0.4), lineWidth: 1.5)
+                    .frame(height: 44)
+            }
+
+            // Day number + indicator dot
+            VStack(spacing: 3) {
+                Text("\(dayNum)")
+                    .appFont(.caption)
+                    .fontWeight(isToday ? .bold : .regular)
+                    .foregroundStyle(data != nil ? .primary : .tertiary)
+
+                // Small dot indicator
+                Circle()
+                    .fill(cellDotColor(data: data))
+                    .frame(width: 5, height: 5)
+                    .opacity(data != nil && data!.total > 0 ? 1 : 0)
+            }
         }
     }
 
-    private func cellColor(data: (taken: Int, total: Int)?) -> Color {
-        guard let data = data else { return Color(.systemGray6) }
-        if data.total == 0 { return Color(.systemGray5) }
+    private func cellFill(data: (taken: Int, total: Int)?) -> Color {
+        guard let data = data, data.total > 0 else { return Color(.systemBackground) }
         let pct = Double(data.taken) / Double(data.total)
-        if pct >= 1.0 { return Color.green.opacity(0.35) }
-        if pct > 0 { return Color.yellow.opacity(0.35) }
-        return Color.red.opacity(0.3)
+        if pct >= 1.0 { return Color.green.opacity(0.18) }
+        if pct > 0 { return Color.orange.opacity(0.16) }
+        return Color.red.opacity(0.14)
     }
 
-    @ViewBuilder
-    private func legendDot(color: Color, label: String) -> some View {
+    private func cellDotColor(data: (taken: Int, total: Int)?) -> Color {
+        guard let data = data, data.total > 0 else { return .clear }
+        let pct = Double(data.taken) / Double(data.total)
+        if pct >= 1.0 { return .green }
+        if pct > 0 { return .orange }
+        return .red
+    }
+
+    // MARK: - Legend
+
+    private func legendItem(color: Color, label: String) -> some View {
         HStack(spacing: 4) {
-            Circle().fill(color.opacity(color == Color(.systemGray4) ? 1 : 0.5)).frame(width: 10, height: 10)
-            Text(label).foregroundStyle(.secondary)
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text(label)
+                .appFont(.caption)
+                .foregroundStyle(.secondary)
         }
     }
+
+    // MARK: - Month Stats
 
     private struct MonthStats {
         let totalDays: Int
@@ -212,100 +242,96 @@ struct AdherenceCalendarView: View {
         return MonthStats(totalDays: entries.count, avgPercent: avg, perfectDays: perfect, missedDays: missed)
     }
 
+    // MARK: - Inline Day Detail
+
     @ViewBuilder
-    private func statPill(label: String, value: String, color: Color) -> some View {
-        VStack(spacing: 2) {
-            Text(value)
-                .appFont(.headline)
-                .foregroundStyle(color)
-            Text(label)
-                .appFont(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-}
+    private func dayDetailInline(date: Date) -> some View {
+        let logs = store.intakeLogs(for: date, medicationID: medicationID)
+        let meds = medicationID != nil ? store.medications.filter { $0.id == medicationID } : store.medications
 
-// MARK: - Day Detail View
-
-private struct DayDetailView: View {
-    let store: DataStore
-    let date: Date
-    var medicationID: UUID?
-
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            let logs = store.intakeLogs(for: date, medicationID: medicationID)
-            let meds = medicationID != nil ? store.medications.filter { $0.id == medicationID } : store.medications
-
-            List {
-                if logs.isEmpty {
-                    Text(NSLocalizedString("No intake logs for this day.", comment: ""))
+        VStack(alignment: .leading, spacing: 0) {
+            // Day header
+            HStack {
+                Text(dayTitle(date))
+                    .appFont(.subheadline)
+                    .foregroundStyle(.primary)
+                Spacer()
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { selectedDay = nil }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
                         .foregroundStyle(.secondary)
-                } else {
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+
+            Divider().padding(.horizontal, 14)
+
+            if logs.isEmpty {
+                Text(NSLocalizedString("No intake logs for this day.", comment: ""))
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(14)
+            } else {
+                VStack(spacing: 0) {
                     ForEach(meds) { med in
                         let medLogs = logs.filter { $0.medicationID == med.id }
                         if !medLogs.isEmpty {
-                            Section(med.name) {
-                                ForEach(medLogs) { log in
-                                    HStack {
-                                        statusIcon(log.status)
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            HStack {
-                                                if let key = log.scheduleKey {
-                                                    Text(key).appFont(.subheadline)
-                                                }
-                                                Text(log.status.rawValue.capitalized)
-                                                    .appFont(.subheadline)
-                                                    .foregroundStyle(statusColor(log.status))
-                                            }
-                                            if let note = log.note, !note.isEmpty {
-                                                Text(note)
-                                                    .appFont(.caption)
-                                                    .foregroundStyle(.secondary)
-                                                    .italic()
-                                            }
-                                            Text(timeString(log.date))
-                                                .appFont(.caption)
-                                                .foregroundStyle(.tertiary)
-                                        }
-                                        Spacer()
+                            ForEach(medLogs) { log in
+                                HStack(spacing: 10) {
+                                    statusIcon(log.status)
+                                        .frame(width: 20)
+                                    Text(med.name)
+                                        .appFont(.subheadline)
+                                    if let key = log.scheduleKey {
+                                        Text(key)
+                                            .appFont(.caption)
+                                            .foregroundStyle(.secondary)
                                     }
+                                    Spacer()
+                                    Text(timeString(log.date))
+                                        .appFont(.caption)
+                                        .foregroundStyle(.secondary)
                                 }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 6)
                             }
                         }
                     }
 
-                    // Show medications with no logs (missed)
+                    // Medications with no logs
                     let loggedMedIDs = Set(logs.map { $0.medicationID })
-                    let missedMeds = meds.filter { !loggedMedIDs.contains($0.id) }
-                    if !missedMeds.isEmpty {
-                        Section(NSLocalizedString("No Record", comment: "")) {
-                            ForEach(missedMeds) { med in
-                                HStack {
-                                    Image(systemName: "questionmark.circle")
-                                        .foregroundStyle(.secondary)
-                                    Text(med.name)
-                                        .appFont(.body)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
+                    let missedMeds = meds.filter { !loggedMedIDs.contains($0.id) && $0.remindersEnabled }
+                    ForEach(missedMeds) { med in
+                        HStack(spacing: 10) {
+                            Image(systemName: "minus.circle")
+                                .font(.system(size: 16))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 20)
+                            Text(med.name)
+                                .appFont(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text(NSLocalizedString("No Record", comment: ""))
+                                .appFont(.caption)
+                                .foregroundStyle(.tertiary)
                         }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
                     }
-                }
-            }
-            .navigationTitle(dateTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(NSLocalizedString("Close", comment: "")) { dismiss() }
                 }
             }
         }
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
+        .padding(.horizontal)
     }
 
-    private var dateTitle: String {
+    private func dayTitle(_ date: Date) -> String {
         let f = DateFormatter()
         f.dateStyle = .medium
         return f.string(from: date)
@@ -321,19 +347,17 @@ private struct DayDetailView: View {
     private func statusIcon(_ status: IntakeStatus) -> some View {
         switch status {
         case .taken:
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 16))
+                .foregroundStyle(.green)
         case .skipped:
-            Image(systemName: "xmark.circle.fill").foregroundStyle(.orange)
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 16))
+                .foregroundStyle(.orange)
         case .snoozed:
-            Image(systemName: "zzz").foregroundStyle(.blue)
-        }
-    }
-
-    private func statusColor(_ status: IntakeStatus) -> Color {
-        switch status {
-        case .taken: return .green
-        case .skipped: return .orange
-        case .snoozed: return .blue
+            Image(systemName: "zzz")
+                .font(.system(size: 14))
+                .foregroundStyle(.blue)
         }
     }
 }

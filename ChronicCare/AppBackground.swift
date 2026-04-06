@@ -11,8 +11,3 @@ struct AppBackground: View {
     }
 }
 
-extension View {
-    func withAppBackground() -> some View {
-        background(AppBackground())
-    }
-}
