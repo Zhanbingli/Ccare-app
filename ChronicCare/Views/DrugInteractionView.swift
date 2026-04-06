@@ -66,14 +66,14 @@ struct DrugInteractionView: View {
                         .foregroundStyle(.white)
                     Spacer()
                 }
-                Text("AI Drug Interaction Analysis")
+                Text(NSLocalizedString("AI Drug Interaction Analysis", comment: ""))
                     .appFont(.headline)
                     .foregroundStyle(.white)
-                Text("Powered by AI to analyze medication interactions, effects, and side effects")
+                Text(NSLocalizedString("Powered by AI to analyze medication interactions, effects, and side effects", comment: ""))
                     .appFont(.subheadline)
                     .foregroundStyle(.white.opacity(0.9))
                 if !hasConsent {
-                    Text("To protect your privacy, analysis is disabled until you allow sending medication info to your chosen AI provider in Settings.")
+                    Text(NSLocalizedString("To protect your privacy, analysis is disabled until you allow sending medication info to your chosen AI provider in Settings.", comment: ""))
                         .appFont(.caption)
                         .foregroundStyle(.white.opacity(0.85))
                         .fixedSize(horizontal: false, vertical: true)
@@ -87,10 +87,10 @@ struct DrugInteractionView: View {
             Image(systemName: "pills")
                 .font(.system(size: 60))
                 .foregroundStyle(.secondary)
-            Text("No medications added")
+            Text(NSLocalizedString("No medications added", comment: ""))
                 .appFont(.headline)
                 .foregroundStyle(.secondary)
-            Text("Add medications to analyze drug interactions")
+            Text(NSLocalizedString("Add medications to analyze drug interactions", comment: ""))
                 .appFont(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -101,7 +101,7 @@ struct DrugInteractionView: View {
 
     private var medicationListSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Current Medications (\(store.medications.count))")
+            Text(String(format: NSLocalizedString("Current Medications (%lld)", comment: ""), store.medications.count))
                 .appFont(.headline)
                 .foregroundStyle(.primary)
 
@@ -142,7 +142,7 @@ struct DrugInteractionView: View {
         } label: {
             HStack {
                 Image(systemName: "wand.and.stars")
-                Text("Analyze Interactions")
+                Text(NSLocalizedString("Analyze Interactions", comment: ""))
             }
             .frame(maxWidth: .infinity)
             .padding()
@@ -165,7 +165,7 @@ struct DrugInteractionView: View {
         VStack(spacing: 16) {
             ProgressView()
                 .scaleEffect(1.5)
-            Text("Analyzing drug interactions...")
+            Text(NSLocalizedString("Analyzing drug interactions...", comment: ""))
                 .appFont(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -178,7 +178,7 @@ struct DrugInteractionView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
             VStack(alignment: .leading, spacing: 6) {
-                Text("Error")
+                Text(NSLocalizedString("Error", comment: ""))
                     .appFont(.subheadline)
                     .foregroundStyle(.primary)
                 Text(message)
@@ -209,7 +209,7 @@ struct DrugInteractionView: View {
                 HStack {
                     Image(systemName: "doc.text.fill")
                         .foregroundStyle(.blue)
-                    Text("Overall Analysis")
+                    Text(NSLocalizedString("Overall Analysis", comment: ""))
                         .appFont(.headline)
                 }
                 Text(result.analysis)
@@ -228,7 +228,7 @@ struct DrugInteractionView: View {
                     HStack {
                         Image(systemName: "arrow.triangle.2.circlepath")
                             .foregroundStyle(.purple)
-                        Text("Detected Interactions (\(result.interactions.count))")
+                        Text(String(format: NSLocalizedString("Detected Interactions (%lld)", comment: ""), result.interactions.count))
                             .appFont(.headline)
                     }
 
@@ -244,7 +244,7 @@ struct DrugInteractionView: View {
                     HStack {
                         Image(systemName: "lightbulb.fill")
                             .foregroundStyle(.yellow)
-                        Text("Recommendations")
+                        Text(NSLocalizedString("Recommendations", comment: ""))
                             .appFont(.headline)
                     }
 
@@ -305,7 +305,7 @@ struct DrugInteractionView: View {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.caption)
                             .foregroundStyle(.green)
-                        Text("Therapeutic Effects")
+                        Text(NSLocalizedString("Therapeutic Effects", comment: ""))
                             .appFont(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -333,7 +333,7 @@ struct DrugInteractionView: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.caption)
                             .foregroundStyle(.orange)
-                        Text("Potential Side Effects")
+                        Text(NSLocalizedString("Potential Side Effects", comment: ""))
                             .appFont(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -439,9 +439,9 @@ struct AISettingsView: View {
                         }
                     }
                 } header: {
-                    Text("Provider")
+                    Text(NSLocalizedString("Provider", comment: ""))
                 } footer: {
-                    Text("Choose between OpenAI or Anthropic for drug interaction analysis")
+                    Text(NSLocalizedString("Choose between OpenAI or Anthropic for drug interaction analysis", comment: ""))
                 }
 
                 Section {
@@ -449,10 +449,10 @@ struct AISettingsView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 } header: {
-                    Text("API Key")
+                    Text(NSLocalizedString("API Key", comment: ""))
                 } footer: {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Your API key is stored securely on your device and never shared")
+                        Text(NSLocalizedString("Your API key is stored securely on your device and never shared", comment: ""))
                         if provider == .openai {
                             Link("Get OpenAI API Key →", destination: URL(string: "https://platform.openai.com/api-keys")!)
                         } else {
@@ -464,8 +464,8 @@ struct AISettingsView: View {
                 Section {
                     Toggle(isOn: $optIn) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Allow sending medication data for analysis")
-                            Text("Medication names, doses, and categories are sent to the selected provider. No health measurements are sent.")
+                            Text(NSLocalizedString("Allow sending medication data for analysis", comment: ""))
+                            Text(NSLocalizedString("Medication names, doses, and categories are sent to the selected provider. No health measurements are sent.", comment: ""))
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }

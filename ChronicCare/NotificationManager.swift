@@ -15,6 +15,77 @@ final class NotificationManager {
     static let actionSnooze60 = "MED_SNOOZE_60"
     static let actionSkip = "MED_SKIP"
 
+    // MARK: - Snooze escalation (count tracking only — rules come from MedicationRuleStore)
+    private let snoozeCountKey = "snooze.today.counts"
+    private let snoozeCountDateKey = "snooze.today.date"
+
+    func snoozeCount(for medicationID: UUID, scheduleTime: DateComponents?) -> Int {
+        resetSnoozeCountsIfNewDay()
+        let key = snoozeTrackingKey(for: medicationID, scheduleTime: scheduleTime)
+        let dict = defaults.dictionary(forKey: snoozeCountKey) as? [String: Int] ?? [:]
+        return dict[key] ?? 0
+    }
+
+    func incrementSnoozeCount(for medicationID: UUID, scheduleTime: DateComponents?) {
+        resetSnoozeCountsIfNewDay()
+        let key = snoozeTrackingKey(for: medicationID, scheduleTime: scheduleTime)
+        var dict = defaults.dictionary(forKey: snoozeCountKey) as? [String: Int] ?? [:]
+        dict[key] = (dict[key] ?? 0) + 1
+        defaults.set(dict, forKey: snoozeCountKey)
+        defaults.set(todayKey(), forKey: snoozeCountDateKey)
+    }
+
+    func resetSnoozeCount(for medicationID: UUID, scheduleTime: DateComponents?) {
+        let key = snoozeTrackingKey(for: medicationID, scheduleTime: scheduleTime)
+        var dict = defaults.dictionary(forKey: snoozeCountKey) as? [String: Int] ?? [:]
+        dict.removeValue(forKey: key)
+        defaults.set(dict, forKey: snoozeCountKey)
+    }
+
+    private func snoozeTrackingKey(for medicationID: UUID, scheduleTime: DateComponents?) -> String {
+        guard let h = scheduleTime?.hour, let m = scheduleTime?.minute else {
+            return medicationID.uuidString
+        }
+        return "\(medicationID.uuidString)_\(String(format: "%02d", h))_\(String(format: "%02d", m))"
+    }
+
+    private func resetSnoozeCountsIfNewDay() {
+        let day = todayKey()
+        if defaults.string(forKey: snoozeCountDateKey) != day {
+            defaults.removeObject(forKey: snoozeCountKey)
+            defaults.set(day, forKey: snoozeCountDateKey)
+        }
+    }
+
+    // MARK: - Behavioral feedback notifications
+    private static let behaviorCategoryId = "BEHAVIOR_FEEDBACK"
+
+    func sendStreakMilestone(streak: Int, medicationName: String) {
+        guard streak > 0 && (streak == 3 || streak == 7 || streak == 14 || streak == 30 || streak % 30 == 0) else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "🔥 \(streak) " + NSLocalizedString("day streak", comment: "")
+        content.body = String(format: NSLocalizedString("Great job taking %@ consistently!", comment: ""), medicationName)
+        content.sound = .default
+        if #available(iOS 15.0, *) { content.interruptionLevel = .passive }
+        let id = "streak_\(streak)_\(todayKey())"
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        let req = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(req, withCompletionHandler: nil)
+    }
+
+    func sendMissWarning(missedDays: Int, medicationName: String) {
+        guard missedDays >= 2 else { return }
+        let content = UNMutableNotificationContent()
+        content.title = NSLocalizedString("Missed Medication", comment: "")
+        content.body = String(format: NSLocalizedString("You haven't taken %@ for %lld days. Please take it or talk to your doctor.", comment: ""), medicationName, missedDays)
+        content.sound = .default
+        if #available(iOS 15.0, *) { content.interruptionLevel = .timeSensitive }
+        let id = "miss_warn_\(todayKey())"
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        let req = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(req, withCompletionHandler: nil)
+    }
+
     // MARK: - Same-day suppression (to avoid duplicate reminders after early Taken/Skip)
     private let defaults = UserDefaults.standard
     private let suppressKey = "suppress.today.ids"

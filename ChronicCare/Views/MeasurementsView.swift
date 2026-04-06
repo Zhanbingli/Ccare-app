@@ -11,7 +11,7 @@ struct MeasurementsView: View {
         NavigationStack {
             List {
                 if filteredMeasurements.isEmpty {
-                    EmptyStateView(systemImage: "heart.text.square", title: "No measurements yet", subtitle: NSLocalizedString("Add your first measurement", comment: ""), actionTitle: NSLocalizedString("Add", comment: "")) {
+                    EmptyStateView(systemImage: "heart.text.square", title: NSLocalizedString("No measurements yet", comment: ""), subtitle: NSLocalizedString("Add your first measurement", comment: ""), actionTitle: NSLocalizedString("Add", comment: "")) {
                         showAdd = true
                     }
                     .listRowBackground(Color.clear)
@@ -194,7 +194,7 @@ struct AddMeasurementView: View {
                                 .foregroundStyle(validationIsWarning ? .orange : .blue)
                                 .font(.system(size: 20))
                             Text(message)
-                                .font(.system(size: 14))
+                                .appFont(.caption)
                                 .foregroundStyle(.primary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }

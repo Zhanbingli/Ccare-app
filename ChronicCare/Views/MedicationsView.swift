@@ -41,7 +41,7 @@ struct MedicationsView: View {
                         .listRowSeparator(.hidden)
                     }
                     if filteredMedications.isEmpty {
-                        Text("No medications added")
+                        Text(NSLocalizedString("No medications added", comment: ""))
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(filteredMedications) { med in
@@ -146,9 +146,9 @@ struct AddMedicationView: View {
             Form {
                 Section {
                     TextField(NSLocalizedString("Medication Name", comment: ""), text: $name)
-                        .font(.system(size: 20, weight: .medium, design: .rounded))
+                        .appFont(.headline)
                     TextField(NSLocalizedString("Dose (e.g. 500mg)", comment: ""), text: $dose)
-                        .font(.system(size: 20, weight: .medium, design: .rounded))
+                        .appFont(.headline)
                 } header: {
                     Text(NSLocalizedString("What are you taking?", comment: ""))
                 }
@@ -174,10 +174,10 @@ struct AddMedicationView: View {
                     }
                     Button { times.append(Date()) } label: {
                         Label(NSLocalizedString("Add Time", comment: ""), systemImage: "plus.circle")
-                            .font(.system(size: 18, weight: .medium, design: .rounded))
+                            .appFont(.subheadline)
                     }
                     Toggle(NSLocalizedString("Remind Me", comment: ""), isOn: $remindersEnabled)
-                        .font(.system(size: 18, weight: .medium, design: .rounded))
+                        .appFont(.subheadline)
                     if remindersEnabled && times.isEmpty {
                         Label(NSLocalizedString("Add at least one time for reminders", comment: ""), systemImage: "exclamationmark.triangle")
                             .appFont(.caption)
@@ -335,9 +335,9 @@ struct EditMedicationView: View {
             Form {
                 Section {
                     TextField(NSLocalizedString("Medication Name", comment: ""), text: $name)
-                        .font(.system(size: 20, weight: .medium, design: .rounded))
+                        .appFont(.headline)
                     TextField(NSLocalizedString("Dose (e.g. 500mg)", comment: ""), text: $dose)
-                        .font(.system(size: 20, weight: .medium, design: .rounded))
+                        .appFont(.headline)
                 } header: {
                     Text(NSLocalizedString("What are you taking?", comment: ""))
                 }
@@ -409,10 +409,10 @@ struct EditMedicationView: View {
                     }
                     Button { times.append(Date()) } label: {
                         Label(NSLocalizedString("Add Time", comment: ""), systemImage: "plus.circle")
-                            .font(.system(size: 18, weight: .medium, design: .rounded))
+                            .appFont(.subheadline)
                     }
                     Toggle(NSLocalizedString("Remind Me", comment: ""), isOn: $remindersEnabled)
-                        .font(.system(size: 18, weight: .medium, design: .rounded))
+                        .appFont(.subheadline)
                     if remindersEnabled && times.isEmpty {
                         Label(NSLocalizedString("Add at least one time for reminders", comment: ""), systemImage: "exclamationmark.triangle")
                             .appFont(.caption)
@@ -786,6 +786,16 @@ private extension MedicationsView {
     private func compactQuickTakeButton(for med: Medication) -> some View {
         if let dose = nextUntakenDose(for: med) {
             Button {
+                // Rule: duplicate taken guard
+                let dupCheck = MedicationRules.checkDuplicateTaken(
+                    medicationID: med.id,
+                    scheduleTime: dose.comps,
+                    intakeLogs: store.intakeLogs
+                )
+                if case .blocked = dupCheck {
+                    Haptics.notification(.warning)
+                    return
+                }
                 store.upsertIntake(medicationID: med.id, status: .taken, scheduleTime: dose.comps)
                 store.decrementPills(for: med.id)
                 NotificationManager.shared.suppressToday(for: med.id, timeComponents: dose.comps)

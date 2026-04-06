@@ -113,10 +113,10 @@ struct EnhancedTrendsView: View {
             Image(systemName: "chart.xyaxis.line")
                 .font(.system(size: 60))
                 .foregroundStyle(.secondary)
-            Text("No data in range")
+            Text(NSLocalizedString("No data in range", comment: ""))
                 .appFont(.headline)
                 .foregroundStyle(.secondary)
-            Text("Add measurements to see trends")
+            Text(NSLocalizedString("Add measurements to see trends", comment: ""))
                 .appFont(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -191,7 +191,7 @@ struct EnhancedTrendsView: View {
     private var kpiDivider: some View {
         Rectangle()
             .fill(Color.primary.opacity(0.08))
-            .frame(width: 1, height: 32)
+            .frame(width: 1, height: 36)
     }
 
     // MARK: - Chart Section
@@ -289,7 +289,7 @@ struct EnhancedTrendsView: View {
                         Button {
                             generateAIInsights()
                         } label: {
-                            Text(aiInsights == nil ? "Generate" : "Refresh")
+                            Text(aiInsights == nil ? NSLocalizedString("Generate", comment: "") : NSLocalizedString("Refresh", comment: ""))
                                 .appFont(.caption)
                         }
                         .buttonStyle(.bordered)
@@ -308,9 +308,9 @@ struct EnhancedTrendsView: View {
                     .padding(.vertical, 12)
                 } else if let insights = aiInsights {
                     Text(insights)
-                        .font(.system(size: 14, weight: .regular))
+                        .appFont(.caption)
                         .foregroundStyle(.primary)
-                        .lineSpacing(4)
+                        .lineSpacing(5)
                 }
             }
             .padding(14)
@@ -383,7 +383,7 @@ struct EnhancedTrendsView: View {
                 .lineStyle(.init(dash: [4, 4]))
                 .foregroundStyle(.red.opacity(0.6))
                 .annotation(position: .top, alignment: .trailing) {
-                    Text("High")
+                    Text(NSLocalizedString("High", comment: "chart annotation"))
                         .appFont(.caption)
                         .foregroundStyle(.red)
                         .padding(4)
@@ -519,7 +519,7 @@ struct EnhancedTrendsView: View {
                     .lineStyle(.init(dash: [4,4]))
                     .foregroundStyle(.green.opacity(0.6))
                     .annotation(position: .top, alignment: .trailing) {
-                        Text("Target")
+                        Text(NSLocalizedString("Target", comment: "chart annotation"))
                             .appFont(.caption)
                             .foregroundStyle(.green)
                             .padding(4)

@@ -191,7 +191,7 @@ struct AdherenceCalendarView: View {
                 Circle()
                     .fill(cellDotColor(data: data))
                     .frame(width: 5, height: 5)
-                    .opacity(data != nil && data!.total > 0 ? 1 : 0)
+                    .opacity((data?.total ?? 0) > 0 ? 1 : 0)
             }
         }
     }

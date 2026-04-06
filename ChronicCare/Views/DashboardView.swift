@@ -10,6 +10,10 @@ struct DashboardView: View {
     @State private var showNoteInput = false
     @State private var pendingNoteItem: MedSchedule?
     @State private var intakeNote: String = ""
+    @State private var showDuplicateAlert = false
+    @State private var duplicateAlertMinutes: Int = 0
+    @State private var safetyAlerts: [String] = []
+    @State private var showSafetyAlerts = false
     @AppStorage("units.glucose") private var glucoseUnitRaw: String = GlucoseUnit.mgdL.rawValue
     @AppStorage("prefs.graceMinutes") private var graceMinutes: Int = 30
 
@@ -97,24 +101,33 @@ struct DashboardView: View {
                     .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                 }
 
-                // MARK: - Measurement
-                Section {
-                    if let latest = store.measurements.first {
-                        latestMeasurementRow(latest)
+                // MARK: - Behavioral Insights (right after meds — they drive action)
+                let insights = MedicationInsightsEngine.generateInsights(
+                    medications: store.medications,
+                    intakeLogs: store.intakeLogs,
+                    store: store
+                )
+                if !insights.isEmpty {
+                    Section {
+                        ForEach(insights.prefix(2)) { insight in
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: iconForInsight(insight.type))
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(colorForInsight(insight.type))
+                                    .frame(width: 22)
+                                Text(insight.message)
+                                    .appFont(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    } header: {
+                        Text(NSLocalizedString("Smart Insights", comment: ""))
                     }
-
-                    Button {
-                        showAddMeasurement = true
-                    } label: {
-                        Label(NSLocalizedString("Log Measurement", comment: ""), systemImage: "plus.circle.fill")
-                            .appFont(.subheadline)
-                    }
-                } header: {
-                    Text(NSLocalizedString("Measurements", comment: ""))
+                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                 }
-                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
 
-                // MARK: - Links
+                // MARK: - Quick Links
                 Section {
                     if totalCount > 0 {
                         NavigationLink {
@@ -143,31 +156,22 @@ struct DashboardView: View {
                 }
                 .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
 
-                // MARK: - Insights (only when noteworthy)
-                let insights = MedicationInsightsEngine.generateInsights(
-                    medications: store.medications,
-                    intakeLogs: store.intakeLogs,
-                    store: store
-                )
-                if !insights.isEmpty {
-                    Section {
-                        ForEach(insights.prefix(2)) { insight in
-                            HStack(alignment: .top, spacing: 10) {
-                                Image(systemName: iconForInsight(insight.type))
-                                    .font(.system(size: 16))
-                                    .foregroundStyle(colorForInsight(insight.type))
-                                    .frame(width: 22)
-                                Text(insight.message)
-                                    .appFont(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    } header: {
-                        Text(NSLocalizedString("Smart Insights", comment: ""))
+                // MARK: - Measurement (secondary — below the fold)
+                Section {
+                    if let latest = store.measurements.first {
+                        latestMeasurementRow(latest)
                     }
-                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+
+                    Button {
+                        showAddMeasurement = true
+                    } label: {
+                        Label(NSLocalizedString("Log Measurement", comment: ""), systemImage: "plus.circle.fill")
+                            .appFont(.subheadline)
+                    }
+                } header: {
+                    Text(NSLocalizedString("Measurements", comment: ""))
                 }
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
             }
             .listStyle(.insetGrouped)
             .refreshable {
@@ -200,12 +204,33 @@ struct DashboardView: View {
             } message: {
                 Text(NSLocalizedString("Optional: add context like side effects or timing.", comment: ""))
             }
+            // Rule 1: Duplicate taken confirmation
+            .alert(NSLocalizedString("Already Taken", comment: ""), isPresented: $showDuplicateAlert) {
+                Button(NSLocalizedString("Take Again", comment: ""), role: .destructive) {
+                    intakeNote = ""
+                    showNoteInput = true
+                }
+                Button(NSLocalizedString("Cancel", comment: ""), role: .cancel) {
+                    pendingNoteItem = nil
+                }
+            } message: {
+                Text(String(format: NSLocalizedString("You took this %lld minutes ago. Are you sure you want to log another dose?", comment: ""), duplicateAlertMinutes))
+            }
             .overlay {
                 if showTakenConfirmation {
                     TakenConfirmationOverlay(medicationName: takenMedName)
                         .transition(.opacity)
                         .zIndex(100)
                 }
+            }
+            .onAppear {
+                runDailySafetyCheck()
+            }
+            // Safety alerts from rule engine
+            .alert(NSLocalizedString("Safety Check", comment: ""), isPresented: $showSafetyAlerts) {
+                Button(NSLocalizedString("OK", comment: ""), role: .cancel) { }
+            } message: {
+                Text(safetyAlerts.joined(separator: "\n\n"))
             }
         }
     }
@@ -378,6 +403,14 @@ private extension DashboardView {
     // MARK: - Medication Row
     @ViewBuilder
     private func medRow(item: MedSchedule, status: TodayMedStatus) -> some View {
+        let comps = Calendar.current.dateComponents([.hour, .minute], from: item.time)
+        let makeupResult: MedicationRules.MakeupDoseResult? = {
+            if case .overdue = status {
+                return MedicationRules.checkMakeupDose(medication: item.med, missedTime: comps)
+            }
+            return nil
+        }()
+
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 10) {
                 statusDot(for: status)
@@ -392,6 +425,22 @@ private extension DashboardView {
                         Text(item.med.dose).appFont(.caption).foregroundStyle(.secondary)
                         Text("·").foregroundStyle(.tertiary)
                         Text(item.time, style: .time).appFont(.caption).foregroundStyle(.secondary)
+                    }
+                    // Makeup dose hint
+                    if let makeup = makeupResult {
+                        switch makeup {
+                        case .canTakeLate:
+                            Text(NSLocalizedString("You can still take it now", comment: ""))
+                                .appFont(.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.orange)
+                        case .tooCloseToNext(let next):
+                            (Text(NSLocalizedString("Too late — next dose ", comment: "")) + Text(next, style: .time))
+                                .appFont(.caption)
+                                .foregroundStyle(.secondary)
+                        case .noNextDose:
+                            EmptyView()
+                        }
                     }
                 }
 
@@ -527,9 +576,22 @@ private extension DashboardView {
         default:
             HStack(spacing: 8) {
                 Button {
-                    pendingNoteItem = item
-                    intakeNote = ""
-                    showNoteInput = true
+                    let comps = Calendar.current.dateComponents([.hour, .minute], from: item.time)
+                    // Rule 1: Duplicate taken guard
+                    let dupCheck = MedicationRules.checkDuplicateTaken(
+                        medicationID: item.med.id,
+                        scheduleTime: comps,
+                        intakeLogs: store.intakeLogs
+                    )
+                    if case .blocked(let mins) = dupCheck {
+                        pendingNoteItem = item
+                        duplicateAlertMinutes = mins
+                        showDuplicateAlert = true
+                    } else {
+                        pendingNoteItem = item
+                        intakeNote = ""
+                        showNoteInput = true
+                    }
                 } label: {
                     Label(NSLocalizedString("Taken", comment: ""), systemImage: "checkmark")
                         .frame(maxWidth: .infinity)
@@ -540,33 +602,60 @@ private extension DashboardView {
 
                 Button {
                     let comps = Calendar.current.dateComponents([.hour, .minute], from: item.time)
-                    store.upsertIntake(medicationID: item.med.id, status: .snoozed, scheduleTime: comps)
-                    NotificationManager.shared.scheduleSnooze(for: item.med, minutes: 10, scheduleTime: comps)
-                    NotificationManager.shared.updateBadge(store: store)
-                    Haptics.impact(.light)
+                    let count = NotificationManager.shared.snoozeCount(for: item.med.id, scheduleTime: comps)
+                    let snoozeResult = MedicationRules.nextSnooze(for: item.med.id, currentSnoozeCount: count)
+                    switch snoozeResult {
+                    case .snooze(let minutes):
+                        store.upsertIntake(medicationID: item.med.id, status: .snoozed, scheduleTime: comps)
+                        NotificationManager.shared.incrementSnoozeCount(for: item.med.id, scheduleTime: comps)
+                        NotificationManager.shared.scheduleSnooze(for: item.med, minutes: minutes, scheduleTime: comps)
+                        NotificationManager.shared.updateBadge(store: store)
+                        Haptics.impact(.light)
+                    case .exhausted:
+                        store.upsertIntake(medicationID: item.med.id, status: .skipped, scheduleTime: comps)
+                        NotificationManager.shared.suppressToday(for: item.med.id, timeComponents: comps)
+                        NotificationManager.shared.cancelTodayInstance(for: item.med.id, timeComponents: comps)
+                        NotificationManager.shared.schedule(for: item.med)
+                        NotificationManager.shared.updateBadge(store: store)
+                        Haptics.notification(.warning)
+                    }
                 } label: {
-                    Text(NSLocalizedString("Later", comment: ""))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
-
-                Button(role: .destructive) {
                     let comps = Calendar.current.dateComponents([.hour, .minute], from: item.time)
-                    store.upsertIntake(medicationID: item.med.id, status: .skipped, scheduleTime: comps)
-                    NotificationManager.shared.suppressToday(for: item.med.id, timeComponents: comps)
-                    NotificationManager.shared.cancelTodayInstance(for: item.med.id, timeComponents: comps)
-                    NotificationManager.shared.schedule(for: item.med)
-                    NotificationManager.shared.updateBadge(store: store)
-                    Haptics.impact(.light)
-                } label: {
-                    Text(NSLocalizedString("Skip", comment: ""))
+                    let count = NotificationManager.shared.snoozeCount(for: item.med.id, scheduleTime: comps)
+                    let isExhausted = MedicationRules.nextSnooze(for: item.med.id, currentSnoozeCount: count).isExhausted
+                    Text(isExhausted ? NSLocalizedString("Missed", comment: "") : NSLocalizedString("Later", comment: ""))
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.regular)
+                .tint(snoozeButtonTint(for: item))
             }
         }
     }
 
+
+    private func runDailySafetyCheck() {
+        let summary = MedicationRules.dailySafetyCheck(
+            medications: store.medications,
+            intakeLogs: store.intakeLogs,
+            consecutiveMissedDaysProvider: { store.consecutiveMissedDays(for: $0) }
+        )
+        var alerts: [String] = []
+        alerts.append(contentsOf: summary.missEscalations)
+        alerts.append(contentsOf: summary.timingConflicts)
+        alerts.append(contentsOf: summary.makeupAvailable)
+        if !alerts.isEmpty {
+            safetyAlerts = alerts
+            showSafetyAlerts = true
+        }
+    }
+
+    private func snoozeButtonTint(for item: MedSchedule) -> Color {
+        let comps = Calendar.current.dateComponents([.hour, .minute], from: item.time)
+        let count = NotificationManager.shared.snoozeCount(for: item.med.id, scheduleTime: comps)
+        let result = MedicationRules.nextSnooze(for: item.med.id, currentSnoozeCount: count)
+        if result.isExhausted { return .red }
+        return count >= 1 ? .orange : Color(.secondaryLabel)
+    }
 
     private func iconForInsight(_ type: MedicationInsight.InsightType) -> String {
         switch type {

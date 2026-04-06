@@ -240,6 +240,22 @@
 "Start logging doses to see your adherence here." = "开始记录服药后即可查看依从率。";
 "Log your first dose to see stats here." = "记录第一次服药后即可查看统计。";
 
+/* Safety Rules */
+"Already Taken" = "已服用过";
+"Take Again" = "再次服用";
+"You took this %lld minutes ago. Are you sure you want to log another dose?" = "你 %lld 分钟前已服用过。确定要再记录一次吗？";
+"Safety Check" = "安全检查";
+"You can still take it now" = "现在还可以补服";
+"Too late — next dose " = "已过补服窗口 — 下次 ";
+"%@ (%@) — you can still take it now" = "%@（%@）— 现在还可以补服";
+"%@ and %@ are only %lld minutes apart" = "%@ 和 %@ 只间隔 %lld 分钟";
+
+/* Behavioral Feedback */
+"Great job taking %@ consistently!" = "%@ 服药非常规律，继续保持！";
+"Missed Medication" = "漏服提醒";
+"You haven't taken %@ for %lld days. Please take it or talk to your doctor." = "你已经 %2$lld 天没有服用 %1$@，请尽快服药或咨询医生。";
+"You've snoozed too many times. Marking as missed." = "延后次数过多，已标记为漏服。";
+
 /* Misc */
 "Taken!" = "已服用！";
 "OK" = "好";

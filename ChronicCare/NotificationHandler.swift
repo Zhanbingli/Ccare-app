@@ -74,52 +74,42 @@ import UserNotifications
                 await MainActor.run { store?.upsertIntake(medicationID: medID, status: .skipped, scheduleTime: nil) }
             }
             if let store = store { NotificationManager.shared.updateBadge(store: store) }
-        case NotificationManager.actionSnooze, NotificationManager.actionSnooze10:
-            if let med = store?.medications.first(where: { $0.id == medID }) {
-                NotificationManager.shared.scheduleSnooze(for: med, minutes: 10, scheduleTime: scheduleComps)
-            } else {
-                NotificationManager.shared.scheduleSnooze(for: medID, minutes: 10, scheduleTime: scheduleComps)
-            }
-            if let comps = scheduleComps {
-                let logAt = logDate(from: comps)
-                if Calendar.current.isDateInToday(logAt) {
-                    NotificationManager.shared.suppressToday(for: medID, timeComponents: comps)
+        case NotificationManager.actionSnooze, NotificationManager.actionSnooze10,
+             NotificationManager.actionSnooze30, NotificationManager.actionSnooze60:
+            // Data-driven snooze escalation via MedicationRules
+            let count = NotificationManager.shared.snoozeCount(for: medID, scheduleTime: scheduleComps)
+            let snoozeResult = await MainActor.run { MedicationRules.nextSnooze(for: medID, currentSnoozeCount: count) }
+            switch snoozeResult {
+            case .snooze(let minutes):
+                NotificationManager.shared.incrementSnoozeCount(for: medID, scheduleTime: scheduleComps)
+                if let med = store?.medications.first(where: { $0.id == medID }) {
+                    NotificationManager.shared.scheduleSnooze(for: med, minutes: minutes, scheduleTime: scheduleComps)
+                } else {
+                    NotificationManager.shared.scheduleSnooze(for: medID, minutes: minutes, scheduleTime: scheduleComps)
                 }
-                await MainActor.run { store?.upsertIntake(medicationID: medID, status: .snoozed, scheduleTime: comps, at: logAt) }
-            } else {
-                await MainActor.run { store?.upsertIntake(medicationID: medID, status: .snoozed, scheduleTime: nil) }
-            }
-            if let store = store { NotificationManager.shared.updateBadge(store: store) }
-        case NotificationManager.actionSnooze30:
-            if let med = store?.medications.first(where: { $0.id == medID }) {
-                NotificationManager.shared.scheduleSnooze(for: med, minutes: 30, scheduleTime: scheduleComps)
-            } else {
-                NotificationManager.shared.scheduleSnooze(for: medID, minutes: 30, scheduleTime: scheduleComps)
-            }
-            if let comps = scheduleComps {
-                let logAt = logDate(from: comps)
-                if Calendar.current.isDateInToday(logAt) {
-                    NotificationManager.shared.suppressToday(for: medID, timeComponents: comps)
+                if let comps = scheduleComps {
+                    let logAt = logDate(from: comps)
+                    if Calendar.current.isDateInToday(logAt) {
+                        NotificationManager.shared.suppressToday(for: medID, timeComponents: comps)
+                    }
+                    await MainActor.run { store?.upsertIntake(medicationID: medID, status: .snoozed, scheduleTime: comps, at: logAt) }
+                } else {
+                    await MainActor.run { store?.upsertIntake(medicationID: medID, status: .snoozed, scheduleTime: nil) }
                 }
-                await MainActor.run { store?.upsertIntake(medicationID: medID, status: .snoozed, scheduleTime: comps, at: logAt) }
-            } else {
-                await MainActor.run { store?.upsertIntake(medicationID: medID, status: .snoozed, scheduleTime: nil) }
-            }
-            if let store = store { NotificationManager.shared.updateBadge(store: store) }
-        case NotificationManager.actionSnooze60:
-            if let med = store?.medications.first(where: { $0.id == medID }) {
-                NotificationManager.shared.scheduleSnooze(for: med, minutes: 60, scheduleTime: scheduleComps)
-            } else {
-                NotificationManager.shared.scheduleSnooze(for: medID, minutes: 60, scheduleTime: scheduleComps)
-            }
-            if let comps = scheduleComps {
-                let logAt = logDate(from: comps)
-                if Calendar.current.isDateInToday(logAt) {
-                    NotificationManager.shared.suppressToday(for: medID, timeComponents: comps)
+            case .exhausted:
+                if let comps = scheduleComps {
+                    let logAt = logDate(from: comps)
+                    if Calendar.current.isDateInToday(logAt) {
+                        NotificationManager.shared.suppressToday(for: medID, timeComponents: comps)
+                    }
+                    await MainActor.run { store?.upsertIntake(medicationID: medID, status: .skipped, scheduleTime: comps, at: logAt) }
+                    if let med = store?.medications.first(where: { $0.id == medID }) {
+                        NotificationManager.shared.cancelTodayInstance(for: medID, timeComponents: comps, now: logAt)
+                        NotificationManager.shared.schedule(for: med)
+                    }
+                } else {
+                    await MainActor.run { store?.upsertIntake(medicationID: medID, status: .skipped, scheduleTime: nil) }
                 }
-                await MainActor.run { store?.upsertIntake(medicationID: medID, status: .snoozed, scheduleTime: comps, at: logAt) }
-            } else {
-                await MainActor.run { store?.upsertIntake(medicationID: medID, status: .snoozed, scheduleTime: nil) }
             }
             if let store = store { NotificationManager.shared.updateBadge(store: store) }
         default:

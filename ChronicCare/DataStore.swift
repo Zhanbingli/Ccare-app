@@ -74,6 +74,17 @@ final class DataStore: ObservableObject {
         }
         let trimmedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         intakeLogs.append(IntakeLog(medicationID: medicationID, date: date, status: status, scheduleKey: key, note: trimmedNote?.isEmpty == true ? nil : trimmedNote))
+
+        // Behavioral feedback — fire after state is committed
+        let medName = medications.first(where: { $0.id == medicationID })?.name ?? ""
+        if status == .taken {
+            NotificationManager.shared.resetSnoozeCount(for: medicationID, scheduleTime: scheduleTime)
+            let streak = currentStreak(for: medicationID)
+            NotificationManager.shared.sendStreakMilestone(streak: streak, medicationName: medName)
+        } else if status == .skipped {
+            let missed = consecutiveMissedDays(for: medicationID)
+            NotificationManager.shared.sendMissWarning(missedDays: missed, medicationName: medName)
+        }
     }
 
     /// Decrement pill supply when a dose is taken
@@ -364,6 +375,28 @@ final class DataStore: ObservableObject {
             streak += 1
         }
         return streak
+    }
+
+    /// Consecutive days (ending yesterday) where the medication had zero taken doses.
+    func consecutiveMissedDays(for medicationID: UUID) -> Int {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        var missed = 0
+        for offset in 1..<60 { // look back up to 60 days
+            guard let day = cal.date(byAdding: .day, value: -offset, to: today) else { break }
+            let dayEnd = cal.date(byAdding: .day, value: 1, to: day)!
+            guard let med = medications.first(where: { $0.id == medicationID }) else { break }
+            let times = med.timesOfDay.compactMap { c -> (Int, Int)? in
+                guard let h = c.hour, let m = c.minute else { return nil }
+                return (h, m)
+            }
+            if times.isEmpty { break }
+            let dayLogs = intakeLogs.filter { $0.medicationID == medicationID && $0.date >= day && $0.date < dayEnd }
+            let hasTaken = dayLogs.contains { $0.status == .taken }
+            if hasTaken { break }
+            missed += 1
+        }
+        return missed
     }
 
     // MARK: - Goal Ranges (UserDefaults-backed)

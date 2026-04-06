@@ -11,7 +11,6 @@ struct ContentView: View {
     @EnvironmentObject var store: DataStore
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = 0
-    @State private var deeplinkMedicationID: UUID? = nil
 
     var body: some View {
         ZStack {
@@ -38,11 +37,8 @@ struct ContentView: View {
             meds.forEach { NotificationManager.shared.schedule(for: $0, now: now) }
             NotificationManager.shared.checkRefillReminders(medications: store.medications)
         }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("openMedicationDetail"))) { notif in
-            if let id = notif.object as? UUID {
-                deeplinkMedicationID = id
-                selectedTab = 1
-            }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("openMedicationDetail"))) { _ in
+            selectedTab = 1
         }
     }
 }
