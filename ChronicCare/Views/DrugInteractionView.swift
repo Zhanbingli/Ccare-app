@@ -36,7 +36,7 @@ struct DrugInteractionView: View {
                 }
                 .padding()
             }
-            .navigationTitle("Drug Interactions")
+            .navigationTitle(NSLocalizedString("Drug Interactions", comment: ""))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -471,21 +471,21 @@ struct AISettingsView: View {
                         }
                     }
                 } footer: {
-                    Text("Analysis is blocked until you opt in. You can turn this off anytime.")
+                    Text(NSLocalizedString("Analysis is blocked until you opt in. You can turn this off anytime.", comment: ""))
                 }
 
                 Section {
                     VStack(alignment: .leading, spacing: 12) {
-                        Label("Privacy Notice", systemImage: "lock.shield.fill")
+                        Label(NSLocalizedString("Privacy Notice", comment: ""), systemImage: "lock.shield.fill")
                             .appFont(.subheadline)
                             .foregroundStyle(.blue)
-                        Text("Your medication data is sent to the selected AI provider for analysis. The analysis is performed in real-time and is not stored by the AI provider. Your API key ensures secure, direct communication.")
+                        Text(NSLocalizedString("Your medication data is sent to the selected AI provider for analysis. The analysis is performed in real-time and is not stored by the AI provider. Your API key ensures secure, direct communication.", comment: ""))
                             .appFont(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
             }
-            .navigationTitle("AI Settings")
+            .navigationTitle(NSLocalizedString("AI Settings", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -502,10 +502,10 @@ struct AISettingsView: View {
                     .disabled(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !optIn)
                 }
             }
-            .alert("Settings Saved", isPresented: $showingSaveConfirmation) {
-                Button("OK") { }
+            .alert(NSLocalizedString("Settings Saved", comment: ""), isPresented: $showingSaveConfirmation) {
+                Button(NSLocalizedString("OK", comment: "")) { }
             } message: {
-                Text("Your AI configuration has been updated successfully")
+                Text(NSLocalizedString("Your AI configuration has been updated successfully", comment: ""))
             }
         }
     }

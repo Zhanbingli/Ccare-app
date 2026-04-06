@@ -11,8 +11,21 @@ struct ContentView: View {
     @EnvironmentObject var store: DataStore
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = 0
+    @State private var showOnboarding = !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
 
     var body: some View {
+        if showOnboarding {
+            OnboardingView {
+                UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+                showOnboarding = false
+            }
+            .environmentObject(store)
+        } else {
+            mainContent
+        }
+    }
+
+    private var mainContent: some View {
         ZStack {
             AppBackground()
             TabView(selection: $selectedTab) {

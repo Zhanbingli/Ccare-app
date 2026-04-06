@@ -109,13 +109,13 @@ class MedicationInsightsEngine {
         guard !actualTimes.isEmpty else { return nil }
 
         // Calculate average hour
-        let avgHour = actualTimes.reduce(0, +) / actualTimes.count
+        let avgHour = Int(round(Double(actualTimes.reduce(0, +)) / Double(actualTimes.count)))
 
         // Get scheduled times
         let scheduledHours = medication.timesOfDay.compactMap { $0.hour }
         guard !scheduledHours.isEmpty else { return nil }
 
-        let avgScheduledHour = scheduledHours.reduce(0, +) / scheduledHours.count
+        let avgScheduledHour = Int(round(Double(scheduledHours.reduce(0, +)) / Double(scheduledHours.count)))
 
         // If average actual time is more than 2 hours different
         if abs(avgHour - avgScheduledHour) >= 2 {

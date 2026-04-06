@@ -6,12 +6,16 @@ final class DataStore: ObservableObject {
     @Published private(set) var measurements: [Measurement] = []
     @Published private(set) var medications: [Medication] = []
     @Published private(set) var intakeLogs: [IntakeLog] = []
+    @Published private(set) var emergencyInfo: EmergencyInfo?
+    @Published private(set) var caregivers: [CaregiverContact] = []
 
     private var cancellables: Set<AnyCancellable> = []
 
     private let measurementsURL: URL
     private let medicationsURL: URL
     private let intakeLogsURL: URL
+    private let emergencyInfoURL: URL
+    private let caregiversURL: URL
     private let goalsDefaults = UserDefaults.standard
 
     init() {
@@ -19,6 +23,8 @@ final class DataStore: ObservableObject {
         self.measurementsURL = docs.appendingPathComponent("measurements.json")
         self.medicationsURL = docs.appendingPathComponent("medications.json")
         self.intakeLogsURL = docs.appendingPathComponent("intake_logs.json")
+        self.emergencyInfoURL = docs.appendingPathComponent("emergency_info.json")
+        self.caregiversURL = docs.appendingPathComponent("caregivers.json")
 
         load()
 
@@ -40,6 +46,12 @@ final class DataStore: ObservableObject {
             .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.saveIntakeLogs() }
             .store(in: &cancellables)
+
+        $caregivers
+            .dropFirst()
+            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+            .sink { [weak self] _ in self?.saveCaregivers() }
+            .store(in: &cancellables)
     }
 
     // MARK: - Public Mutations
@@ -54,7 +66,13 @@ final class DataStore: ObservableObject {
     func removeMeasurement(at offsets: IndexSet) { measurements.remove(atOffsets: offsets) }
 
     func addMedication(_ item: Medication) { medications.append(item) }
-    func removeMedication(at offsets: IndexSet) { medications.remove(atOffsets: offsets) }
+    func removeMedication(at offsets: IndexSet) {
+        let removedIDs = offsets.map { medications[$0].id }
+        medications.remove(atOffsets: offsets)
+        for id in removedIDs {
+            MedicationRuleStore.shared.removeOverride(for: id)
+        }
+    }
     func updateMedication(_ item: Medication) {
         if let idx = medications.firstIndex(where: { $0.id == item.id }) {
             medications[idx] = item
@@ -83,7 +101,7 @@ final class DataStore: ObservableObject {
             NotificationManager.shared.sendStreakMilestone(streak: streak, medicationName: medName)
         } else if status == .skipped {
             let missed = consecutiveMissedDays(for: medicationID)
-            NotificationManager.shared.sendMissWarning(missedDays: missed, medicationName: medName)
+            NotificationManager.shared.sendMissWarning(for: medicationID, missedDays: missed, medicationName: medName)
         }
     }
 
@@ -100,6 +118,23 @@ final class DataStore: ObservableObject {
         measurements.removeAll()
         medications.removeAll()
         intakeLogs.removeAll()
+        emergencyInfo = nil
+        caregivers.removeAll()
+    }
+
+    // MARK: - Emergency Info
+    func updateEmergencyInfo(_ info: EmergencyInfo) {
+        emergencyInfo = info
+        saveEmergencyInfo()
+    }
+
+    // MARK: - Caregivers
+    func addCaregiver(_ c: CaregiverContact) { caregivers.append(c) }
+    func removeCaregiver(at offsets: IndexSet) { caregivers.remove(atOffsets: offsets) }
+    func updateCaregiver(_ c: CaregiverContact) {
+        if let idx = caregivers.firstIndex(where: { $0.id == c.id }) {
+            caregivers[idx] = c
+        }
     }
 
     // MARK: - Import Backup
@@ -107,6 +142,8 @@ final class DataStore: ObservableObject {
         measurements = backup.measurements.sorted(by: { $0.date > $1.date })
         medications = backup.medications
         intakeLogs = backup.intakeLogs
+        if let info = backup.emergencyInfo { emergencyInfo = info; saveEmergencyInfo() }
+        if let cg = backup.caregivers { caregivers = cg }
     }
 
     // MARK: - Load/Save
@@ -133,6 +170,14 @@ final class DataStore: ObservableObject {
         } catch {
             if (error as NSError).domain != NSCocoaErrorDomain { print("Load intake logs error: \(error)") }
         }
+        do {
+            let data = try Data(contentsOf: emergencyInfoURL)
+            self.emergencyInfo = try JSONDecoder().decode(EmergencyInfo.self, from: data)
+        } catch { /* first launch or no data */ }
+        do {
+            let data = try Data(contentsOf: caregiversURL)
+            self.caregivers = try JSONDecoder().decode([CaregiverContact].self, from: data)
+        } catch { /* first launch or no data */ }
     }
 
     private func saveMeasurements() {
@@ -143,6 +188,17 @@ final class DataStore: ObservableObject {
     private func saveMedications() {
         let snapshot = medications
         persist(snapshot, to: medicationsURL, label: "medications")
+    }
+
+    private func saveEmergencyInfo() {
+        if let info = emergencyInfo {
+            persist(info, to: emergencyInfoURL, label: "emergency info")
+        }
+    }
+
+    private func saveCaregivers() {
+        let snapshot = caregivers
+        persist(snapshot, to: caregiversURL, label: "caregivers")
     }
 
     private func saveIntakeLogs() {
@@ -378,19 +434,28 @@ final class DataStore: ObservableObject {
     }
 
     /// Consecutive days (ending yesterday) where the medication had zero taken doses.
+    /// Only looks back to the earliest log for this medication (avoids false positives for newly added meds).
     func consecutiveMissedDays(for medicationID: UUID) -> Int {
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
+
+        // Don't count days before the medication had any activity
+        let medLogs = intakeLogs.filter { $0.medicationID == medicationID }
+        guard let earliest = medLogs.min(by: { $0.date < $1.date }) else { return 0 }
+        let earliestDay = cal.startOfDay(for: earliest.date)
+
+        guard let med = medications.first(where: { $0.id == medicationID }) else { return 0 }
+        let times = med.timesOfDay.compactMap { c -> (Int, Int)? in
+            guard let h = c.hour, let m = c.minute else { return nil }
+            return (h, m)
+        }
+        if times.isEmpty { return 0 }
+
         var missed = 0
-        for offset in 1..<60 { // look back up to 60 days
+        for offset in 1..<60 {
             guard let day = cal.date(byAdding: .day, value: -offset, to: today) else { break }
+            if day < earliestDay { break }
             let dayEnd = cal.date(byAdding: .day, value: 1, to: day)!
-            guard let med = medications.first(where: { $0.id == medicationID }) else { break }
-            let times = med.timesOfDay.compactMap { c -> (Int, Int)? in
-                guard let h = c.hour, let m = c.minute else { return nil }
-                return (h, m)
-            }
-            if times.isEmpty { break }
             let dayLogs = intakeLogs.filter { $0.medicationID == medicationID && $0.date >= day && $0.date < dayEnd }
             let hasTaken = dayLogs.contains { $0.status == .taken }
             if hasTaken { break }

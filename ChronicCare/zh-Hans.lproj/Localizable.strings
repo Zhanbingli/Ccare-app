@@ -256,6 +256,55 @@
 "You haven't taken %@ for %lld days. Please take it or talk to your doctor." = "你已经 %2$lld 天没有服用 %1$@，请尽快服药或咨询医生。";
 "You've snoozed too many times. Marking as missed." = "延后次数过多，已标记为漏服。";
 
+/* Trends (additional) */
+"Add measurements to see trends" = "添加测量数据以查看趋势";
+"High" = "偏高";
+"Target" = "目标";
+
+/* Drug Interaction */
+"Drug Interactions" = "药物相互作用";
+"AI Drug Interaction Analysis" = "AI 药物相互作用分析";
+"Powered by AI to analyze medication interactions, effects, and side effects" = "使用 AI 分析药物相互作用、疗效和副作用";
+"To protect your privacy, analysis is disabled until you allow sending medication info to your chosen AI provider in Settings." = "为保护隐私，分析功能在您允许在设置中将药物信息发送给 AI 服务商之前处于关闭状态。";
+"Add medications to analyze drug interactions" = "添加药物以分析相互作用";
+"Current Medications (%lld)" = "当前用药（%lld）";
+"Analyze Interactions" = "分析相互作用";
+"Analyzing drug interactions..." = "正在分析药物相互作用…";
+"Overall Analysis" = "综合分析";
+"Detected Interactions (%lld)" = "检测到的相互作用（%lld）";
+"Recommendations" = "建议";
+"Therapeutic Effects" = "治疗效果";
+"Potential Side Effects" = "潜在副作用";
+
+/* AI Settings */
+"AI Settings" = "AI 设置";
+"Choose between OpenAI or Anthropic for drug interaction analysis" = "选择 OpenAI 或 Anthropic 用于药物相互作用分析";
+"Your API key is stored securely on your device and never shared" = "API 密钥安全存储在设备上，不会共享";
+"Allow sending medication data for analysis" = "允许发送药物数据进行分析";
+"Medication names, doses, and categories are sent to the selected provider. No health measurements are sent." = "药物名称、剂量和类别将发送至所选服务商。不会发送健康测量数据。";
+"Analysis is blocked until you opt in. You can turn this off anytime." = "分析功能需要您先同意才能使用。您可以随时关闭。";
+"Privacy Notice" = "隐私声明";
+"Your medication data is sent to the selected AI provider for analysis. The analysis is performed in real-time and is not stored by the AI provider. Your API key ensures secure, direct communication." = "您的药物数据将发送至所选 AI 服务商进行分析。分析实时完成，AI 服务商不会存储数据。API 密钥确保安全、直接通信。";
+"Settings Saved" = "设置已保存";
+"Your AI configuration has been updated successfully" = "AI 配置已更新成功";
+
+/* Onboarding */
+"Welcome to Ccare" = "欢迎使用 Ccare";
+"Your personal medication companion. We'll help you stay on track with your health." = "您的个人用药助手，帮您按时服药、守护健康。";
+"Get Started" = "开始设置";
+"Skip for now" = "稍后再说";
+"Add Your First Medication" = "添加第一种药物";
+"Reminder Time" = "提醒时间";
+"Next" = "下一步";
+"Enable Reminders" = "开启提醒";
+"We'll send you a gentle reminder when it's time to take your medication. You won't miss a dose." = "到服药时间时，我们会发送提醒通知，让您不会错过任何一次用药。";
+"Reminders enabled!" = "提醒已开启！";
+"You can enable reminders later in Settings." = "您可以稍后在设置中开启提醒。";
+"You're All Set!" = "设置完成！";
+"You can add medications anytime from the Medications tab." = "您可以随时在「用药」标签页中添加药物。";
+"We'll remind you to take %@ on time." = "我们会按时提醒您服用%@。";
+"Go to Dashboard" = "进入首页";
+
 /* Misc */
 "Taken!" = "已服用！";
 "OK" = "好";

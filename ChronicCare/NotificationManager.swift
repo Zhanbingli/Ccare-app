@@ -73,14 +73,14 @@ final class NotificationManager {
         UNUserNotificationCenter.current().add(req, withCompletionHandler: nil)
     }
 
-    func sendMissWarning(missedDays: Int, medicationName: String) {
+    func sendMissWarning(for medicationID: UUID, missedDays: Int, medicationName: String) {
         guard missedDays >= 2 else { return }
         let content = UNMutableNotificationContent()
         content.title = NSLocalizedString("Missed Medication", comment: "")
         content.body = String(format: NSLocalizedString("You haven't taken %@ for %lld days. Please take it or talk to your doctor.", comment: ""), medicationName, missedDays)
         content.sound = .default
         if #available(iOS 15.0, *) { content.interruptionLevel = .timeSensitive }
-        let id = "miss_warn_\(todayKey())"
+        let id = "miss_warn_\(medicationID.uuidString)_\(todayKey())"
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
         let req = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
         UNUserNotificationCenter.current().add(req, withCompletionHandler: nil)

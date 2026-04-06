@@ -19,7 +19,10 @@ struct MeasurementsView: View {
                     ForEach(groupedMeasurements, id: \.day) { section in
                         Section(header: Text(sectionHeaderTitle(for: section.day)).appFont(.subheadline).foregroundStyle(.secondary)) {
                             ForEach(section.entries) { m in
-                                TintedCard(tint: m.cardTint) {
+                                HStack(spacing: 12) {
+                                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                        .fill(m.cardTint)
+                                        .frame(width: 4)
                                     VStack(alignment: .leading, spacing: 6) {
                                         HStack(alignment: .firstTextBaseline) {
                                             Text(m.type.rawValue).appFont(.headline)
@@ -49,19 +52,8 @@ struct MeasurementsView: View {
                                         }
                                     }
                                 }
-                                .cornerRadius(16, corners: [.topLeft, .bottomLeft])
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
-                                .listRowInsets(EdgeInsets())
+                                .padding(.vertical, 4)
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) {
-                                        if let i = store.measurements.firstIndex(where: { $0.id == m.id }) {
-                                            store.removeMeasurement(at: IndexSet(integer: i))
-                                        }
-                                    } label: { Label("Delete", systemImage: "trash") }
-                                    .tint(.red)
-                                }
-                                .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                     Button(role: .destructive) {
                                         if let i = store.measurements.firstIndex(where: { $0.id == m.id }) {
                                             store.removeMeasurement(at: IndexSet(integer: i))
@@ -73,13 +65,11 @@ struct MeasurementsView: View {
                                     Button(role: .destructive) { if let i = store.measurements.firstIndex(where: { $0.id == m.id }) { store.removeMeasurement(at: IndexSet(integer: i)) } } label: { Label("Delete", systemImage: "trash") }
                                     Button { UIPasteboard.general.string = "\(m.type.rawValue): \(m.value)" } label: { Label("Copy", systemImage: "doc.on.doc") }
                                 }
-                                .padding(.vertical, 2)
                             }
                         }
                     }
                 }
             }
-            .applyListStyling()
             .navigationTitle("Measurements")
             .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .top) {
@@ -405,18 +395,6 @@ private extension MeasurementsView {
     }
 }
 
-private extension View {
-    @ViewBuilder
-    func applyListStyling() -> some View {
-        if #available(iOS 16.0, *) {
-            self
-                .scrollContentBackground(.hidden)
-                .background(Color(.systemGroupedBackground))
-        } else {
-            self
-        }
-    }
-}
 
 #Preview {
     MeasurementsView().environmentObject(DataStore())

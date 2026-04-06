@@ -917,7 +917,7 @@ private extension MedicationsView {
                 }
             }
         )) {
-            Text("Remind")
+            Text(NSLocalizedString("Remind", comment: ""))
         }
         .labelsHidden()
     }

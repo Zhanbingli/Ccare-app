@@ -16,6 +16,8 @@ struct DashboardView: View {
     @State private var showSafetyAlerts = false
     @AppStorage("units.glucose") private var glucoseUnitRaw: String = GlucoseUnit.mgdL.rawValue
     @AppStorage("prefs.graceMinutes") private var graceMinutes: Int = 30
+    @State private var tick = false
+    private let refreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     private struct MedSchedule: Identifiable {
         let id: String // medID_HH:MM
@@ -42,6 +44,7 @@ struct DashboardView: View {
     }
 
     var body: some View {
+        let _ = tick // force re-render on timer
         NavigationStack {
             let schedules = todaySchedules()
             let statusLookup = latestTodayLogMap()
@@ -183,6 +186,7 @@ struct DashboardView: View {
                 store.objectWillChange.send()
             }
             .navigationTitle(NSLocalizedString("Today", comment: ""))
+            .onReceive(refreshTimer) { _ in tick.toggle() }
             .sheet(isPresented: $showAddMeasurement) {
                 AddMeasurementView { m in
                     store.addMeasurement(m)
@@ -246,10 +250,11 @@ private struct TakenConfirmationOverlay: View {
                 .foregroundStyle(.green)
                 .symbolRenderingMode(.hierarchical)
             Text(medicationName)
-                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .appFont(.headline)
                 .foregroundStyle(.primary)
             Text(NSLocalizedString("Taken!", comment: ""))
-                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .appFont(.title)
+                .fontWeight(.bold)
                 .foregroundStyle(.green)
         }
         .padding(40)
@@ -394,7 +399,8 @@ private extension DashboardView {
             }
 
             Text(String(format: "%d%%", Int(adherence * 100)))
-                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .appFont(.title)
+                .fontWeight(.bold)
                 .monospacedDigit()
                 .foregroundStyle(adherence >= 1.0 ? .green : .primary)
         }
@@ -634,6 +640,13 @@ private extension DashboardView {
 
 
     private func runDailySafetyCheck() {
+        let key = "lastSafetyCheckDate"
+        let today = Calendar.current.startOfDay(for: Date())
+        if let last = UserDefaults.standard.object(forKey: key) as? Date,
+           Calendar.current.isDate(last, inSameDayAs: today) {
+            return
+        }
+
         let summary = MedicationRules.dailySafetyCheck(
             medications: store.medications,
             intakeLogs: store.intakeLogs,
@@ -643,6 +656,9 @@ private extension DashboardView {
         alerts.append(contentsOf: summary.missEscalations)
         alerts.append(contentsOf: summary.timingConflicts)
         alerts.append(contentsOf: summary.makeupAvailable)
+
+        UserDefaults.standard.set(today, forKey: key)
+
         if !alerts.isEmpty {
             safetyAlerts = alerts
             showSafetyAlerts = true

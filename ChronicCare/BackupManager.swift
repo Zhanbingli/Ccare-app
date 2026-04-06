@@ -6,12 +6,14 @@ struct AppBackup: Codable {
     let measurements: [Measurement]
     let medications: [Medication]
     let intakeLogs: [IntakeLog]
+    var emergencyInfo: EmergencyInfo?
+    var caregivers: [CaregiverContact]?
 }
 
 enum BackupManager {
     @MainActor
     static func makeBackup(store: DataStore) throws -> URL {
-        let backup = AppBackup(version: 1, date: Date(), measurements: store.measurements, medications: store.medications, intakeLogs: store.intakeLogs)
+        let backup = AppBackup(version: 1, date: Date(), measurements: store.measurements, medications: store.medications, intakeLogs: store.intakeLogs, emergencyInfo: store.emergencyInfo, caregivers: store.caregivers)
         let data = try JSONEncoder().encode(backup)
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("Ccare_Backup_\(Int(Date().timeIntervalSince1970)).json")
         try data.write(to: url, options: .atomic)

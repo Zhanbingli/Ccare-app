@@ -60,23 +60,52 @@ struct Measurement: Identifiable, Codable {
     var note: String?
 }
 
+enum FoodInstruction: String, CaseIterable, Codable, Identifiable {
+    case withFood
+    case beforeFood
+    case afterFood
+    case onEmptyStomach
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .withFood: return NSLocalizedString("With food", comment: "")
+        case .beforeFood: return NSLocalizedString("Before food", comment: "")
+        case .afterFood: return NSLocalizedString("After food", comment: "")
+        case .onEmptyStomach: return NSLocalizedString("On empty stomach", comment: "")
+        }
+    }
+
+    var shortLabel: String {
+        switch self {
+        case .withFood: return NSLocalizedString("w/ food", comment: "")
+        case .beforeFood: return NSLocalizedString("before meal", comment: "")
+        case .afterFood: return NSLocalizedString("after meal", comment: "")
+        case .onEmptyStomach: return NSLocalizedString("empty stomach", comment: "")
+        }
+    }
+}
+
 struct Medication: Identifiable, Codable {
     var id: UUID = UUID()
     var name: String
     var dose: String
     var notes: String?
-    var timesOfDay: [DateComponents] // one or more times (hour & minute)
+    var timesOfDay: [DateComponents]
     var remindersEnabled: Bool
-    var category: MedicationCategory? // optional for backward compatibility
+    var category: MedicationCategory?
     var customCategoryName: String?
-    var imagePath: String? // relative path under Documents (e.g., "med_images/<id>.jpg")
-    var pillsRemaining: Int? // nil = not tracking supply
-    var pillsPerDose: Int? // how many pills per dose (default 1)
+    var imagePath: String?
+    var pillsRemaining: Int?
+    var pillsPerDose: Int?
+    var foodInstruction: FoodInstruction?
+    var isAsNeeded: Bool?
+    var courseEndDate: Date?
+    var specialInstructions: String?
 
-    // Backward compatibility decoder to support legacy `timeOfDay`
-    enum CodingKeys: String, CodingKey { case id, name, dose, notes, timesOfDay, timeOfDay, remindersEnabled, category, customCategoryName, imagePath, pillsRemaining, pillsPerDose }
+    enum CodingKeys: String, CodingKey { case id, name, dose, notes, timesOfDay, timeOfDay, remindersEnabled, category, customCategoryName, imagePath, pillsRemaining, pillsPerDose, foodInstruction, isAsNeeded, courseEndDate, specialInstructions }
 
-    init(id: UUID = UUID(), name: String, dose: String, notes: String? = nil, timesOfDay: [DateComponents], remindersEnabled: Bool, category: MedicationCategory? = nil, customCategoryName: String? = nil, imagePath: String? = nil, pillsRemaining: Int? = nil, pillsPerDose: Int? = nil) {
+    init(id: UUID = UUID(), name: String, dose: String, notes: String? = nil, timesOfDay: [DateComponents], remindersEnabled: Bool, category: MedicationCategory? = nil, customCategoryName: String? = nil, imagePath: String? = nil, pillsRemaining: Int? = nil, pillsPerDose: Int? = nil, foodInstruction: FoodInstruction? = nil, isAsNeeded: Bool? = nil, courseEndDate: Date? = nil, specialInstructions: String? = nil) {
         self.id = id
         self.name = name
         self.dose = dose
@@ -88,6 +117,10 @@ struct Medication: Identifiable, Codable {
         self.imagePath = imagePath
         self.pillsRemaining = pillsRemaining
         self.pillsPerDose = pillsPerDose
+        self.foodInstruction = foodInstruction
+        self.isAsNeeded = isAsNeeded
+        self.courseEndDate = courseEndDate
+        self.specialInstructions = specialInstructions
     }
 
     init(from decoder: Decoder) throws {
@@ -102,6 +135,10 @@ struct Medication: Identifiable, Codable {
         self.imagePath = try c.decodeIfPresent(String.self, forKey: .imagePath)
         self.pillsRemaining = try c.decodeIfPresent(Int.self, forKey: .pillsRemaining)
         self.pillsPerDose = try c.decodeIfPresent(Int.self, forKey: .pillsPerDose)
+        self.foodInstruction = try c.decodeIfPresent(FoodInstruction.self, forKey: .foodInstruction)
+        self.isAsNeeded = try c.decodeIfPresent(Bool.self, forKey: .isAsNeeded)
+        self.courseEndDate = try c.decodeIfPresent(Date.self, forKey: .courseEndDate)
+        self.specialInstructions = try c.decodeIfPresent(String.self, forKey: .specialInstructions)
         if let times = try c.decodeIfPresent([DateComponents].self, forKey: .timesOfDay) {
             self.timesOfDay = times
         } else if let legacy = try c.decodeIfPresent(DateComponents.self, forKey: .timeOfDay) {
@@ -124,6 +161,10 @@ struct Medication: Identifiable, Codable {
         try c.encodeIfPresent(imagePath, forKey: .imagePath)
         try c.encodeIfPresent(pillsRemaining, forKey: .pillsRemaining)
         try c.encodeIfPresent(pillsPerDose, forKey: .pillsPerDose)
+        try c.encodeIfPresent(foodInstruction, forKey: .foodInstruction)
+        try c.encodeIfPresent(isAsNeeded, forKey: .isAsNeeded)
+        try c.encodeIfPresent(courseEndDate, forKey: .courseEndDate)
+        try c.encodeIfPresent(specialInstructions, forKey: .specialInstructions)
     }
 }
 
@@ -169,8 +210,43 @@ struct IntakeLog: Identifiable, Codable {
     var medicationID: UUID
     var date: Date
     var status: IntakeStatus
-    // Optional schedule key (e.g., "08:00") for multi-time medications
     var scheduleKey: String?
-    // Optional note for context (e.g., "felt dizzy", "took with food")
     var note: String?
+}
+
+// MARK: - Category-Measurement Correlation
+
+extension MedicationCategory {
+    var correlatedMeasurementTypes: [MeasurementType] {
+        switch self {
+        case .antihypertensive: return [.bloodPressure, .heartRate]
+        case .antidiabetic: return [.bloodGlucose]
+        default: return []
+        }
+    }
+}
+
+// MARK: - Emergency Info
+
+struct EmergencyContact: Codable, Identifiable {
+    var id: UUID = UUID()
+    var name: String
+    var phone: String
+    var relationship: String
+}
+
+struct EmergencyInfo: Codable {
+    var bloodType: String?
+    var allergies: String?
+    var medicalConditions: String?
+    var emergencyContacts: [EmergencyContact] = []
+}
+
+// MARK: - Caregiver
+
+struct CaregiverContact: Codable, Identifiable {
+    var id: UUID = UUID()
+    var name: String
+    var phone: String?
+    var notifyOnMiss: Bool = true
 }
