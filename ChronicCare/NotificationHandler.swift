@@ -37,6 +37,11 @@ import UserNotifications
             return cal.date(from: components) ?? fallback
         }
 
+        // Cancel follow-up reminders whenever user acts on a notification
+        if let comps = scheduleComps {
+            NotificationManager.shared.cancelFollowUps(for: medID, timeComponents: comps)
+        }
+
         switch response.actionIdentifier {
         case NotificationManager.actionTaken:
             if let comps = scheduleComps {

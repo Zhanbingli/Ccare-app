@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 import UIKit
 import UserNotifications
+import Charts
 
 struct MedicationsView: View {
     @EnvironmentObject var store: DataStore
@@ -140,6 +141,11 @@ struct AddMedicationView: View {
     @State private var trackSupply: Bool = false
     @State private var pillsRemaining: Int = 30
     @State private var pillsPerDose: Int = 1
+    @State private var foodInstruction: FoodInstruction?
+    @State private var isAsNeeded: Bool = false
+    @State private var hasCourseEnd: Bool = false
+    @State private var courseEndDate: Date = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
+    @State private var specialInstructions: String = ""
 
     var body: some View {
         NavigationStack {
@@ -230,6 +236,22 @@ struct AddMedicationView: View {
                                 Button(role: .destructive) { pickedImage = nil } label: { Text(NSLocalizedString("Remove", comment: "")) }
                             }
                         }
+
+                        Picker(NSLocalizedString("Food Instruction", comment: ""), selection: $foodInstruction) {
+                            Text(NSLocalizedString("None", comment: "")).tag(FoodInstruction?.none)
+                            ForEach(FoodInstruction.allCases) { f in
+                                Text(f.displayName).tag(Optional(f))
+                            }
+                        }
+
+                        Toggle(NSLocalizedString("As Needed (PRN)", comment: ""), isOn: $isAsNeeded)
+
+                        Toggle(NSLocalizedString("Has Course End Date", comment: ""), isOn: $hasCourseEnd)
+                        if hasCourseEnd {
+                            DatePicker(NSLocalizedString("End Date", comment: ""), selection: $courseEndDate, displayedComponents: .date)
+                        }
+
+                        TextField(NSLocalizedString("Special Instructions", comment: ""), text: $specialInstructions)
                     }
                 }
             }
@@ -260,7 +282,11 @@ struct AddMedicationView: View {
                             customCategoryName: category == .custom ? customCategoryName.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
                             imagePath: imagePath,
                             pillsRemaining: trackSupply ? pillsRemaining : nil,
-                            pillsPerDose: trackSupply ? pillsPerDose : nil
+                            pillsPerDose: trackSupply ? pillsPerDose : nil,
+                            foodInstruction: foodInstruction,
+                            isAsNeeded: isAsNeeded ? true : nil,
+                            courseEndDate: hasCourseEnd ? courseEndDate : nil,
+                            specialInstructions: specialInstructions.isEmpty ? nil : specialInstructions
                         )
                         onSave(med)
                         Haptics.success()
@@ -288,7 +314,11 @@ struct AddMedicationView: View {
                         customCategoryName: category == .custom ? customCategoryName.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
                         imagePath: imagePath,
                         pillsRemaining: trackSupply ? pillsRemaining : nil,
-                        pillsPerDose: trackSupply ? pillsPerDose : nil
+                        pillsPerDose: trackSupply ? pillsPerDose : nil,
+                        foodInstruction: foodInstruction,
+                        isAsNeeded: isAsNeeded ? true : nil,
+                        courseEndDate: hasCourseEnd ? courseEndDate : nil,
+                        specialInstructions: specialInstructions.isEmpty ? nil : specialInstructions
                     )
                     onSave(med)
                     Haptics.success()
@@ -322,6 +352,11 @@ struct EditMedicationView: View {
     @State private var trackSupply: Bool = false
     @State private var pillsRemaining: Int = 30
     @State private var pillsPerDose: Int = 1
+    @State private var foodInstruction: FoodInstruction?
+    @State private var isAsNeeded: Bool = false
+    @State private var hasCourseEnd: Bool = false
+    @State private var courseEndDate: Date = Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
+    @State private var specialInstructions: String = ""
 
     init(medication: Medication, onSave: @escaping (Medication) -> Void, onDelete: (() -> Void)? = nil) {
         self.medication = medication
@@ -469,6 +504,23 @@ struct EditMedicationView: View {
                                 Button(role: .destructive) { pickedImage = nil; removePhoto = true } label: { Text(NSLocalizedString("Remove", comment: "")) }
                             }
                         }
+
+                        Picker(NSLocalizedString("Food Instruction", comment: ""), selection: $foodInstruction) {
+                            Text(NSLocalizedString("None", comment: "")).tag(FoodInstruction?.none)
+                            ForEach(FoodInstruction.allCases) { fi in
+                                Text(fi.displayName).tag(FoodInstruction?.some(fi))
+                            }
+                        }
+
+                        Toggle(NSLocalizedString("As Needed (PRN)", comment: ""), isOn: $isAsNeeded)
+
+                        Toggle(NSLocalizedString("Course End Date", comment: ""), isOn: $hasCourseEnd)
+                        if hasCourseEnd {
+                            DatePicker(NSLocalizedString("End Date", comment: ""), selection: $courseEndDate, displayedComponents: .date)
+                        }
+
+                        TextField(NSLocalizedString("Special Instructions (optional)", comment: ""), text: $specialInstructions, axis: .vertical)
+                            .lineLimit(2...4)
                     }
                 }
 
@@ -477,6 +529,47 @@ struct EditMedicationView: View {
                         AdherenceCalendarView(medicationID: medication.id)
                     } label: {
                         Label(NSLocalizedString("Adherence History", comment: ""), systemImage: "calendar")
+                    }
+                }
+
+                // Correlation mini-chart for medications with known category
+                if let cat = medication.category, !cat.correlatedMeasurementTypes.isEmpty {
+                    let correlatedTypes = cat.correlatedMeasurementTypes
+                    ForEach(correlatedTypes, id: \.self) { mType in
+                        let data = store.measurements.filter { $0.type == mType }
+                            .sorted { $0.date < $1.date }
+                            .suffix(30)
+                        if data.count >= 2 {
+                            Section {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Label(String(format: NSLocalizedString("Related: %@", comment: ""), mType.rawValue), systemImage: "chart.xyaxis.line")
+                                        .appFont(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                    Chart(Array(data)) { m in
+                                        LineMark(
+                                            x: .value("Date", m.date),
+                                            y: .value("Value", m.value)
+                                        )
+                                        .foregroundStyle(mType.tint)
+                                        .interpolationMethod(.catmullRom)
+                                        PointMark(
+                                            x: .value("Date", m.date),
+                                            y: .value("Value", m.value)
+                                        )
+                                        .foregroundStyle(mType.tint)
+                                        .symbolSize(16)
+                                    }
+                                    .frame(height: 120)
+                                    .chartXAxis(.hidden)
+                                    .chartYAxis {
+                                        AxisMarks(position: .leading, values: .automatic(desiredCount: 3))
+                                    }
+                                }
+                                .padding(.vertical, 4)
+                            } header: {
+                                Text(NSLocalizedString("Related Health Data", comment: ""))
+                            }
+                        }
                     }
                 }
             }
@@ -498,6 +591,11 @@ struct EditMedicationView: View {
                 trackSupply = medication.pillsRemaining != nil
                 pillsRemaining = medication.pillsRemaining ?? 30
                 pillsPerDose = medication.pillsPerDose ?? 1
+                foodInstruction = medication.foodInstruction
+                isAsNeeded = medication.isAsNeeded ?? false
+                hasCourseEnd = medication.courseEndDate != nil
+                courseEndDate = medication.courseEndDate ?? Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
+                specialInstructions = medication.specialInstructions ?? ""
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -552,6 +650,10 @@ struct EditMedicationView: View {
         updated.customCategoryName = category == .custom ? customCategoryName.trimmingCharacters(in: .whitespacesAndNewlines) : nil
         updated.pillsRemaining = trackSupply ? pillsRemaining : nil
         updated.pillsPerDose = trackSupply ? pillsPerDose : nil
+        updated.foodInstruction = foodInstruction
+        updated.isAsNeeded = isAsNeeded ? true : nil
+        updated.courseEndDate = hasCourseEnd ? courseEndDate : nil
+        updated.specialInstructions = specialInstructions.isEmpty ? nil : specialInstructions
         if removePhoto {
             removeMedImage(path: updated.imagePath)
             updated.imagePath = nil
@@ -709,6 +811,14 @@ private extension MedicationsView {
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(Capsule().fill(Color.orange.opacity(0.12)))
+                        }
+                        if med.isAsNeeded == true {
+                            Text(NSLocalizedString("PRN", comment: ""))
+                                .appFont(.caption)
+                                .foregroundStyle(.blue)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(Color.blue.opacity(0.12)))
                         }
                     }
                     // Dose + times inline
@@ -935,7 +1045,7 @@ private extension MedicationsView {
         switch status {
         case .taken: return .green
         case .skipped: return .orange
-        case .snoozed: return .secondary
+        case .snoozed: return .blue
         }
     }
 
@@ -981,14 +1091,14 @@ private func saveMedImage(image: UIImage, id: UUID) -> String? {
     } catch { return nil }
 }
 
-private func loadMedImage(path: String?) -> UIImage? {
+func loadMedImage(path: String?) -> UIImage? {
     guard let path = path else { return nil }
     let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
     let url = docs.appendingPathComponent(path)
     return UIImage(contentsOfFile: url.path)
 }
 
-private func removeMedImage(path: String?) {
+func removeMedImage(path: String?) {
     guard let path = path else { return }
     let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
     let url = docs.appendingPathComponent(path)

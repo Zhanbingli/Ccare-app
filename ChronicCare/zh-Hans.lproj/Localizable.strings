@@ -3,6 +3,7 @@
 "Track" = "记录";
 "Trends" = "趋势";
 "Meds" = "用药";
+"Health" = "健康";
 "Settings" = "设置";
 
 /* Dashboard */
@@ -304,6 +305,103 @@
 "You can add medications anytime from the Medications tab." = "您可以随时在「用药」标签页中添加药物。";
 "We'll remind you to take %@ on time." = "我们会按时提醒您服用%@。";
 "Go to Dashboard" = "进入首页";
+
+/* Emergency Info */
+"Emergency Info" = "紧急医疗信息";
+"Basic Info" = "基本信息";
+"Blood Type" = "血型";
+"Not set" = "未设置";
+"Allergies" = "过敏信息";
+"e.g., Penicillin, Peanuts" = "如：青霉素、花生";
+"Separate multiple items with commas" = "多项请用逗号分隔";
+"Medical Conditions" = "疾病史";
+"e.g., Hypertension, Diabetes" = "如：高血压、糖尿病";
+"Emergency Contacts" = "紧急联系人";
+"Add Contact" = "添加联系人";
+"Phone" = "电话";
+"Relationship" = "关系";
+"Emergency Medical Info" = "紧急医疗信息";
+"Emergency Card" = "紧急卡片";
+"View Emergency Card" = "查看紧急卡片";
+"Current Medications" = "当前用药";
+"Share Emergency Info" = "分享紧急信息";
+
+/* Caregivers */
+"Caregivers" = "照护者";
+"No caregivers added" = "尚未添加照护者";
+"Add a family member or caregiver to share your medication status." = "添加家人或照护者，以便分享您的用药状态。";
+"Bell icon means they'll be included in missed-dose reminders." = "铃铛图标表示漏服时会提醒您通知此人。";
+"Share today's status" = "分享今日状态";
+"Add Caregiver" = "添加照护者";
+"Caregiver Info" = "照护者信息";
+"Phone (optional)" = "电话（选填）";
+"Remind me to share on missed doses" = "漏服时提醒我分享";
+"When you miss medication for 2+ days, we'll remind you to share your status with this person." = "连续漏服2天以上时，我们会提醒您与此人分享用药状态。";
+"Medication Update — %@" = "用药更新 — %@";
+"Upcoming" = "待服用";
+"Sent from Ccare" = "来自 Ccare";
+"Share with Caregiver?" = "通知照护者？";
+"You haven't taken %@ for %lld days. Would you like to share your status with %@?" = "您已%lld天未服用%@，是否通知%@？";
+
+/* Food Instructions */
+"Food Instruction" = "饮食指导";
+"None" = "无";
+"With Food" = "随餐服用";
+"Before Food" = "饭前服用";
+"After Food" = "饭后服用";
+"On Empty Stomach" = "空腹服用";
+"🍽 With food" = "🍽 随餐";
+"⏰ Before food" = "⏰ 饭前";
+"🍽 After food" = "🍽 饭后";
+"🚫 Empty stomach" = "🚫 空腹";
+"As Needed (PRN)" = "按需用药";
+"Course End Date" = "疗程结束日期";
+"End Date" = "结束日期";
+"Special Instructions (optional)" = "特殊指导（选填）";
+"Last day" = "最后一天";
+"%lld days left" = "还剩%lld天";
+
+/* Correlation Insights */
+"Related Health Data" = "相关健康数据";
+"Related: %@" = "相关：%@";
+"decreased" = "下降";
+"increased" = "上升";
+"While taking %@, your %@ has %@ by %.0f%% over the past week." = "服用%@期间，您的%@在过去一周%@了%.0f%%。";
+"View Trends" = "查看趋势";
+
+/* PRN / As Needed */
+"As Needed" = "按需用药";
+"PRN" = "按需";
+"Log Dose" = "记录用药";
+"Taken %lld×" = "已服%lld次";
+"As Needed (PRN)" = "按需用药";
+
+/* Export */
+"Export Reports" = "导出报告";
+"Custom Date Range" = "自定义日期范围";
+"Start" = "开始";
+"End" = "结束";
+"Period" = "时间段";
+"7 days" = "7天";
+"30 days" = "30天";
+"90 days" = "90天";
+"Time Range" = "时间范围";
+"Export Format" = "导出格式";
+"Export Intake Log (CSV)" = "导出用药记录 (CSV)";
+"Export Measurements (CSV)" = "导出测量数据 (CSV)";
+"Done" = "完成";
+
+/* Next Dose Hero */
+"Next Dose" = "下次用药";
+"Take Now" = "立即服用";
+"Take" = "服用";
+"All caught up!" = "全部已服！";
+"No upcoming doses" = "暂无待服药物";
+
+/* Follow-up Reminders */
+"Haven't taken it yet?" = "还没服药？";
+"Reminder: still not taken" = "提醒：仍未服药";
+"Urgent: please take your medication" = "紧急：请立即服药";
 
 /* Misc */
 "Taken!" = "已服用！";

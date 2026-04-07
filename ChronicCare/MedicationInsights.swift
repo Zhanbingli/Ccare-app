@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 struct MedicationInsight: Identifiable {
     let id = UUID()
@@ -13,6 +14,27 @@ struct MedicationInsight: Identifiable {
         case timeAdjustmentSuggestion
         case adherenceImprovement
         case reminderNotWorking
+        case correlationTrend
+
+        var icon: String {
+            switch self {
+            case .skippedFrequently: return "exclamationmark.triangle.fill"
+            case .timeAdjustmentSuggestion: return "clock.arrow.circlepath"
+            case .adherenceImprovement: return "chart.line.uptrend.xyaxis"
+            case .reminderNotWorking: return "bell.slash.fill"
+            case .correlationTrend: return "chart.xyaxis.line"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .skippedFrequently: return .orange
+            case .timeAdjustmentSuggestion: return .blue
+            case .adherenceImprovement: return .purple
+            case .reminderNotWorking: return .gray
+            case .correlationTrend: return .teal
+            }
+        }
     }
 }
 
@@ -22,11 +44,12 @@ class MedicationInsightsEngine {
     static func generateInsights(
         medications: [Medication],
         intakeLogs: [IntakeLog],
+        measurements: [Measurement] = [],
         store: DataStore
     ) -> [MedicationInsight] {
         var insights: [MedicationInsight] = []
 
-        for medication in medications where medication.remindersEnabled {
+        for medication in medications where medication.remindersEnabled && medication.isAsNeeded != true {
             // Check for frequent skips
             if let skipInsight = checkFrequentSkips(medication: medication, logs: intakeLogs) {
                 insights.append(skipInsight)
@@ -40,6 +63,11 @@ class MedicationInsightsEngine {
             // Check for reminder time optimization
             if let timeInsight = suggestBetterTime(medication: medication, logs: intakeLogs) {
                 insights.append(timeInsight)
+            }
+
+            // Check for medication-measurement correlation
+            if let corrInsight = checkCorrelationTrend(medication: medication, logs: intakeLogs, measurements: measurements) {
+                insights.append(corrInsight)
             }
         }
 
@@ -155,6 +183,58 @@ class MedicationInsightsEngine {
         let adherenceRate = expectedDoses > 0 ? Double(taken) / Double(expectedDoses) : 0.0
 
         return (taken, missed, skipped, adherenceRate)
+    }
+
+    // MARK: - Medication-Measurement Correlation
+
+    private static func checkCorrelationTrend(medication: Medication, logs: [IntakeLog], measurements: [Measurement]) -> MedicationInsight? {
+        guard let category = medication.category else { return nil }
+        let correlatedTypes = category.correlatedMeasurementTypes
+        guard !correlatedTypes.isEmpty else { return nil }
+
+        let cal = Calendar.current
+        let now = Date()
+        // Need at least 14 days of data
+        guard let firstLog = logs.filter({ $0.medicationID == medication.id && $0.status == .taken }).sorted(by: { $0.date < $1.date }).first,
+              cal.dateComponents([.day], from: firstLog.date, to: now).day ?? 0 >= 14 else { return nil }
+
+        for mType in correlatedTypes {
+            let typeMeasurements = measurements.filter { $0.type == mType }.sorted { $0.date < $1.date }
+            guard typeMeasurements.count >= 4 else { continue }
+
+            // Compare first week average vs last week average
+            let sevenDaysAgo = cal.date(byAdding: .day, value: -7, to: now)!
+            let fourteenDaysAgo = cal.date(byAdding: .day, value: -14, to: now)!
+
+            let recentValues = typeMeasurements.filter { $0.date >= sevenDaysAgo }.map { $0.value }
+            let earlierValues = typeMeasurements.filter { $0.date >= fourteenDaysAgo && $0.date < sevenDaysAgo }.map { $0.value }
+
+            guard recentValues.count >= 2, earlierValues.count >= 2 else { continue }
+
+            let recentAvg = recentValues.reduce(0, +) / Double(recentValues.count)
+            let earlierAvg = earlierValues.reduce(0, +) / Double(earlierValues.count)
+            guard earlierAvg != 0 else { continue }
+            let change = recentAvg - earlierAvg
+            let pctChange = abs(change / earlierAvg) * 100
+
+            // Only report if change is meaningful (>5%)
+            guard pctChange > 5 else { continue }
+
+            let direction = change < 0
+                ? NSLocalizedString("decreased", comment: "")
+                : NSLocalizedString("increased", comment: "")
+            let message = String(format: NSLocalizedString("While taking %@, your %@ has %@ by %.0f%% over the past week.", comment: ""),
+                                 medication.name, mType.rawValue, direction, pctChange)
+
+            return MedicationInsight(
+                medicationID: medication.id,
+                type: .correlationTrend,
+                message: message,
+                actionTitle: NSLocalizedString("View Trends", comment: ""),
+                action: nil
+            )
+        }
+        return nil
     }
 
     // MARK: - Smart Suggestions

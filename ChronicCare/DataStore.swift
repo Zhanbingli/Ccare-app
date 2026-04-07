@@ -102,6 +102,13 @@ final class DataStore: ObservableObject {
         } else if status == .skipped {
             let missed = consecutiveMissedDays(for: medicationID)
             NotificationManager.shared.sendMissWarning(for: medicationID, missedDays: missed, medicationName: medName)
+            // Caregiver notification when missed 2+ days and caregivers have notifyOnMiss
+            if missed >= 2 {
+                let notifyCaregivers = caregivers.filter { $0.notifyOnMiss }
+                for cg in notifyCaregivers {
+                    NotificationManager.shared.sendCaregiverReminder(caregiverName: cg.name, medicationName: medName, missedDays: missed)
+                }
+            }
         }
     }
 
@@ -257,11 +264,12 @@ final class DataStore: ObservableObject {
             return candidates.first?.status
         }
 
-        // Enumerate expected schedules per day based on medication times
-        let meds: [Medication] = {
+        // Enumerate expected schedules per day based on medication times (exclude PRN)
+        let allMeds: [Medication] = {
             if let mid = medicationID { return medications.filter { $0.id == mid } }
             return medications
         }()
+        let meds = allMeds.filter { $0.isAsNeeded != true }
 
         let now = Date()
         var byDay: [Date: (taken: Int, total: Int)] = [:]
@@ -314,10 +322,11 @@ final class DataStore: ObservableObject {
             return true
         }
 
-        let meds: [Medication] = {
+        let allMeds2: [Medication] = {
             if let mid = medicationID { return medications.filter { $0.id == mid } }
             return medications
         }()
+        let meds = allMeds2.filter { $0.isAsNeeded != true }
 
         var result: [Date: (taken: Int, total: Int)] = [:]
         for dayNum in monthRange {
@@ -367,10 +376,11 @@ final class DataStore: ObservableObject {
         let startDay = cal.date(byAdding: .day, value: -(days - 1), to: endDay)!
         var taken = 0, total = 0
         let now = Date()
-        let meds: [Medication] = {
+        let allMeds3: [Medication] = {
             if let mid = medicationID { return medications.filter { $0.id == mid } }
             return medications
         }()
+        let meds = allMeds3.filter { $0.isAsNeeded != true }
         for i in 0..<days {
             let day = cal.date(byAdding: .day, value: i, to: startDay)!
             let dayKey = cal.startOfDay(for: day)
@@ -399,6 +409,8 @@ final class DataStore: ObservableObject {
 
     /// Current streak: consecutive days (ending today/yesterday) with all doses taken
     func currentStreak(for medicationID: UUID) -> Int {
+        guard let med = medications.first(where: { $0.id == medicationID }),
+              med.isAsNeeded != true else { return 0 }
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
         var streak = 0
@@ -406,7 +418,6 @@ final class DataStore: ObservableObject {
             let day = cal.date(byAdding: .day, value: -offset, to: today)!
             let dayKey = cal.startOfDay(for: day)
             let dayEnd = cal.date(byAdding: .day, value: 1, to: dayKey)!
-            guard let med = medications.first(where: { $0.id == medicationID }) else { break }
             let times = med.timesOfDay.compactMap { c -> (Int, Int)? in
                 guard let h = c.hour, let m = c.minute else { return nil }
                 return (h, m)

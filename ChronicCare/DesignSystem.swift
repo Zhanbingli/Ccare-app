@@ -99,6 +99,17 @@ extension MeasurementType {
     }
 }
 
+extension MeasurementType {
+    var tintUIColor: UIColor {
+        switch self {
+        case .bloodPressure: return .systemIndigo
+        case .bloodGlucose:  return .systemOrange
+        case .weight:        return .systemTeal
+        case .heartRate:     return .systemPink
+        }
+    }
+}
+
 // MARK: - Rounded corners per-edge
 struct RoundedCornersShape: Shape {
     var corners: UIRectCorner = .allCorners

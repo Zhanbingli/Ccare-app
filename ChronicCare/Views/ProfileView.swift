@@ -15,6 +15,7 @@ struct ProfileView: View {
     @State private var errorMessage = ""
     @State private var showSuccessAlert = false
     @State private var successMessage = ""
+    @State private var showExportSheet = false
     @AppStorage("hapticsEnabled") private var hapticsEnabled: Bool = true
     @AppStorage("units.glucose") private var glucoseUnitRaw: String = GlucoseUnit.mgdL.rawValue
     @AppStorage("prefs.graceMinutes") private var graceMinutes: Int = 30
@@ -37,15 +38,13 @@ struct ProfileView: View {
                 Section {
                     Button {
                         HealthKitManager.shared.requestAuthorization { granted, error in
-                            DispatchQueue.main.async {
-                                if let error = error {
-                                    errorMessage = String(format: NSLocalizedString("Could not connect to Health: %@", comment: ""), error.localizedDescription)
-                                    showErrorAlert = true
-                                } else if granted {
-                                    Haptics.success()
-                                    successMessage = NSLocalizedString("Connected to Apple Health.", comment: "")
-                                    showSuccessAlert = true
-                                }
+                            if let error = error {
+                                errorMessage = String(format: NSLocalizedString("Could not connect to Health: %@", comment: ""), error.localizedDescription)
+                                showErrorAlert = true
+                            } else if granted {
+                                Haptics.success()
+                                successMessage = NSLocalizedString("Connected to Apple Health.", comment: "")
+                                showSuccessAlert = true
                             }
                         }
                     } label: {
@@ -133,6 +132,33 @@ struct ProfileView: View {
                     Text(NSLocalizedString("Goals", comment: ""))
                 }
 
+                // MARK: - Emergency Info
+                Section {
+                    NavigationLink {
+                        EmergencyInfoEditView().environmentObject(store)
+                    } label: {
+                        Label(NSLocalizedString("Edit Emergency Info", comment: ""), systemImage: "cross.case")
+                    }
+                    NavigationLink {
+                        EmergencyCardView().environmentObject(store)
+                    } label: {
+                        Label(NSLocalizedString("View Emergency Card", comment: ""), systemImage: "person.text.rectangle")
+                    }
+                } header: {
+                    Text(NSLocalizedString("Emergency Info", comment: ""))
+                }
+
+                // MARK: - Caregivers
+                Section {
+                    NavigationLink {
+                        CaregiversView().environmentObject(store)
+                    } label: {
+                        Label(NSLocalizedString("Manage Caregivers", comment: ""), systemImage: "person.2")
+                    }
+                } header: {
+                    Text(NSLocalizedString("Caregivers", comment: ""))
+                }
+
                 // MARK: - General
                 Section {
                     Toggle(NSLocalizedString("Haptic Feedback", comment: ""), isOn: $hapticsEnabled)
@@ -170,8 +196,8 @@ struct ProfileView: View {
 
                 // MARK: - Data
                 Section {
-                    Button { exportPDF() } label: {
-                        Label(NSLocalizedString("Export PDF Report", comment: ""), systemImage: "doc.richtext")
+                    Button { showExportSheet = true } label: {
+                        Label(NSLocalizedString("Export Reports", comment: ""), systemImage: "doc.richtext")
                     }
                     Button { exportBackup() } label: {
                         Label(NSLocalizedString("Export Backup", comment: ""), systemImage: "externaldrive.fill")
@@ -225,6 +251,9 @@ struct ProfileView: View {
                 if let url = shareURL {
                     ShareSheet(activityItems: [url])
                 }
+            }
+            .sheet(isPresented: $showExportSheet) {
+                ExportOptionsSheet(store: store)
             }
             .fileImporter(isPresented: $showImporter, allowedContentTypes: [.json]) { result in
                 switch result {
@@ -417,5 +446,128 @@ struct ProfileView: View {
     private var glucoseHighLabel: String {
         let fmt = gluUnit == .mgdL ? "%.0f" : "%.1f"
         return String(format: "High: \(fmt) %@", glucoseHighDisplayBinding.wrappedValue, glucoseUnitLabel)
+    }
+}
+
+// MARK: - Export Options Sheet
+
+private struct ExportOptionsSheet: View {
+    @ObservedObject var store: DataStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var exportDays: Int = 30
+    @State private var useCustomRange = false
+    @State private var customStart = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+    @State private var customEnd = Date()
+    @State private var showShare = false
+    @State private var shareURL: URL?
+    @State private var errorMessage: String?
+
+    private var dateRange: (start: Date, end: Date) {
+        if useCustomRange {
+            return (Calendar.current.startOfDay(for: customStart),
+                    Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: customEnd)) ?? Date())
+        }
+        let end = Date()
+        let start = Calendar.current.date(byAdding: .day, value: -exportDays, to: end) ?? end
+        return (start, end)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Toggle(NSLocalizedString("Custom Date Range", comment: ""), isOn: $useCustomRange)
+                    if useCustomRange {
+                        DatePicker(NSLocalizedString("Start", comment: ""), selection: $customStart, displayedComponents: .date)
+                        DatePicker(NSLocalizedString("End", comment: ""), selection: $customEnd, displayedComponents: .date)
+                    } else {
+                        Picker(NSLocalizedString("Period", comment: ""), selection: $exportDays) {
+                            Text(NSLocalizedString("7 days", comment: "")).tag(7)
+                            Text(NSLocalizedString("30 days", comment: "")).tag(30)
+                            Text(NSLocalizedString("90 days", comment: "")).tag(90)
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                } header: {
+                    Text(NSLocalizedString("Time Range", comment: ""))
+                }
+
+                Section {
+                    Button {
+                        exportPDF()
+                    } label: {
+                        Label(NSLocalizedString("Export PDF Report", comment: ""), systemImage: "doc.richtext")
+                    }
+                    Button {
+                        exportIntakeCSV()
+                    } label: {
+                        Label(NSLocalizedString("Export Intake Log (CSV)", comment: ""), systemImage: "tablecells")
+                    }
+                    Button {
+                        exportMeasurementsCSV()
+                    } label: {
+                        Label(NSLocalizedString("Export Measurements (CSV)", comment: ""), systemImage: "chart.line.uptrend.xyaxis")
+                    }
+                } header: {
+                    Text(NSLocalizedString("Export Format", comment: ""))
+                }
+
+                if let err = errorMessage {
+                    Section {
+                        Text(err).foregroundStyle(.red).appFont(.caption)
+                    }
+                }
+            }
+            .navigationTitle(NSLocalizedString("Export Reports", comment: ""))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(NSLocalizedString("Done", comment: "")) { dismiss() }
+                }
+            }
+            .sheet(isPresented: $showShare) {
+                if let url = shareURL {
+                    ShareSheet(activityItems: [url])
+                }
+            }
+        }
+    }
+
+    private func exportPDF() {
+        do {
+            let days = useCustomRange
+                ? max(1, Calendar.current.dateComponents([.day], from: customStart, to: customEnd).day ?? 30)
+                : exportDays
+            let url = try PDFGenerator.generateReport(store: store, days: days)
+            shareURL = url
+            showShare = true
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func exportIntakeCSV() {
+        do {
+            let range = dateRange
+            let url = try BackupManager.generateIntakeCSV(store: store, startDate: range.start, endDate: range.end)
+            shareURL = url
+            showShare = true
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func exportMeasurementsCSV() {
+        do {
+            let range = dateRange
+            let url = try BackupManager.generateMeasurementsCSV(store: store, startDate: range.start, endDate: range.end)
+            shareURL = url
+            showShare = true
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }

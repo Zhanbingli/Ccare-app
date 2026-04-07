@@ -73,6 +73,37 @@ enum PDFGenerator {
             adhStr30.draw(at: CGPoint(x: margin + 160, y: y), withAttributes: adh30 >= 0.8 ? greenAttrs : adh30 >= 0.5 ? orangeAttrs : redAttrs)
             y += 20
 
+            // --- Adherence Bar Chart ---
+            let scheduledMeds = store.medications.filter { $0.isAsNeeded != true }
+            if !scheduledMeds.isEmpty {
+                let barHeight: CGFloat = 14
+                let spacing: CGFloat = 4
+                let chartHeight = CGFloat(scheduledMeds.count) * (barHeight + spacing) + 10
+                ensureSpace(chartHeight)
+                y += 6
+                let maxBarWidth = bounds.width - margin * 2 - 130
+                for med in scheduledMeds {
+                    let adh = store.adherencePercent(for: med.id, days: days)
+                    let barColor: UIColor = adh >= 0.8 ? .systemGreen : adh >= 0.5 ? .systemOrange : .systemRed
+                    // Label
+                    let label = med.name.count > 15 ? String(med.name.prefix(15)) + "…" : med.name
+                    label.draw(at: CGPoint(x: margin, y: y), withAttributes: [.font: UIFont.systemFont(ofSize: 9)])
+                    // Bar background
+                    let barX = margin + 120
+                    UIColor.systemGray5.setFill()
+                    UIBezierPath(roundedRect: CGRect(x: barX, y: y + 1, width: maxBarWidth, height: barHeight), cornerRadius: 3).fill()
+                    // Bar fill
+                    barColor.setFill()
+                    let fillWidth = max(2, maxBarWidth * CGFloat(adh))
+                    UIBezierPath(roundedRect: CGRect(x: barX, y: y + 1, width: fillWidth, height: barHeight), cornerRadius: 3).fill()
+                    // Percentage label
+                    let pctStr = String(format: "%.0f%%", adh * 100)
+                    pctStr.draw(at: CGPoint(x: barX + fillWidth + 4, y: y), withAttributes: [.font: UIFont.systemFont(ofSize: 9), .foregroundColor: barColor])
+                    y += barHeight + spacing
+                }
+                y += 6
+            }
+
             drawSeparator()
 
             // --- Medications with Per-Med Adherence & Supply ---
@@ -82,20 +113,27 @@ enum PDFGenerator {
 
             for med in store.medications {
                 ensureSpace(60)
-                let medAdh = store.adherencePercent(for: med.id, days: days)
-                let streak = store.currentStreak(for: med.id)
 
                 // Medication name and dose
                 let medTitle = "\(med.name) — \(med.dose)"
                 medTitle.draw(at: CGPoint(x: margin + 10, y: y), withAttributes: subheadAttrs)
                 y += 16
 
-                // Adherence and streak
-                let adhText = String(format: NSLocalizedString("Adherence: %.0f%%", comment: ""), medAdh * 100)
-                let streakText = String(format: NSLocalizedString("Streak: %lld days", comment: ""), streak)
-                adhText.draw(at: CGPoint(x: margin + 20, y: y), withAttributes: medAdh >= 0.8 ? greenAttrs : medAdh >= 0.5 ? orangeAttrs : redAttrs)
-                streakText.draw(at: CGPoint(x: margin + 180, y: y), withAttributes: bodyAttrs)
-                y += 15
+                if med.isAsNeeded == true {
+                    // PRN meds: show label instead of adherence
+                    let prnText = NSLocalizedString("As Needed (PRN)", comment: "")
+                    prnText.draw(at: CGPoint(x: margin + 20, y: y), withAttributes: [.font: UIFont.italicSystemFont(ofSize: 11), .foregroundColor: UIColor.systemBlue])
+                    y += 15
+                } else {
+                    // Adherence and streak
+                    let medAdh = store.adherencePercent(for: med.id, days: days)
+                    let streak = store.currentStreak(for: med.id)
+                    let adhText = String(format: NSLocalizedString("Adherence: %.0f%%", comment: ""), medAdh * 100)
+                    let streakText = String(format: NSLocalizedString("Streak: %lld days", comment: ""), streak)
+                    adhText.draw(at: CGPoint(x: margin + 20, y: y), withAttributes: medAdh >= 0.8 ? greenAttrs : medAdh >= 0.5 ? orangeAttrs : redAttrs)
+                    streakText.draw(at: CGPoint(x: margin + 180, y: y), withAttributes: bodyAttrs)
+                    y += 15
+                }
 
                 // Category
                 if let catName = med.displayCategoryName {
@@ -165,15 +203,15 @@ enum PDFGenerator {
                 if type == .bloodPressure {
                     let sysValues = typeMeasurements.map { $0.value }
                     let diaValues = typeMeasurements.compactMap { $0.diastolic }
-                    if !sysValues.isEmpty {
-                        let sysMin = Int(sysValues.min()!), sysMax = Int(sysValues.max()!), sysAvg = Int(sysValues.reduce(0, +) / Double(sysValues.count))
-                        let sysText = String(format: NSLocalizedString("Systolic — Min: %lld  Avg: %lld  Max: %lld mmHg", comment: ""), sysMin, sysAvg, sysMax)
+                    if let sysMin = sysValues.min(), let sysMax = sysValues.max() {
+                        let sysAvg = Int(sysValues.reduce(0, +) / Double(sysValues.count))
+                        let sysText = String(format: NSLocalizedString("Systolic — Min: %lld  Avg: %lld  Max: %lld mmHg", comment: ""), Int(sysMin), sysAvg, Int(sysMax))
                         sysText.draw(at: CGPoint(x: margin + 20, y: y), withAttributes: bodyAttrs)
                         y += 14
                     }
-                    if !diaValues.isEmpty {
-                        let diaMin = Int(diaValues.min()!), diaMax = Int(diaValues.max()!), diaAvg = Int(diaValues.reduce(0, +) / Double(diaValues.count))
-                        let diaText = String(format: NSLocalizedString("Diastolic — Min: %lld  Avg: %lld  Max: %lld mmHg", comment: ""), diaMin, diaAvg, diaMax)
+                    if let diaMin = diaValues.min(), let diaMax = diaValues.max() {
+                        let diaAvg = Int(diaValues.reduce(0, +) / Double(diaValues.count))
+                        let diaText = String(format: NSLocalizedString("Diastolic — Min: %lld  Avg: %lld  Max: %lld mmHg", comment: ""), Int(diaMin), diaAvg, Int(diaMax))
                         diaText.draw(at: CGPoint(x: margin + 20, y: y), withAttributes: bodyAttrs)
                         y += 14
                     }
@@ -204,6 +242,47 @@ enum PDFGenerator {
                     let statsText = String(format: NSLocalizedString("Min: %@  Avg: %@  Max: %@ %@", comment: ""), displayValues.min, displayValues.avg, displayValues.max, displayValues.unit)
                     statsText.draw(at: CGPoint(x: margin + 20, y: y), withAttributes: bodyAttrs)
                     y += 14
+                }
+
+                // Mini line chart
+                let sorted = typeMeasurements.sorted { $0.date < $1.date }
+                if sorted.count >= 2 {
+                    let chartW = bounds.width - margin * 2 - 20
+                    let chartH: CGFloat = 80
+                    ensureSpace(chartH + 16)
+
+                    let chartX = margin + 10
+                    let chartY = y
+                    // Background
+                    UIColor.systemGray6.setFill()
+                    UIBezierPath(roundedRect: CGRect(x: chartX, y: chartY, width: chartW, height: chartH), cornerRadius: 4).fill()
+
+                    let vals = sorted.map { $0.value }
+                    guard let vMin = vals.min(), let vMax = vals.max() else { continue }
+                    let range = vMax - vMin
+                    let effectiveRange = range < 1 ? 1.0 : range
+                    let padded = effectiveRange * 0.1
+
+                    let path = UIBezierPath()
+                    for (i, m) in sorted.enumerated() {
+                        let px = chartX + 4 + (chartW - 8) * CGFloat(i) / CGFloat(max(1, sorted.count - 1))
+                        let py = chartY + chartH - 4 - (chartH - 8) * CGFloat((m.value - vMin + padded) / (effectiveRange + padded * 2))
+                        if i == 0 { path.move(to: CGPoint(x: px, y: py)) }
+                        else { path.addLine(to: CGPoint(x: px, y: py)) }
+                    }
+                    type.tintUIColor.setStroke()
+                    path.lineWidth = 1.5
+                    path.stroke()
+
+                    // Dot on last point
+                    if let last = sorted.last {
+                        let px = chartX + chartW - 4
+                        let py = chartY + chartH - 4 - (chartH - 8) * CGFloat((last.value - vMin + padded) / (effectiveRange + padded * 2))
+                        type.tintUIColor.setFill()
+                        UIBezierPath(ovalIn: CGRect(x: px - 3, y: py - 3, width: 6, height: 6)).fill()
+                    }
+
+                    y += chartH + 8
                 }
 
                 y += 6

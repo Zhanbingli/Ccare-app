@@ -17,7 +17,11 @@ final class HealthKitManager: ObservableObject {
 
     // MARK: - Authorization
     func requestAuthorization(completion: @escaping (Bool, Error?) -> Void) {
-        guard HKHealthStore.isHealthDataAvailable() else { completion(false, nil); return }
+        guard HKHealthStore.isHealthDataAvailable() else {
+            completion(false, NSError(domain: "HealthKit", code: -1,
+                                     userInfo: [NSLocalizedDescriptionKey: NSLocalizedString("Health data is not available on this device.", comment: "")]))
+            return
+        }
 
         let read: Set<HKObjectType> = [
             systolicType, diastolicType, bpCorrelationType,
@@ -27,7 +31,11 @@ final class HealthKitManager: ObservableObject {
             systolicType, diastolicType, bpCorrelationType,
             glucoseType, heartRateType, weightType
         ]
-        healthStore.requestAuthorization(toShare: write, read: read, completion: completion)
+        healthStore.requestAuthorization(toShare: write, read: read) { granted, error in
+            DispatchQueue.main.async {
+                completion(granted, error)
+            }
+        }
     }
 
     // MARK: - Fetch

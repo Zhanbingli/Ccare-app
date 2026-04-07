@@ -32,9 +32,9 @@ struct ContentView: View {
                 DashboardView()
                     .tag(0)
                     .tabItem { Label(NSLocalizedString("Today", comment: ""), systemImage: "checklist") }
-                MedicationsView()
+                HealthView()
                     .tag(1)
-                    .tabItem { Label(NSLocalizedString("Medications", comment: ""), systemImage: "pill.fill") }
+                    .tabItem { Label(NSLocalizedString("Health", comment: ""), systemImage: "heart.text.square") }
                 ProfileView()
                     .tag(2)
                     .tabItem { Label(NSLocalizedString("Settings", comment: ""), systemImage: "gearshape") }

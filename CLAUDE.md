@@ -27,7 +27,7 @@ Requirements: Xcode 15+, iOS 16+ deployment target. HealthKit entitlement must b
 
 - `NotificationHandler` (`UNUserNotificationCenterDelegate`) processes notification action responses (taken/snooze/skip) and holds a weak reference to `DataStore` set during `onAppear`.
 
-- **Views** follow the three-tab shell in `ContentView`: Home (DashboardView), Medications (MedicationsView), Settings (ProfileView). `EnhancedTrendsView` provides KPI grids and charts. Deep-linking from insights uses `NotificationCenter.default` posts with name `"openMedicationDetail"`.
+- **Views** follow the three-tab shell in `ContentView`: Today (DashboardView — pure action panel), Health (HealthView — medication management + data/trends), Settings (ProfileView). `EnhancedTrendsView` provides KPI grids and charts. Deep-linking from insights uses `NotificationCenter.default` posts with name `"openMedicationDetail"`.
 
 ## Data Flow
 

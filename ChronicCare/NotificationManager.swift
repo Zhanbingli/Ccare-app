@@ -86,6 +86,18 @@ final class NotificationManager {
         UNUserNotificationCenter.current().add(req, withCompletionHandler: nil)
     }
 
+    func sendCaregiverReminder(caregiverName: String, medicationName: String, missedDays: Int) {
+        let content = UNMutableNotificationContent()
+        content.title = NSLocalizedString("Share with Caregiver?", comment: "")
+        content.body = String(format: NSLocalizedString("You haven't taken %@ for %lld days. Would you like to share your status with %@?", comment: ""), medicationName, missedDays, caregiverName)
+        content.sound = .default
+        if #available(iOS 15.0, *) { content.interruptionLevel = .active }
+        let id = "caregiver_\(caregiverName.hashValue)_\(todayKey())"
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 2, repeats: false)
+        let req = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(req, withCompletionHandler: nil)
+    }
+
     // MARK: - Same-day suppression (to avoid duplicate reminders after early Taken/Skip)
     private let defaults = UserDefaults.standard
     private let suppressKey = "suppress.today.ids"
@@ -189,16 +201,13 @@ final class NotificationManager {
         let center = UNUserNotificationCenter.current()
         let prefix = medication.id.uuidString
         center.getPendingNotificationRequests { list in
-            // Remove only base schedule IDs (not snooze_)
-            let ids = list.map { $0.identifier }.filter { $0.hasPrefix(prefix + "_") }
+            // Remove base schedule IDs, snoozes, and follow-ups for this medication
+            let ids = list.map { $0.identifier }.filter { $0.contains(prefix) }
             if !ids.isEmpty { center.removePendingNotificationRequests(withIdentifiers: ids) }
-            // Also remove lingering snoozes when regenerating full schedule
-            let snoozeIds = list.map { $0.identifier }.filter { $0.hasPrefix("snooze_\(prefix)") }
-            if !snoozeIds.isEmpty { center.removePendingNotificationRequests(withIdentifiers: snoozeIds) }
 
-            // Clean delivered notifications with same prefix to avoid stale banners/badges
+            // Clean delivered notifications to avoid stale banners/badges
             center.getDeliveredNotifications { notes in
-                let delivered = notes.map { $0.request.identifier }.filter { $0.hasPrefix(prefix) || $0.hasPrefix("snooze_\(prefix)") }
+                let delivered = notes.map { $0.request.identifier }.filter { $0.contains(prefix) }
                 if !delivered.isEmpty { center.removeDeliveredNotifications(withIdentifiers: delivered) }
             }
 
@@ -223,20 +232,85 @@ final class NotificationManager {
         return result
     }
 
+    // Follow-up intervals in minutes after original scheduled time
+    private let followUpIntervals = [10, 30, 60]
+
     private func scheduleUpcomingInstances(for medication: Medication, timeComponents: DateComponents, horizonDays: Int, now: Date = Date()) {
         let fireDates = upcomingFireDates(for: timeComponents, horizonDays: horizonDays, from: now)
         guard !fireDates.isEmpty else { return }
         let calendar = Calendar.current
+        let center = UNUserNotificationCenter.current()
         fireDates.forEach { fireDate in
             let comps = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
             let id = instanceId(for: medication.id, date: fireDate, comps: timeComponents)
             let content = makeContent(for: medication, scheduleTime: timeComponents, scheduledDate: fireDate)
             let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
             let req = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
-            UNUserNotificationCenter.current().add(req) { error in
+            center.add(req) { error in
                 if let error = error { print("Notification schedule error: \(error)") }
             }
+
+            // Schedule follow-up reminders at increasing intervals
+            for (index, minutes) in followUpIntervals.enumerated() {
+                let followUpDate = fireDate.addingTimeInterval(TimeInterval(minutes * 60))
+                guard followUpDate > now else { continue }
+                let fuId = followUpId(index: index + 1, for: medication.id, date: fireDate, comps: timeComponents)
+                let fuContent = makeFollowUpContent(for: medication, scheduleTime: timeComponents, scheduledDate: fireDate, attempt: index + 1)
+                let fuComps = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: followUpDate)
+                let fuTrigger = UNCalendarNotificationTrigger(dateMatching: fuComps, repeats: false)
+                let fuReq = UNNotificationRequest(identifier: fuId, content: fuContent, trigger: fuTrigger)
+                center.add(fuReq, withCompletionHandler: nil)
+            }
         }
+    }
+
+    private func followUpId(index: Int, for medID: UUID, date: Date, comps: DateComponents) -> String {
+        "followup_\(index)_\(instanceId(for: medID, date: date, comps: comps))"
+    }
+
+    /// Cancel all follow-up reminders for a specific dose instance
+    func cancelFollowUps(for medicationID: UUID, timeComponents: DateComponents, now: Date = Date()) {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: now)
+        let baseId = instanceId(for: medicationID, date: today, comps: timeComponents)
+        let ids = followUpIntervals.indices.map { "followup_\($0 + 1)_\(baseId)" }
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
+        // Also remove any already-delivered follow-ups
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ids)
+    }
+
+    private func makeFollowUpContent(for medication: Medication, scheduleTime: DateComponents?, scheduledDate: Date?, attempt: Int) -> UNMutableNotificationContent {
+        let content = UNMutableNotificationContent()
+        content.title = medication.name
+        let urgency: String
+        switch attempt {
+        case 1:
+            urgency = NSLocalizedString("Haven't taken it yet?", comment: "follow-up reminder")
+        case 2:
+            urgency = NSLocalizedString("Reminder: still not taken", comment: "follow-up reminder")
+        default:
+            urgency = NSLocalizedString("Urgent: please take your medication", comment: "follow-up reminder")
+        }
+        var bodyText = "\(urgency) — \(medication.dose)"
+        if let fi = medication.foodInstruction {
+            bodyText += " · \(fi.shortLabel)"
+        }
+        content.body = bodyText
+        content.sound = .default
+        content.categoryIdentifier = Self.categoryId
+        var info: [String: Any] = ["medicationID": medication.id.uuidString]
+        if let comps = scheduleTime, let h = comps.hour, let m = comps.minute {
+            info["scheduleHour"] = h
+            info["scheduleMinute"] = m
+        }
+        if let scheduledDate {
+            info["scheduledDate"] = isoFormatter.string(from: scheduledDate)
+        }
+        content.userInfo = info
+        content.threadIdentifier = medication.id.uuidString
+        if #available(iOS 15.0, *) { content.interruptionLevel = .timeSensitive }
+        if #available(iOS 15.0, *) { content.relevanceScore = min(0.9 + Double(attempt) * 0.03, 1.0) }
+        return content
     }
 
     private func makeContent(for medication: Medication, scheduleTime: DateComponents?, scheduledDate: Date? = nil, isSnooze: Bool = false) -> UNMutableNotificationContent {
@@ -254,6 +328,9 @@ final class NotificationManager {
             bodyText = String(format: NSLocalizedString("%@ — scheduled for %@", comment: "dose — scheduled for time"), medication.dose, timeStr)
         } else {
             bodyText = String(format: NSLocalizedString("Dose: %@", comment: ""), medication.dose)
+        }
+        if let fi = medication.foodInstruction {
+            bodyText += " · \(fi.shortLabel)"
         }
         content.body = bodyText
         content.sound = .default
@@ -291,12 +368,16 @@ final class NotificationManager {
         let center = UNUserNotificationCenter.current()
         let prefix = medication.id.uuidString
         center.getPendingNotificationRequests { list in
-            let ids = list.map { $0.identifier }.filter { $0.hasPrefix(prefix) || $0.hasPrefix("snooze_\(prefix)") }
+            let ids = list.map { $0.identifier }.filter {
+                $0.hasPrefix(prefix) || $0.hasPrefix("snooze_\(prefix)") || $0.contains(prefix)
+            }
             center.removePendingNotificationRequests(withIdentifiers: ids)
         }
         // Remove delivered notifications with same prefix by enumerating
         center.getDeliveredNotifications { notes in
-            let ids = notes.map { $0.request.identifier }.filter { $0.hasPrefix(prefix) || $0.hasPrefix("snooze_\(prefix)") }
+            let ids = notes.map { $0.request.identifier }.filter {
+                $0.hasPrefix(prefix) || $0.hasPrefix("snooze_\(prefix)") || $0.contains(prefix)
+            }
             if !ids.isEmpty { center.removeDeliveredNotifications(withIdentifiers: ids) }
         }
     }
@@ -495,14 +576,13 @@ final class NotificationManager {
     // Remove pending/delivered notifications that no longer match current medications
     func cleanOrphanedRequests(validMedicationIDs: Set<UUID>) {
         let center = UNUserNotificationCenter.current()
+        let validStrings = Set(validMedicationIDs.map { $0.uuidString })
         center.getPendingNotificationRequests { list in
             let orphanIds = list
                 .map { $0.identifier }
                 .filter { id in
-                    // identifiers use medID prefix before first "_"
-                    let prefix = id.split(separator: "_").first
-                    guard let pref = prefix, let uuid = UUID(uuidString: String(pref)) else { return false }
-                    return !validMedicationIDs.contains(uuid)
+                    // Check if any valid medication ID appears in the identifier
+                    !validStrings.contains(where: { id.contains($0) })
                 }
             if !orphanIds.isEmpty { center.removePendingNotificationRequests(withIdentifiers: orphanIds) }
         }
@@ -510,9 +590,7 @@ final class NotificationManager {
             let orphanIds = notes
                 .map { $0.request.identifier }
                 .filter { id in
-                    let prefix = id.split(separator: "_").first
-                    guard let pref = prefix, let uuid = UUID(uuidString: String(pref)) else { return false }
-                    return !validMedicationIDs.contains(uuid)
+                    !validStrings.contains(where: { id.contains($0) })
                 }
             if !orphanIds.isEmpty { center.removeDeliveredNotifications(withIdentifiers: orphanIds) }
         }
