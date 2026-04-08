@@ -36,9 +36,6 @@ struct ContentView: View {
                 HealthView(deepLinkMedicationID: $deepLinkMedicationID)
                     .tag(1)
                     .tabItem { Label(NSLocalizedString("Health", comment: ""), systemImage: "heart.text.square") }
-                ProfileView()
-                    .tag(2)
-                    .tabItem { Label(NSLocalizedString("Settings", comment: ""), systemImage: "gearshape") }
             }
         }
         .environment(\.font, AppFontStyle.body.font)

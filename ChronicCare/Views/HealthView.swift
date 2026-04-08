@@ -6,6 +6,8 @@ struct HealthView: View {
     @Binding var deepLinkMedicationID: UUID?
     @State private var scrollProxy: ScrollViewProxy?
     @State private var showAdd = false
+    @State private var showAddMeasurement = false
+    @State private var showSettings = false
     @State private var editTarget: Medication? = nil
     @State private var showNotificationDeniedAlert = false
     @State private var deniedMedName: String? = nil
@@ -28,8 +30,29 @@ struct HealthView: View {
             }
             .navigationTitle(NSLocalizedString("Health", comment: ""))
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showAdd = true } label: { Image(systemName: "plus") }
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        Button {
+                            showAddMeasurement = true
+                        } label: {
+                            Label(NSLocalizedString("Log Measurement", comment: ""), systemImage: "waveform.path.ecg")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                }
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+
+                    Button {
+                        showAdd = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
                 }
             }
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: NSLocalizedString("Search medications", comment: ""))
@@ -42,6 +65,17 @@ struct HealthView: View {
                     }
                     refreshNotificationStatus()
                 }
+            }
+            .sheet(isPresented: $showAddMeasurement) {
+                AddMeasurementView { measurement in
+                    store.addMeasurement(measurement)
+                    Haptics.success()
+                }
+                .presentationDetents([.medium, .large])
+            }
+            .sheet(isPresented: $showSettings) {
+                ProfileView()
+                    .environmentObject(store)
             }
             .sheet(item: $editTarget) { med in
                 EditMedicationView(medication: med, onSave: { updated in
