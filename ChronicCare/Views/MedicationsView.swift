@@ -70,7 +70,7 @@ struct MedicationsView: View {
                 AddMedicationView { med in
                     store.addMedication(med)
                     if med.remindersEnabled {
-                        NotificationManager.shared.schedule(for: med)
+                        NotificationManager.shared.schedule(for: med, intakeLogs: store.intakeLogs)
                         NotificationManager.shared.updateBadge(store: store)
                     }
                     refreshNotificationStatus()
@@ -80,7 +80,7 @@ struct MedicationsView: View {
                 EditMedicationView(medication: med, onSave: { updated in
                     store.updateMedication(updated)
                     if updated.remindersEnabled {
-                        NotificationManager.shared.schedule(for: updated)
+                        NotificationManager.shared.schedule(for: updated, intakeLogs: store.intakeLogs)
                         NotificationManager.shared.updateBadge(store: store)
                     } else {
                         NotificationManager.shared.cancelAll(for: updated)
@@ -146,6 +146,12 @@ struct AddMedicationView: View {
     @State private var hasCourseEnd: Bool = false
     @State private var courseEndDate: Date = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
     @State private var specialInstructions: String = ""
+    @State private var isOCRLoading = false
+    @State private var ocrSuggestion: MedicationOCRSuggestion?
+    @State private var ocrErrorMessage: String?
+    @State private var showOCRError = false
+    @State private var showOCRCamera = false
+    @State private var showCameraUnavailableAlert = false
 
     var body: some View {
         NavigationStack {
@@ -157,6 +163,31 @@ struct AddMedicationView: View {
                         .appFont(.headline)
                 } header: {
                     Text(NSLocalizedString("What are you taking?", comment: ""))
+                }
+                Section {
+                    Button {
+                        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                            showOCRCamera = true
+                        } else {
+                            showCameraUnavailableAlert = true
+                        }
+                    } label: {
+                        Label(NSLocalizedString("Scan Label", comment: ""), systemImage: "camera.viewfinder")
+                            .appFont(.subheadline)
+                    }
+                    if isOCRLoading {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text(NSLocalizedString("Reading label...", comment: ""))
+                                .appFont(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text(NSLocalizedString("Fill From Label", comment: ""))
+                } footer: {
+                    Text(NSLocalizedString("Use a clear photo of the prescription label or box. OCR suggests the medication name and dose for review before applying.", comment: ""))
                 }
                 Section {
                     if times.isEmpty {
@@ -326,6 +357,111 @@ struct AddMedicationView: View {
                 }
             } message: {
                 Text(NSLocalizedString("Reminders are enabled but no times are set. Add a time or save without reminders.", comment: ""))
+            }
+            .sheet(item: $ocrSuggestion) { suggestion in
+                MedicationOCRReviewSheet(suggestion: suggestion) {
+                    applyOCRSuggestion(suggestion)
+                }
+            }
+            .fullScreenCover(isPresented: $showOCRCamera) {
+                CameraCaptureView { image in
+                    runOCR(from: image)
+                }
+                .ignoresSafeArea()
+            }
+            .alert(NSLocalizedString("Couldn't Read Label", comment: ""), isPresented: $showOCRError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(ocrErrorMessage ?? NSLocalizedString("We couldn't confidently extract medication details from that image. Try a clearer photo of the label.", comment: ""))
+            }
+            .alert(NSLocalizedString("Camera Unavailable", comment: ""), isPresented: $showCameraUnavailableAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(NSLocalizedString("This device does not currently provide camera access for label scanning.", comment: ""))
+            }
+        }
+    }
+
+    private func runOCR(from image: UIImage) {
+        isOCRLoading = true
+        Task {
+            do {
+                guard let data = image.jpegData(compressionQuality: 0.9) else {
+                    throw MedicationOCRService.OCRFailure.unreadableImage
+                }
+                let suggestion = try await MedicationOCRService.recognizeMedication(from: data)
+                await MainActor.run {
+                    isOCRLoading = false
+                    ocrSuggestion = suggestion
+                }
+            } catch {
+                await MainActor.run {
+                    isOCRLoading = false
+                    ocrErrorMessage = error.localizedDescription
+                    showOCRError = true
+                }
+            }
+        }
+    }
+
+    private func applyOCRSuggestion(_ suggestion: MedicationOCRSuggestion) {
+        if let detectedName = suggestion.name, !detectedName.isEmpty {
+            name = detectedName
+        }
+        if let detectedDose = suggestion.dose, !detectedDose.isEmpty {
+            dose = detectedDose
+        }
+        if notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let detectedNotes = suggestion.notes,
+           !detectedNotes.isEmpty {
+            notes = detectedNotes
+        }
+        ocrSuggestion = nil
+    }
+}
+
+private struct MedicationOCRReviewSheet: View {
+    let suggestion: MedicationOCRSuggestion
+    let onApply: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if let name = suggestion.name, !name.isEmpty {
+                    Section(NSLocalizedString("Detected Name", comment: "")) {
+                        Text(name)
+                    }
+                }
+                if let dose = suggestion.dose, !dose.isEmpty {
+                    Section(NSLocalizedString("Detected Dose", comment: "")) {
+                        Text(dose)
+                    }
+                }
+                if let notes = suggestion.notes, !notes.isEmpty {
+                    Section(NSLocalizedString("Detected Notes", comment: "")) {
+                        Text(notes)
+                    }
+                }
+                Section(NSLocalizedString("Raw Text", comment: "")) {
+                    Text(suggestion.rawText.isEmpty ? NSLocalizedString("No OCR text found.", comment: "") : suggestion.rawText)
+                        .appFont(.caption)
+                        .textSelection(.enabled)
+                }
+            }
+            .navigationTitle(NSLocalizedString("Review OCR Result", comment: ""))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(NSLocalizedString("Apply", comment: "")) {
+                        onApply()
+                        dismiss()
+                    }
+                    .disabled(!suggestion.hasUsefulContent)
+                }
             }
         }
     }
@@ -627,12 +763,13 @@ struct EditMedicationView: View {
                         onDelete?()
                         dismiss()
                     } label: {
-                        Label("Delete Medication", systemImage: "trash")
+                        Text(NSLocalizedString("Delete Medication", comment: ""))
+                            .appFont(.subheadline)
+                            .foregroundStyle(.red)
                             .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
-                    .padding()
+                    .background(Color(.systemBackground))
                 }
             }
         }
@@ -906,11 +1043,16 @@ private extension MedicationsView {
                     Haptics.notification(.warning)
                     return
                 }
-                store.upsertIntake(medicationID: med.id, status: .taken, scheduleTime: dose.comps)
+                store.upsertIntake(
+                    medicationID: med.id,
+                    status: .taken,
+                    scheduleTime: dose.comps,
+                    scheduledDate: dose.scheduledDate
+                )
                 store.decrementPills(for: med.id)
                 NotificationManager.shared.suppressToday(for: med.id, timeComponents: dose.comps)
-                NotificationManager.shared.cancelTodayInstance(for: med.id, timeComponents: dose.comps)
-                NotificationManager.shared.schedule(for: med)
+                NotificationManager.shared.cancelDoseNotifications(for: med.id, timeComponents: dose.comps)
+                NotificationManager.shared.schedule(for: med, intakeLogs: store.intakeLogs)
                 NotificationManager.shared.updateBadge(store: store)
                 Haptics.success()
             } label: {
@@ -929,7 +1071,7 @@ private extension MedicationsView {
         }
     }
 
-    private func nextUntakenDose(for med: Medication) -> (comps: DateComponents, timeStr: String)? {
+    private func nextUntakenDose(for med: Medication) -> (comps: DateComponents, scheduledDate: Date, timeStr: String)? {
         let cal = Calendar.current
         let now = Date()
         let dayStart = cal.startOfDay(for: now)
@@ -938,13 +1080,15 @@ private extension MedicationsView {
         let sorted = med.timesOfDay.sorted { ($0.hour ?? 0) * 60 + ($0.minute ?? 0) < ($1.hour ?? 0) * 60 + ($1.minute ?? 0) }
         for comps in sorted {
             let key = String(format: "%02d:%02d", comps.hour ?? 0, comps.minute ?? 0)
-            let taken = todayLogs.contains { $0.scheduleKey == key && $0.status == .taken }
-            if !taken {
+            let resolved = todayLogs.contains { $0.scheduleKey == key && ($0.status == .taken || $0.status == .skipped) }
+            guard !resolved,
+                  let scheduledDate = cal.date(bySettingHour: comps.hour ?? 0, minute: comps.minute ?? 0, second: 0, of: now),
+                  scheduledDate <= now else { continue }
+            if !resolved {
                 let formatter = DateFormatter()
                 formatter.timeStyle = .short
-                let timeStr = cal.date(bySettingHour: comps.hour ?? 0, minute: comps.minute ?? 0, second: 0, of: now)
-                    .map { formatter.string(from: $0) } ?? ""
-                return (comps, timeStr)
+                let timeStr = formatter.string(from: scheduledDate)
+                return (comps, scheduledDate, timeStr)
             }
         }
         return nil
@@ -1008,7 +1152,7 @@ private extension MedicationsView {
                             var updated = med
                             updated.remindersEnabled = true
                             store.updateMedication(updated)
-                            NotificationManager.shared.schedule(for: updated)
+                            NotificationManager.shared.schedule(for: updated, intakeLogs: store.intakeLogs)
                             NotificationManager.shared.updateBadge(store: store)
                             Haptics.impact(.light)
                             refreshNotificationStatus()

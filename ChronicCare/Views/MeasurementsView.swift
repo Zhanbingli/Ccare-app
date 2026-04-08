@@ -114,7 +114,6 @@ struct AddMeasurementView: View {
     @State private var note: String = ""
     @State private var date: Date = Date()
     @State private var glucoseUnit: GlucoseUnit = UnitPreferences.glucoseUnit
-    @State private var overrideGlucoseUnit: Bool = false
     @State private var validationMessage: String?
     @State private var showValidationAlert = false
     @State private var validationIsWarning = false
@@ -154,27 +153,18 @@ struct AddMeasurementView: View {
                             .frame(maxWidth: 140)
                     }
                     if type == .bloodGlucose {
-                        if overrideGlucoseUnit {
-                            Picker("Unit", selection: $glucoseUnit) {
-                                ForEach(GlucoseUnit.allCases) { u in
-                                    Text(u.rawValue).tag(u)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                        } else {
-                            HStack {
-                                Text(String(format: NSLocalizedString("Unit: %@", comment: ""), UnitPreferences.glucoseUnit.rawValue))
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                                Button(NSLocalizedString("Change Unit", comment: "")) { overrideGlucoseUnit = true }
+                        Picker("Unit", selection: $glucoseUnit) {
+                            ForEach(GlucoseUnit.allCases) { u in
+                                Text(u.rawValue).tag(u)
                             }
                         }
+                        .pickerStyle(.segmented)
                     } else {
                         Text(String(format: NSLocalizedString("Unit: %@", comment: ""), type.unit))
                             .foregroundStyle(.secondary)
                     }
                 }
-                DatePicker("Date", selection: $date)
+                DatePicker("Date", selection: $date, in: ...Date())
                 TextField("Note (optional)", text: $note)
 
                 if let message = validationMessage {
@@ -246,7 +236,7 @@ struct AddMeasurementView: View {
 
         case .bloodGlucose:
             guard let val = Double(valueInput) else { return }
-            let unitToUse = overrideGlucoseUnit ? glucoseUnit : UnitPreferences.glucoseUnit
+            let unitToUse = glucoseUnit
             let result = DataValidator.validateBloodGlucose(value: val, unit: unitToUse)
             handleValidationResult(result)
 
@@ -310,7 +300,7 @@ struct AddMeasurementView: View {
 
     private func saveWithoutValidation() {
         guard let measurement = makeMeasurement() else { return }
-        onSave(measurement)
+        onSave(measurement.clampedToNow())
         Haptics.success()
         dismiss()
     }
@@ -339,7 +329,7 @@ private extension AddMeasurementView {
             )
         case .bloodGlucose:
             guard let input = Double(valueInput) else { return nil }
-            let unitToUse = overrideGlucoseUnit ? glucoseUnit : UnitPreferences.glucoseUnit
+            let unitToUse = glucoseUnit
             let mgdl = UnitPreferences.convertToMgdl(input, from: unitToUse)
             return Measurement(
                 type: .bloodGlucose,

@@ -56,6 +56,7 @@ final class DataStore: ObservableObject {
 
     // MARK: - Public Mutations
     func addMeasurement(_ item: Measurement) {
+        let item = item.clampedToNow()
         // Keep measurements sorted by date desc to avoid resorting in views
         if let idx = measurements.firstIndex(where: { item.date > $0.date }) {
             measurements.insert(item, at: idx)
@@ -78,20 +79,39 @@ final class DataStore: ObservableObject {
             medications[idx] = item
         }
     }
-    // Ensure one final status per day per medication per scheduleKey
-    func upsertIntake(medicationID: UUID, status: IntakeStatus, scheduleTime: DateComponents?, at date: Date = Date(), note: String? = nil) {
-        var key: String? = nil
-        if let h = scheduleTime?.hour, let m = scheduleTime?.minute {
-            key = String(format: "%02d:%02d", h, m)
-        }
+    // Ensure one final status per day per medication per scheduleKey.
+    // Callers can override the key for PRN logging where multiple same-day entries are valid.
+    func upsertIntake(
+        medicationID: UUID,
+        status: IntakeStatus,
+        scheduleTime: DateComponents?,
+        at date: Date = Date(),
+        scheduledDate: Date? = nil,
+        recordedAt: Date = Date(),
+        scheduleKeyOverride: String? = nil,
+        note: String? = nil
+    ) {
+        let key = resolvedScheduleKey(from: scheduleTime, override: scheduleKeyOverride)
+        let effectiveScheduledDate = scheduledDate ?? inferredScheduledDate(from: scheduleTime, relativeTo: date)
+        let effectiveDate = effectiveScheduledDate ?? date
         let cal = Calendar.current
-        let dayStart = cal.startOfDay(for: date)
+        let dayStart = cal.startOfDay(for: effectiveDate)
         let dayEnd = cal.date(byAdding: .day, value: 1, to: dayStart)!
         intakeLogs.removeAll { log in
             log.medicationID == medicationID && log.date >= dayStart && log.date < dayEnd && log.scheduleKey == key
         }
         let trimmedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
-        intakeLogs.append(IntakeLog(medicationID: medicationID, date: date, status: status, scheduleKey: key, note: trimmedNote?.isEmpty == true ? nil : trimmedNote))
+        intakeLogs.append(
+            IntakeLog(
+                medicationID: medicationID,
+                date: effectiveDate,
+                status: status,
+                scheduleKey: key,
+                note: trimmedNote?.isEmpty == true ? nil : trimmedNote,
+                scheduledDate: effectiveScheduledDate,
+                recordedAt: recordedAt
+            )
+        )
 
         // Behavioral feedback — fire after state is committed
         let medName = medications.first(where: { $0.id == medicationID })?.name ?? ""
@@ -110,6 +130,12 @@ final class DataStore: ObservableObject {
                 }
             }
         }
+    }
+
+    private func resolvedScheduleKey(from scheduleTime: DateComponents?, override: String?) -> String? {
+        if let override, !override.isEmpty { return override }
+        guard let h = scheduleTime?.hour, let m = scheduleTime?.minute else { return nil }
+        return String(format: "%02d:%02d", h, m)
     }
 
     /// Decrement pill supply when a dose is taken
@@ -231,6 +257,11 @@ final class DataStore: ObservableObject {
                 print("Failed to save \(label): \(error)")
             }
         }
+    }
+
+    private func inferredScheduledDate(from scheduleTime: DateComponents?, relativeTo date: Date) -> Date? {
+        guard let hour = scheduleTime?.hour, let minute = scheduleTime?.minute else { return nil }
+        return Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: date)
     }
 
     // MARK: - Stats

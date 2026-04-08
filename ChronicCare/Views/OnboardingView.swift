@@ -262,7 +262,7 @@ struct OnboardingView: View {
                 remindersEnabled: true
             )
             store.addMedication(med)
-            NotificationManager.shared.schedule(for: med)
+            NotificationManager.shared.schedule(for: med, intakeLogs: store.intakeLogs)
             NotificationManager.shared.updateBadge(store: store)
         }
         Haptics.success()

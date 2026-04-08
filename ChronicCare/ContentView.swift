@@ -12,6 +12,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = 0
     @State private var showOnboarding = !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+    @State private var deepLinkMedicationID: UUID? = nil
 
     var body: some View {
         if showOnboarding {
@@ -32,7 +33,7 @@ struct ContentView: View {
                 DashboardView()
                     .tag(0)
                     .tabItem { Label(NSLocalizedString("Today", comment: ""), systemImage: "checklist") }
-                HealthView()
+                HealthView(deepLinkMedicationID: $deepLinkMedicationID)
                     .tag(1)
                     .tabItem { Label(NSLocalizedString("Health", comment: ""), systemImage: "heart.text.square") }
                 ProfileView()
@@ -47,11 +48,14 @@ struct ContentView: View {
             let meds = store.medications.filter { $0.remindersEnabled }
             let now = Date()
             NotificationManager.shared.cleanOrphanedRequests(validMedicationIDs: Set(meds.map { $0.id }))
-            meds.forEach { NotificationManager.shared.schedule(for: $0, now: now) }
+            meds.forEach { NotificationManager.shared.schedule(for: $0, intakeLogs: store.intakeLogs, now: now) }
             NotificationManager.shared.checkRefillReminders(medications: store.medications)
         }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("openMedicationDetail"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("openMedicationDetail"))) { notification in
             selectedTab = 1
+            if let medID = notification.object as? UUID {
+                deepLinkMedicationID = medID
+            }
         }
     }
 }

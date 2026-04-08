@@ -177,6 +177,19 @@ struct ProfileView: View {
                     SecureField(NSLocalizedString("API Key", comment: ""), text: $aiApiKey)
                         .textContentType(.password)
                         .autocorrectionDisabled()
+                    Button {
+                        let urlStr: String
+                        switch aiProvider {
+                        case .openai: urlStr = "https://platform.openai.com/api-keys"
+                        case .anthropic: urlStr = "https://console.anthropic.com/settings/keys"
+                        }
+                        if let url = URL(string: urlStr) {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        Label(String(format: NSLocalizedString("Get %@ API Key", comment: ""), aiProvider.rawValue), systemImage: "key.fill")
+                            .appFont(.subheadline)
+                    }
                     Toggle(NSLocalizedString("Allow AI Analysis", comment: ""), isOn: $aiOptIn)
                     if !aiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && aiOptIn {
                         HStack {
@@ -264,7 +277,7 @@ struct ProfileView: View {
                         current.forEach { NotificationManager.shared.cancelAll(for: $0) }
                         store.importBackup(backup)
                         for med in store.medications where med.remindersEnabled {
-                            NotificationManager.shared.schedule(for: med)
+                            NotificationManager.shared.schedule(for: med, intakeLogs: store.intakeLogs)
                         }
                         NotificationManager.shared.cleanOrphanedRequests(validMedicationIDs: Set(store.medications.map { $0.id }))
                         Haptics.success()

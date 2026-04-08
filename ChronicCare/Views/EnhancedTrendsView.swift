@@ -7,23 +7,24 @@ struct EnhancedTrendsView: View {
     @State private var selectedType: MeasurementType = .bloodPressure
     @State private var rangeDays: Int = 30
     @State private var selectedDataPoint: Measurement?
-    @State private var showDataPointPicker = false
     @State private var showAIInsights = false
     @State private var aiInsights: String?
     @State private var isLoadingInsights = false
     @AppStorage("units.glucose") private var glucoseUnitRaw: String = GlucoseUnit.mgdL.rawValue
 
     private var filtered: [Measurement] {
+        let now = Date()
         let start = Calendar.current.date(byAdding: .day, value: -rangeDays, to: Date())!
         return store.measurements
-            .filter { $0.type == selectedType && $0.date >= start }
+            .filter { $0.type == selectedType && $0.date >= start && $0.date <= now }
             .sorted(by: { $0.date < $1.date })
     }
 
     private var sevenDaySlice: [Measurement] {
+        let now = Date()
         let start = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
         return store.measurements
-            .filter { $0.type == selectedType && $0.date >= start }
+            .filter { $0.type == selectedType && $0.date >= start && $0.date <= now }
             .sorted(by: { $0.date < $1.date })
     }
 
@@ -127,93 +128,37 @@ struct EnhancedTrendsView: View {
 
     // MARK: - KPI Header
     private var kpiHeader: some View {
-        VStack(spacing: 10) {
-            // Compact KPI row
-            HStack(spacing: 0) {
-                kpiCell(label: NSLocalizedString("Latest", comment: ""), value: latestText(), unit: selectedType.unit)
-                kpiDivider
-                kpiCell(label: NSLocalizedString("Change", comment: ""), value: deltaText(), unit: "")
-                kpiDivider
-                kpiCell(label: NSLocalizedString("7d Avg", comment: ""), value: sevenDayAverageText(), unit: "")
-                kpiDivider
-                kpiCell(label: NSLocalizedString("7d In\u{2011}Range", comment: ""), value: sevenDayInRangeText(), unit: "")
-            }
-            .padding(.vertical, 14)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color(.secondarySystemBackground))
-            )
-
-            // Insight banner (only if noteworthy)
-            if let insight = insightSummary() {
-                HStack(spacing: 8) {
-                    Image(systemName: "lightbulb.fill")
-                        .font(.caption)
-                        .foregroundStyle(.yellow)
-                    Text(insight.title)
-                        .appFont(.caption)
-                        .foregroundStyle(.primary)
-                    Text("—")
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(insight.detail)
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color.yellow.opacity(0.08))
-                )
-            }
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+            kpiCell(label: NSLocalizedString("Latest", comment: ""), value: latestText(), unit: selectedType.unit)
+            kpiCell(label: NSLocalizedString("Change", comment: ""), value: deltaText(), unit: "")
+            kpiCell(label: NSLocalizedString("7d Avg", comment: ""), value: sevenDayAverageText(), unit: "")
+            kpiCell(label: NSLocalizedString("7d In\u{2011}Range", comment: ""), value: sevenDayInRangeText(), unit: "")
         }
     }
 
     private func kpiCell(label: String, value: String, unit: String) -> some View {
         VStack(spacing: 4) {
             Text(value)
-                .appFont(.subheadline)
+                .font(.system(.title3, design: .rounded))
                 .fontWeight(.bold)
                 .monospacedDigit()
                 .lineLimit(1)
-                .minimumScaleFactor(0.6)
             Text(label)
                 .appFont(.caption)
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
         }
         .frame(maxWidth: .infinity)
-    }
-
-    private var kpiDivider: some View {
-        Rectangle()
-            .fill(Color.primary.opacity(0.08))
-            .frame(width: 1, height: 36)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
     }
 
     // MARK: - Chart Section
     private var chartSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            chart
-                .frame(height: 260)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if !filtered.isEmpty {
-                        showDataPointPicker = true
-                    }
-                }
-        }
-        .sheet(isPresented: $showDataPointPicker) {
-            DataPointPickerView(
-                measurements: filtered,
-                selectedMeasurement: $selectedDataPoint,
-                measurementType: selectedType
-            )
-            .presentationDetents([.medium, .large])
-        }
+        chart
+            .frame(height: 260)
     }
 
     // MARK: - Data Point Detail
@@ -479,16 +424,18 @@ struct EnhancedTrendsView: View {
                 }
             }
         }
-        .chartPlotStyle { plot in
-            plot
-                .background(
-                    LinearGradient(
-                        colors: [Color(.systemBackground), Color(.secondarySystemBackground)],
-                        startPoint: .top,
-                        endPoint: .bottom
+        .chartOverlay { proxy in
+            GeometryReader { geo in
+                Rectangle().fill(.clear).contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onEnded { drag in
+                                guard let date: Date = proxy.value(atX: drag.location.x) else { return }
+                                let nearest = filtered.min(by: { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) })
+                                withAnimation(.easeInOut(duration: 0.2)) { selectedDataPoint = nearest }
+                            }
                     )
-                )
-                .cornerRadius(12)
+            }
         }
     }
 
@@ -504,6 +451,8 @@ struct EnhancedTrendsView: View {
                 displayRange = r
             }
         }
+        let displayValues = filtered.map { (selectedType == .bloodGlucose) ? UnitPreferences.mgdlToPreferred($0.value) : $0.value }
+        let yFloor = displayValues.min().map { $0 * 0.95 } ?? 0
 
         return Chart {
             if let rDisplay = displayRange {
@@ -535,11 +484,12 @@ struct EnhancedTrendsView: View {
                 let yVal = (selectedType == .bloodGlucose) ? UnitPreferences.mgdlToPreferred(m.value) : m.value
                 AreaMark(
                     x: .value("Date", m.date),
-                    y: .value("Value", yVal)
+                    yStart: .value("Base", yFloor),
+                    yEnd: .value("Value", yVal)
                 )
                 .foregroundStyle(
                     LinearGradient(
-                        colors: [selectedType.tint.opacity(0.3), selectedType.tint.opacity(0.05)],
+                        colors: [selectedType.tint.opacity(0.25), selectedType.tint.opacity(0.02)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
@@ -596,18 +546,20 @@ struct EnhancedTrendsView: View {
         .chartYAxis {
             AxisMarks(position: .leading)
         }
-        .chartPlotStyle { plot in
-            plot
-                .background(
-                    LinearGradient(
-                        colors: [Color(.systemBackground), Color(.secondarySystemBackground)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .cornerRadius(12)
-        }
         .chartYAxisLabel(unit)
+        .chartOverlay { proxy in
+            GeometryReader { geo in
+                Rectangle().fill(.clear).contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onEnded { drag in
+                                guard let date: Date = proxy.value(atX: drag.location.x) else { return }
+                                let nearest = filtered.min(by: { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) })
+                                withAnimation(.easeInOut(duration: 0.2)) { selectedDataPoint = nearest }
+                            }
+                    )
+            }
+        }
     }
 
     // MARK: - Helpers
@@ -685,26 +637,6 @@ struct EnhancedTrendsView: View {
         }
         let pct = Double(ok) / Double(sevenDaySlice.count)
         return "\(Int(pct * 100))%"
-    }
-
-    private func insightSummary() -> (title: String, detail: String)? {
-        guard let latest = filtered.last, let first = filtered.first else { return nil }
-        switch selectedType {
-        case .bloodPressure:
-            let thresholds = store.bpThresholds()
-            if let dia = latest.diastolic, latest.value >= thresholds.systolicHigh || dia >= thresholds.diastolicHigh {
-                return (NSLocalizedString("Blood pressure is above goal", comment: ""), NSLocalizedString("Consider logging how you feel and ensure reminders are on for medications.", comment: ""))
-            }
-            return (NSLocalizedString("Blood pressure looks steady", comment: ""), NSLocalizedString("Keep following your schedule to stay within targets.", comment: ""))
-        case .bloodGlucose:
-            return (NSLocalizedString("7-day glucose trends", comment: ""), NSLocalizedString("Track meals and activities that affect your readings.", comment: ""))
-        case .weight:
-            let diff = latest.value - first.value
-            let sign = diff >= 0 ? "+" : ""
-            return (NSLocalizedString("Weight trend", comment: ""), String(format: "%.1f kg (%@%.1f since start)", latest.value, sign, diff))
-        case .heartRate:
-            return (NSLocalizedString("Heart rate monitoring", comment: ""), NSLocalizedString("Note any unusual patterns or symptoms.", comment: ""))
-        }
     }
 
     private func generateAIInsights() {
@@ -932,100 +864,6 @@ struct EnhancedTrendsView: View {
         }
 
         return insights
-    }
-}
-
-// MARK: - Data Point Picker
-struct DataPointPickerView: View {
-    let measurements: [Measurement]
-    @Binding var selectedMeasurement: Measurement?
-    let measurementType: MeasurementType
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(measurements.reversed()) { measurement in
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            selectedMeasurement = measurement
-                        }
-                        Haptics.impact(.light)
-                        dismiss()
-                    } label: {
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(measurement.date, style: .date)
-                                    .appFont(.subheadline)
-                                    .foregroundStyle(.primary)
-                                Text(measurement.date, style: .time)
-                                    .appFont(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer()
-
-                            VStack(alignment: .trailing, spacing: 4) {
-                                if measurement.type == .bloodPressure, let dia = measurement.diastolic {
-                                    Text("\(Int(measurement.value))/\(Int(dia))")
-                                        .appFont(.headline)
-                                        .foregroundStyle(.primary)
-                                    Text(measurement.type.unit)
-                                        .appFont(.caption)
-                                        .foregroundStyle(.secondary)
-                                } else if measurement.type == .bloodGlucose {
-                                    let v = UnitPreferences.mgdlToPreferred(measurement.value)
-                                    let unit = UnitPreferences.glucoseUnit.rawValue
-                                    let formatted = UnitPreferences.glucoseUnit == .mgdL ? String(format: "%.0f", v) : String(format: "%.1f", v)
-                                    Text(formatted)
-                                        .appFont(.headline)
-                                        .foregroundStyle(.primary)
-                                    Text(unit)
-                                        .appFont(.caption)
-                                        .foregroundStyle(.secondary)
-                                } else {
-                                    Text(String(format: "%.1f", measurement.value))
-                                        .appFont(.headline)
-                                        .foregroundStyle(.primary)
-                                    Text(measurement.type.unit)
-                                        .appFont(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-
-                            if selectedMeasurement?.id == measurement.id {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.blue)
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-                    .listRowBackground(
-                        selectedMeasurement?.id == measurement.id ?
-                        Color.blue.opacity(0.1) : Color.clear
-                    )
-                }
-            }
-            .navigationTitle("Select Data Point")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                if selectedMeasurement != nil {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Clear") {
-                            withAnimation {
-                                selectedMeasurement = nil
-                            }
-                            dismiss()
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 

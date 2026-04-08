@@ -3,6 +3,7 @@ import UserNotifications
 
 struct HealthView: View {
     @EnvironmentObject var store: DataStore
+    @Binding var deepLinkMedicationID: UUID?
     @State private var scrollProxy: ScrollViewProxy?
     @State private var showAdd = false
     @State private var editTarget: Medication? = nil
@@ -10,8 +11,6 @@ struct HealthView: View {
     @State private var deniedMedName: String? = nil
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var searchText: String = ""
-    @State private var filter: MedFilter = .all
-    @State private var scrollToMedicationID: UUID? = nil
     @AppStorage("units.glucose") private var glucoseUnitRaw: String = GlucoseUnit.mgdL.rawValue
 
     var body: some View {
@@ -38,7 +37,7 @@ struct HealthView: View {
                 AddMedicationView { med in
                     store.addMedication(med)
                     if med.remindersEnabled {
-                        NotificationManager.shared.schedule(for: med)
+                        NotificationManager.shared.schedule(for: med, intakeLogs: store.intakeLogs)
                         NotificationManager.shared.updateBadge(store: store)
                     }
                     refreshNotificationStatus()
@@ -48,7 +47,7 @@ struct HealthView: View {
                 EditMedicationView(medication: med, onSave: { updated in
                     store.updateMedication(updated)
                     if updated.remindersEnabled {
-                        NotificationManager.shared.schedule(for: updated)
+                        NotificationManager.shared.schedule(for: updated, intakeLogs: store.intakeLogs)
                         NotificationManager.shared.updateBadge(store: store)
                     } else {
                         NotificationManager.shared.cancelAll(for: updated)
@@ -67,10 +66,13 @@ struct HealthView: View {
             }
             .onAppear(perform: refreshNotificationStatus)
             .onChange(of: store.medications.count) { _ in refreshNotificationStatus() }
-            .onChange(of: scrollToMedicationID) { target in
+            .onChange(of: deepLinkMedicationID) { target in
                 if let id = target {
                     withAnimation { scrollProxy?.scrollTo(id, anchor: .top) }
-                    scrollToMedicationID = nil
+                    if let med = store.medications.first(where: { $0.id == id }) {
+                        editTarget = med
+                    }
+                    deepLinkMedicationID = nil
                 }
             }
             .alert(isPresented: $showNotificationDeniedAlert) {
@@ -94,15 +96,6 @@ struct HealthView: View {
 
     @ViewBuilder
     private var medicationSections: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 12) {
-                summaryCard
-                filterChips
-            }
-        }
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
-
         if notificationStatus == .denied {
             Section {
                 HStack(alignment: .top, spacing: 12) {
@@ -113,18 +106,32 @@ struct HealthView: View {
                     }
                 }
             }
-            .listRowSeparator(.hidden)
         }
 
         if filteredMedications.isEmpty {
-            Text(NSLocalizedString("No medications added", comment: ""))
-                .foregroundStyle(.secondary)
+            Section {
+                EmptyStateView(
+                    systemImage: "pills.fill",
+                    title: NSLocalizedString("No medications added", comment: ""),
+                    subtitle: NSLocalizedString("Tap + to add your first medication.", comment: ""),
+                    actionTitle: NSLocalizedString("Add Medication", comment: ""),
+                    action: { showAdd = true }
+                )
+            }
+            .listRowBackground(Color.clear)
         } else {
-            ForEach(filteredMedications) { med in
-                medicationCard(for: med)
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
-                    .id(med.id)
+            Section {
+                ForEach(filteredMedications) { med in
+                    medicationCard(for: med)
+                        .id(med.id)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
+                }
+            } header: {
+                let total = store.medications.count
+                let active = store.medications.filter { $0.remindersEnabled }.count
+                Text(String(format: NSLocalizedString("%lld Medications · %lld Active", comment: ""), total, active))
             }
         }
     }
@@ -198,109 +205,14 @@ struct HealthView: View {
 // MARK: - Medication List Helpers
 
 private extension HealthView {
-    enum MedFilter: String, CaseIterable, Identifiable {
-        case all, remindersOn, remindersOff
-        var id: String { rawValue }
-        var displayName: LocalizedStringKey {
-            switch self {
-            case .all: return LocalizedStringKey("All")
-            case .remindersOn: return LocalizedStringKey("Active")
-            case .remindersOff: return LocalizedStringKey("Paused")
-            }
-        }
-    }
-
     var filteredMedications: [Medication] {
-        store.medications.filter { med in
-            let matchesFilter: Bool = {
-                switch filter {
-                case .all: return true
-                case .remindersOn: return med.remindersEnabled
-                case .remindersOff: return !med.remindersEnabled
-                }
-            }()
-            let matchesSearch: Bool
-            if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                matchesSearch = true
-            } else {
-                let query = searchText.lowercased()
-                matchesSearch = med.name.lowercased().contains(query) || med.dose.lowercased().contains(query)
-            }
-            return matchesFilter && matchesSearch
+        guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return store.medications
         }
-    }
-
-    var summaryCard: some View {
-        let total = store.medications.count
-        let active = store.medications.filter { $0.remindersEnabled }.count
-        let paused = max(total - active, 0)
-        return HStack(spacing: 0) {
-            summaryStat(value: "\(total)", label: NSLocalizedString("Medications", comment: ""))
-            summaryDivider
-            summaryStat(value: "\(active)", label: NSLocalizedString("Active", comment: ""), color: .green)
-            summaryDivider
-            summaryStat(value: "\(paused)", label: NSLocalizedString("Paused", comment: ""), color: paused > 0 ? .orange : .secondary)
+        let query = searchText.lowercased()
+        return store.medications.filter { med in
+            med.name.lowercased().contains(query) || med.dose.lowercased().contains(query)
         }
-        .padding(.vertical, 14)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
-    }
-
-    func summaryStat(value: String, label: String, color: Color = .primary) -> some View {
-        VStack(spacing: 4) {
-            Text(value).appFont(.headline).foregroundStyle(color)
-            Text(label).appFont(.caption).foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    var summaryDivider: some View {
-        Rectangle().fill(Color.primary.opacity(0.08)).frame(width: 1, height: 32)
-    }
-
-    var filterChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: 10) {
-                ForEach(MedFilter.allCases) { chipButton(for: $0) }
-            }
-            .padding(.horizontal, 4)
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    func chipButton(for option: MedFilter) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.18)) { filter = option }
-        } label: {
-            HStack(spacing: 6) {
-                Text(option.displayName)
-                countChip(for: option)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(Capsule().fill(filter == option ? Color.accentColor.opacity(0.2) : Color(.systemBackground)))
-            .overlay(Capsule().stroke(filter == option ? Color.accentColor : Color.primary.opacity(0.1), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-    }
-
-    func countText(for filter: MedFilter) -> Int {
-        switch filter {
-        case .all: return store.medications.count
-        case .remindersOn: return store.medications.filter { $0.remindersEnabled }.count
-        case .remindersOff: return store.medications.filter { !$0.remindersEnabled }.count
-        }
-    }
-
-    func countChip(for filter: MedFilter) -> some View {
-        Text("\(countText(for: filter))")
-            .appFont(.caption)
-            .foregroundStyle(.primary.opacity(0.6))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(Capsule().fill(Color.primary.opacity(0.08)))
     }
 
     @ViewBuilder
@@ -352,7 +264,8 @@ private extension HealthView {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.06), radius: 4, x: 0, y: 2)
         )
         .contentShape(Rectangle())
         .onTapGesture { editTarget = med }
@@ -394,12 +307,16 @@ private extension HealthView {
                     Haptics.notification(.warning)
                     return
                 }
-                store.upsertIntake(medicationID: med.id, status: .taken, scheduleTime: dose.comps)
+                store.upsertIntake(
+                    medicationID: med.id,
+                    status: .taken,
+                    scheduleTime: dose.comps,
+                    scheduledDate: dose.scheduledDate
+                )
                 store.decrementPills(for: med.id)
                 NotificationManager.shared.suppressToday(for: med.id, timeComponents: dose.comps)
-                NotificationManager.shared.cancelTodayInstance(for: med.id, timeComponents: dose.comps)
-                NotificationManager.shared.cancelFollowUps(for: med.id, timeComponents: dose.comps)
-                NotificationManager.shared.schedule(for: med)
+                NotificationManager.shared.cancelDoseNotifications(for: med.id, timeComponents: dose.comps)
+                NotificationManager.shared.schedule(for: med, intakeLogs: store.intakeLogs)
                 NotificationManager.shared.updateBadge(store: store)
                 Haptics.success()
             } label: {
@@ -415,7 +332,7 @@ private extension HealthView {
         }
     }
 
-    func nextUntakenDose(for med: Medication) -> (comps: DateComponents, timeStr: String)? {
+    func nextUntakenDose(for med: Medication) -> (comps: DateComponents, scheduledDate: Date, timeStr: String)? {
         let cal = Calendar.current
         let now = Date()
         let dayStart = cal.startOfDay(for: now)
@@ -424,12 +341,14 @@ private extension HealthView {
         let sorted = med.timesOfDay.sorted { ($0.hour ?? 0) * 60 + ($0.minute ?? 0) < ($1.hour ?? 0) * 60 + ($1.minute ?? 0) }
         for comps in sorted {
             let key = String(format: "%02d:%02d", comps.hour ?? 0, comps.minute ?? 0)
-            let taken = todayLogs.contains { $0.scheduleKey == key && $0.status == .taken }
-            if !taken {
+            let resolved = todayLogs.contains { $0.scheduleKey == key && ($0.status == .taken || $0.status == .skipped) }
+            guard !resolved,
+                  let scheduledDate = cal.date(bySettingHour: comps.hour ?? 0, minute: comps.minute ?? 0, second: 0, of: now),
+                  scheduledDate <= now else { continue }
+            if !resolved {
                 let formatter = DateFormatter(); formatter.timeStyle = .short
-                let timeStr = cal.date(bySettingHour: comps.hour ?? 0, minute: comps.minute ?? 0, second: 0, of: now)
-                    .map { formatter.string(from: $0) } ?? ""
-                return (comps, timeStr)
+                let timeStr = formatter.string(from: scheduledDate)
+                return (comps, scheduledDate, timeStr)
             }
         }
         return nil
@@ -480,7 +399,7 @@ private extension HealthView {
                             }
                             var updated = med; updated.remindersEnabled = true
                             store.updateMedication(updated)
-                            NotificationManager.shared.schedule(for: updated)
+                            NotificationManager.shared.schedule(for: updated, intakeLogs: store.intakeLogs)
                             NotificationManager.shared.updateBadge(store: store)
                             Haptics.impact(.light)
                             refreshNotificationStatus()
@@ -565,7 +484,8 @@ private extension HealthView {
             .appFont(.subheadline)
             .fontWeight(.medium)
 
-            Text(m.date, style: .relative).appFont(.caption).foregroundStyle(.secondary)
+            Text(m.date, format: .dateTime.month(.abbreviated).day().hour().minute())
+                .appFont(.caption).foregroundStyle(.secondary)
         }
     }
 }

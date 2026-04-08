@@ -403,6 +403,35 @@
 "Reminder: still not taken" = "提醒：仍未服药";
 "Urgent: please take your medication" = "紧急：请立即服药";
 
+/* AI */
+"Get %@ API Key" = "获取 %@ API 密钥";
+
+/* Today Summary */
+"%lld of %lld taken" = "已服 %lld/%lld";
+"%lld remaining" = "还剩 %lld 项";
+"All done today!" = "今日全部完成！";
+
+/* Health Tab */
+"%lld Medications · %lld Active" = "%lld 种药物 · %lld 种开启中";
+"Tap + to add your first medication." = "点击 + 添加第一种药物。";
+
 /* Misc */
 "Taken!" = "已服用！";
 "OK" = "好";
+
+/* OCR Import */
+"Fill From Label" = "从标签填充";
+"Scan Label" = "扫描标签";
+"Use a clear photo of the prescription label or box. OCR suggests the medication name and dose for review before applying." = "拍摄清晰的处方标签或药盒照片。OCR 会先识别药名和剂量，确认后再填入表单。";
+"Reading label..." = "正在识别标签...";
+"Couldn't Read Label" = "无法识别标签";
+"We couldn't confidently extract medication details from that image. Try a clearer photo of the label." = "无法可靠地从该图片中提取药物信息。请尝试更清晰的标签照片。";
+"Review OCR Result" = "确认识别结果";
+"Detected Name" = "识别到的药名";
+"Detected Dose" = "识别到的剂量";
+"Detected Notes" = "识别到的备注";
+"Raw Text" = "原始文本";
+"Apply" = "应用";
+"No OCR text found." = "未识别到文本。";
+"Camera Unavailable" = "相机不可用";
+"This device does not currently provide camera access for label scanning." = "当前设备暂时无法使用相机进行标签扫描。";

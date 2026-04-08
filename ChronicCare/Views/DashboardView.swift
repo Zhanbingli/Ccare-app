@@ -132,7 +132,7 @@ struct DashboardView: View {
                 let meds = store.medications.filter { $0.remindersEnabled }
                 let now = Date()
                 NotificationManager.shared.cleanOrphanedRequests(validMedicationIDs: Set(meds.map { $0.id }))
-                meds.forEach { NotificationManager.shared.schedule(for: $0, now: now) }
+                meds.forEach { NotificationManager.shared.schedule(for: $0, intakeLogs: store.intakeLogs, now: now) }
                 NotificationManager.shared.checkRefillReminders(medications: store.medications)
                 store.objectWillChange.send()
             }
@@ -278,31 +278,39 @@ private extension DashboardView {
 
     // MARK: - Today Summary
     private func todaySummaryRow(adherence: Double, taken: Int, total: Int) -> some View {
-        HStack(spacing: 12) {
-            // Progress bar
-            VStack(alignment: .leading, spacing: 4) {
-                Text(String(format: NSLocalizedString("Taken %lld/%lld", comment: ""), taken, total))
-                    .appFont(.subheadline)
-                    .foregroundStyle(.primary)
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(Color.primary.opacity(0.08))
-                            .frame(height: 6)
-                        Capsule()
-                            .fill(adherence >= 1.0 ? Color.green : Color.accentColor)
-                            .frame(width: geo.size.width * CGFloat(min(max(adherence, 0), 1)), height: 6)
-                            .animation(.easeInOut(duration: 0.3), value: adherence)
-                    }
-                }
-                .frame(height: 6)
+        HStack(spacing: 16) {
+            // Circular progress
+            ZStack {
+                Circle()
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 5)
+                Circle()
+                    .trim(from: 0, to: CGFloat(min(max(adherence, 0), 1)))
+                    .stroke(adherence >= 1.0 ? Color.green : Color.accentColor, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .animation(.easeInOut(duration: 0.4), value: adherence)
+                Text(String(format: "%d%%", Int(adherence * 100)))
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(adherence >= 1.0 ? .green : .primary)
             }
+            .frame(width: 48, height: 48)
 
-            Text(String(format: "%d%%", Int(adherence * 100)))
-                .appFont(.title)
-                .fontWeight(.bold)
-                .monospacedDigit()
-                .foregroundStyle(adherence >= 1.0 ? .green : .primary)
+            VStack(alignment: .leading, spacing: 2) {
+                if adherence >= 1.0 {
+                    Text(NSLocalizedString("All done today!", comment: ""))
+                        .appFont(.headline)
+                        .foregroundStyle(.green)
+                } else {
+                    Text(String(format: NSLocalizedString("%lld of %lld taken", comment: ""), taken, total))
+                        .appFont(.headline)
+                }
+                if total - taken > 0 {
+                    Text(String(format: NSLocalizedString("%lld remaining", comment: ""), total - taken))
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
         }
     }
 
@@ -312,7 +320,7 @@ private extension DashboardView {
         HStack(alignment: .center, spacing: 12) {
             // Tappable circle — primary action
             Button {
-                if !isFinalStatus(status) {
+                if canLogDose(for: item, status: status) {
                     let comps = Calendar.current.dateComponents([.hour, .minute], from: item.time)
                     let dupCheck = MedicationRules.checkDuplicateTaken(
                         medicationID: item.med.id,
@@ -334,7 +342,7 @@ private extension DashboardView {
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
-            .disabled(isFinalStatus(status))
+            .disabled(!canLogDose(for: item, status: status))
 
             // Content
             VStack(alignment: .leading, spacing: 2) {
@@ -390,7 +398,13 @@ private extension DashboardView {
             Button {
                 let now = Date()
                 let comps = cal.dateComponents([.hour, .minute], from: now)
-                store.upsertIntake(medicationID: med.id, status: .taken, scheduleTime: comps)
+                store.upsertIntake(
+                    medicationID: med.id,
+                    status: .taken,
+                    scheduleTime: comps,
+                    scheduledDate: now,
+                    scheduleKeyOverride: "prn_\(now.timeIntervalSince1970)"
+                )
                 store.decrementPills(for: med.id)
                 Haptics.success()
             } label: {
@@ -419,16 +433,15 @@ private extension DashboardView {
     @ViewBuilder
     private func nextDoseCard(schedules: [MedSchedule], statusCache: [String: TodayMedStatus], takenCount: Int = 0, totalCount: Int = 0) -> some View {
         // Find first actionable dose (upcoming or due now)
-        let nextItem = schedules.first { item in
+        let nextActionableItem = schedules.first { item in
             let s = statusCache[item.id] ?? .none
-            if case .none = s { return true }
-            if case .dueSoon = s { return true }
-            return false
+            return canLogDose(for: item, status: s)
         }
 
-        if let item = nextItem {
+        if let item = nextActionableItem {
             let isDue: Bool = {
                 if case .dueSoon = statusCache[item.id] ?? .none { return true }
+                if case .overdue = statusCache[item.id] ?? .none { return true }
                 return false
             }()
             VStack(spacing: 12) {
@@ -486,6 +499,29 @@ private extension DashboardView {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(Color(.secondarySystemGroupedBackground))
             )
+        } else if let upcoming = schedules.first(where: { !isFinalStatus(statusCache[$0.id] ?? .none) }) {
+            VStack(spacing: 8) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(NSLocalizedString("Next Dose", comment: ""))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(upcoming.med.name)
+                            .appFont(.headline)
+                        HStack(spacing: 4) {
+                            Text(upcoming.med.dose).appFont(.subheadline).foregroundStyle(.secondary)
+                            Text("·").foregroundStyle(.tertiary)
+                            Text(upcoming.time, style: .time).appFont(.subheadline).foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                }
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(.secondarySystemGroupedBackground))
+            )
         } else if takenCount == totalCount && totalCount > 0 {
             // All caught up
             HStack(spacing: 10) {
@@ -520,12 +556,17 @@ private extension DashboardView {
     private func commitTaken(note: String?) {
         guard let item = pendingNoteItem else { return }
         let comps = Calendar.current.dateComponents([.hour, .minute], from: item.time)
-        store.upsertIntake(medicationID: item.med.id, status: .taken, scheduleTime: comps, note: note)
+        store.upsertIntake(
+            medicationID: item.med.id,
+            status: .taken,
+            scheduleTime: comps,
+            scheduledDate: item.time,
+            note: note
+        )
         store.decrementPills(for: item.med.id)
         NotificationManager.shared.suppressToday(for: item.med.id, timeComponents: comps)
-        NotificationManager.shared.cancelTodayInstance(for: item.med.id, timeComponents: comps)
-        NotificationManager.shared.cancelFollowUps(for: item.med.id, timeComponents: comps)
-        NotificationManager.shared.schedule(for: item.med)
+        NotificationManager.shared.cancelDoseNotifications(for: item.med.id, timeComponents: comps)
+        NotificationManager.shared.schedule(for: item.med, intakeLogs: store.intakeLogs)
         NotificationManager.shared.updateBadge(store: store)
         Haptics.success()
         takenMedName = item.med.name
@@ -565,6 +606,16 @@ private extension DashboardView {
             Image(systemName: "circle")
                 .font(.system(size: 24, weight: .regular))
                 .foregroundStyle(.secondary.opacity(0.5))
+        }
+    }
+
+    private func canLogDose(for item: MedSchedule, status: TodayMedStatus) -> Bool {
+        guard !isFinalStatus(status) else { return false }
+        switch status {
+        case .dueSoon, .overdue, .snoozed:
+            return true
+        case .none, .taken, .skipped:
+            return false
         }
     }
 

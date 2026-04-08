@@ -60,6 +60,15 @@ struct Measurement: Identifiable, Codable {
     var note: String?
 }
 
+extension Measurement {
+    func clampedToNow(now: Date = Date()) -> Measurement {
+        guard date > now else { return self }
+        var copy = self
+        copy.date = now
+        return copy
+    }
+}
+
 enum FoodInstruction: String, CaseIterable, Codable, Identifiable {
     case withFood
     case beforeFood
@@ -212,6 +221,14 @@ struct IntakeLog: Identifiable, Codable {
     var status: IntakeStatus
     var scheduleKey: String?
     var note: String?
+    var scheduledDate: Date? = nil
+    var recordedAt: Date? = nil
+}
+
+extension IntakeLog {
+    var effectiveRecordedAt: Date {
+        recordedAt ?? date
+    }
 }
 
 // MARK: - Category-Measurement Correlation

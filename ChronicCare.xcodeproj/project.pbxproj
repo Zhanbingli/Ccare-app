@@ -403,6 +403,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Ccare;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Ccare uses the camera to scan medication labels and fill in medication details.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Ccare uses Health to read your health data (blood pressure, blood glucose, heart rate, weight) for trends and insights.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Ccare writes measurements you add to Apple Health for safe storage and cross‑app use.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -435,6 +436,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Ccare;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Ccare uses the camera to scan medication labels and fill in medication details.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Ccare uses Health to read your health data (blood pressure, blood glucose, heart rate, weight) for trends and insights.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Ccare writes measurements you add to Apple Health for safe storage and cross‑app use.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
