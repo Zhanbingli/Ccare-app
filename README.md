@@ -1,6 +1,6 @@
 # ChronicCare
 
-![ChronicCare screenshot](IMG_1594.jpg)
+![ChronicCare screenshot](docs/assets/hero.png)
 
 ChronicCare is an offline-first SwiftUI app for chronic medication management. It combines reliable medication reminders, fast health logging, medication-specific detail views, and lightweight adherence insights in a product designed for daily use.
 
