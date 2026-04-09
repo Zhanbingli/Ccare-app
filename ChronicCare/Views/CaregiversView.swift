@@ -3,9 +3,60 @@ import SwiftUI
 struct CaregiversView: View {
     @EnvironmentObject var store: DataStore
     @State private var showAdd = false
+    @State private var shareText: String = ""
+    @State private var showShare = false
+
+    private var caregiverAlertCount: Int {
+        store.caregivers.filter(\.notifyOnMiss).count
+    }
+
+    private var missedSupportItems: [(medication: Medication, missedDays: Int)] {
+        store.medications.compactMap { medication in
+            let missedDays = store.consecutiveMissedDays(for: medication.id)
+            guard missedDays >= 2 else { return nil }
+            return (medication, missedDays)
+        }
+    }
 
     var body: some View {
         List {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(NSLocalizedString("Support Network", comment: ""))
+                        .appFont(.headline)
+                    Text(caregiverSummary)
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+            }
+
+            Section {
+                if missedSupportItems.isEmpty {
+                    Text(NSLocalizedString("No medications currently meet the missed-dose support threshold.", comment: ""))
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(missedSupportItems, id: \.medication.id) { item in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(item.medication.name)
+                                .appFont(.subheadline)
+                            Text(String(format: NSLocalizedString("Missed for %lld days. Share reminders should now be active for caregivers with alerts enabled.", comment: ""), item.missedDays))
+                                .appFont(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    Button(NSLocalizedString("Prepare Status Update", comment: "")) {
+                        shareText = buildSupportUpdate()
+                        showShare = true
+                    }
+                }
+            } header: {
+                Text(NSLocalizedString("Current Support Status", comment: ""))
+            }
+
             if store.caregivers.isEmpty {
                 Section {
                     EmptyStateView(
@@ -45,8 +96,10 @@ struct CaregiversView: View {
         }
         .navigationTitle(NSLocalizedString("Caregivers", comment: ""))
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { showAdd = true } label: { Image(systemName: "plus") }
+            if !store.caregivers.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showAdd = true } label: { Image(systemName: "plus") }
+                }
             }
         }
         .sheet(isPresented: $showAdd) {
@@ -55,6 +108,43 @@ struct CaregiversView: View {
                 Haptics.success()
             }
         }
+        .sheet(isPresented: $showShare) {
+            ShareSheet(activityItems: [shareText])
+        }
+    }
+
+    private var caregiverSummary: String {
+        if store.caregivers.isEmpty {
+            return NSLocalizedString("Add someone you trust so missed-dose support is easier to act on later.", comment: "")
+        }
+        if caregiverAlertCount == 0 {
+            return String(format: NSLocalizedString("%lld caregivers saved, but none are set for missed-dose support.", comment: ""), store.caregivers.count)
+        }
+        return String(format: NSLocalizedString("%lld caregivers saved. %lld will be included when missed-dose support is triggered.", comment: ""), store.caregivers.count, caregiverAlertCount)
+    }
+
+    private func buildSupportUpdate() -> String {
+        var lines: [String] = []
+        lines.append(NSLocalizedString("Medication Support Update", comment: ""))
+        lines.append("")
+
+        if !missedSupportItems.isEmpty {
+            lines.append(NSLocalizedString("Attention needed for:", comment: ""))
+            for item in missedSupportItems {
+                lines.append("• \(item.medication.name) - \(item.missedDays) days missed")
+            }
+            lines.append("")
+        }
+
+        let enabledCaregivers = store.caregivers.filter(\.notifyOnMiss)
+        if !enabledCaregivers.isEmpty {
+            lines.append(NSLocalizedString("Configured caregivers:", comment: ""))
+            for caregiver in enabledCaregivers {
+                lines.append("• \(caregiver.name)")
+            }
+        }
+
+        return lines.joined(separator: "\n")
     }
 }
 

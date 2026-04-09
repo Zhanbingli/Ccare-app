@@ -15,7 +15,7 @@ enum BackupManager {
     static func makeBackup(store: DataStore) throws -> URL {
         let backup = AppBackup(version: 1, date: Date(), measurements: store.measurements, medications: store.medications, intakeLogs: store.intakeLogs, emergencyInfo: store.emergencyInfo, caregivers: store.caregivers)
         let data = try JSONEncoder().encode(backup)
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Ccare_Backup_\(Int(Date().timeIntervalSince1970)).json")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("ChronicCare_Backup_\(Int(Date().timeIntervalSince1970)).json")
         try data.write(to: url, options: .atomic)
         return url
     }
@@ -56,7 +56,7 @@ enum BackupManager {
             csv += "\(dateStr),\(name),\(dose),\(status),\(key)\n"
         }
 
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Ccare_Intake_\(Int(Date().timeIntervalSince1970)).csv")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("ChronicCare_Intake_\(Int(Date().timeIntervalSince1970)).csv")
         try csv.write(to: url, atomically: true, encoding: .utf8)
         return url
     }
@@ -86,7 +86,7 @@ enum BackupManager {
             csv += "\(dateStr),\(typeName),\(value),\(dia),\(unit)\n"
         }
 
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Ccare_Measurements_\(Int(Date().timeIntervalSince1970)).csv")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("ChronicCare_Measurements_\(Int(Date().timeIntervalSince1970)).csv")
         try csv.write(to: url, atomically: true, encoding: .utf8)
         return url
     }

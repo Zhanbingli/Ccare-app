@@ -420,6 +420,8 @@ struct AISettingsView: View {
     @State private var showingSaveConfirmation = false
     @State private var optIn: Bool
     var onSave: (() -> Void)?
+    private let openAIKeyURL = URL(string: "https://platform.openai.com/api-keys")
+    private let anthropicKeyURL = URL(string: "https://console.anthropic.com/")
 
     init(onSave: (() -> Void)? = nil) {
         let config = AIService.shared.getConfiguration()
@@ -453,10 +455,10 @@ struct AISettingsView: View {
                 } footer: {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(NSLocalizedString("Your API key is stored securely on your device and never shared", comment: ""))
-                        if provider == .openai {
-                            Link("Get OpenAI API Key →", destination: URL(string: "https://platform.openai.com/api-keys")!)
-                        } else {
-                            Link("Get Anthropic API Key →", destination: URL(string: "https://console.anthropic.com/")!)
+                        if provider == .openai, let openAIKeyURL {
+                            Link("Get OpenAI API Key →", destination: openAIKeyURL)
+                        } else if provider == .anthropic, let anthropicKeyURL {
+                            Link("Get Anthropic API Key →", destination: anthropicKeyURL)
                         }
                     }
                 }

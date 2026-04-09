@@ -42,6 +42,35 @@ struct TintedCard<Content: View>: View {
     }
 }
 
+struct AppBadge: View {
+    let text: String
+    let tint: Color
+    var icon: String? = nil
+
+    var body: some View {
+        HStack(spacing: 5) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            Text(text)
+                .appFont(.caption)
+                .fontWeight(.semibold)
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            Capsule(style: .continuous)
+                .fill(tint.opacity(0.12))
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(tint.opacity(0.16), lineWidth: 0.8)
+        )
+    }
+}
+
 extension View {
     func sectionHeader(_ title: String, systemImage: String? = nil) -> some View {
         HStack(spacing: 8) {
@@ -125,4 +154,3 @@ extension View {
         clipShape(RoundedCornersShape(corners: corners, radius: radius))
     }
 }
-

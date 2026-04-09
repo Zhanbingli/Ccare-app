@@ -177,12 +177,20 @@ struct Medication: Identifiable, Codable {
     }
 }
 
+enum MedicationCourseState: Equatable {
+    case ended(daysPast: Int)
+    case endsToday
+    case endingSoon(daysRemaining: Int)
+    case scheduled(daysRemaining: Int)
+}
+
 extension Medication {
     /// How many days of supply remain (nil if not tracking)
     var daysOfSupplyRemaining: Int? {
         guard let remaining = pillsRemaining, remaining > 0 else { return pillsRemaining == 0 ? 0 : nil }
+        guard isAsNeeded != true, !timesOfDay.isEmpty else { return nil }
         let perDose = pillsPerDose ?? 1
-        let dosesPerDay = max(timesOfDay.count, 1)
+        let dosesPerDay = timesOfDay.count
         let pillsPerDay = perDose * dosesPerDay
         guard pillsPerDay > 0 else { return nil }
         return remaining / pillsPerDay
@@ -191,6 +199,21 @@ extension Medication {
     var isLowSupply: Bool {
         guard let days = daysOfSupplyRemaining else { return false }
         return days <= 7
+    }
+
+    func daysUntilCourseEnd(reference now: Date = Date(), calendar: Calendar = .current) -> Int? {
+        guard let courseEndDate else { return nil }
+        let start = calendar.startOfDay(for: now)
+        let end = calendar.startOfDay(for: courseEndDate)
+        return calendar.dateComponents([.day], from: start, to: end).day
+    }
+
+    func courseState(thresholdDays: Int = 3, reference now: Date = Date(), calendar: Calendar = .current) -> MedicationCourseState? {
+        guard let days = daysUntilCourseEnd(reference: now, calendar: calendar) else { return nil }
+        if days < 0 { return .ended(daysPast: abs(days)) }
+        if days == 0 { return .endsToday }
+        if days <= max(thresholdDays, 0) { return .endingSoon(daysRemaining: days) }
+        return .scheduled(daysRemaining: days)
     }
 
     var displayCategoryName: String? {

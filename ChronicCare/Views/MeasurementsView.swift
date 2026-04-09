@@ -117,72 +117,119 @@ struct AddMeasurementView: View {
     @State private var validationMessage: String?
     @State private var showValidationAlert = false
     @State private var validationIsWarning = false
+    @State private var showContextNotes = false
+    @FocusState private var focusedField: EntryField?
+
+    private enum EntryField: Hashable {
+        case systolic
+        case diastolic
+        case value
+    }
 
     var body: some View {
         NavigationStack {
-            Form {
-                Picker("Type", selection: $type) {
-                    ForEach(MeasurementType.allCases) { t in
-                        Text(t.rawValue).tag(t)
-                    }
-                }
-                if type == .bloodPressure {
-                    HStack {
-                        Text(NSLocalizedString("Systolic:", comment: ""))
-                        Spacer()
-                        TextField("", text: $systolicInput)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(maxWidth: 140)
-                    }
-                    HStack {
-                        Text(NSLocalizedString("Diastolic:", comment: ""))
-                        Spacer()
-                        TextField("", text: $diastolicInput)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(maxWidth: 140)
-                    }
-                } else {
-                    HStack {
-                        Text(NSLocalizedString("Value", comment: ""))
-                        Spacer()
-                        TextField("", text: $valueInput)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(maxWidth: 140)
-                    }
-                    if type == .bloodGlucose {
-                        Picker("Unit", selection: $glucoseUnit) {
-                            ForEach(GlucoseUnit.allCases) { u in
-                                Text(u.rawValue).tag(u)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Card {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text(NSLocalizedString("Measurement", comment: ""))
+                                .appFont(.headline)
+
+                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                                ForEach(MeasurementType.allCases) { measurementType in
+                                    measurementTypeButton(for: measurementType)
+                                }
+                            }
+
+                            if type == .bloodPressure {
+                                bloodPressureEntryLayout
+                            } else {
+                                measurementInputCard(
+                                    title: NSLocalizedString("Value", comment: ""),
+                                    text: $valueInput,
+                                    placeholder: suggestedPlaceholder,
+                                    unit: displayedUnitLabel,
+                                    field: .value,
+                                    keyboard: type == .bloodGlucose ? .decimalPad : .decimalPad
+                                )
+
+                                if type == .bloodGlucose {
+                                    Picker(NSLocalizedString("Unit", comment: ""), selection: $glucoseUnit) {
+                                        ForEach(GlucoseUnit.allCases) { unit in
+                                            Text(unit.rawValue).tag(unit)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+                                }
                             }
                         }
-                        .pickerStyle(.segmented)
-                    } else {
-                        Text(String(format: NSLocalizedString("Unit: %@", comment: ""), type.unit))
-                            .foregroundStyle(.secondary)
                     }
-                }
-                DatePicker("Date", selection: $date, in: ...Date())
-                TextField("Note (optional)", text: $note)
 
-                if let message = validationMessage {
-                    Section {
-                        HStack(alignment: .top, spacing: 12) {
-                            Image(systemName: validationIsWarning ? "exclamationmark.triangle.fill" : "info.circle.fill")
-                                .foregroundStyle(validationIsWarning ? .orange : .blue)
-                                .font(.system(size: 20))
-                            Text(message)
-                                .appFont(.caption)
-                                .foregroundStyle(.primary)
-                                .fixedSize(horizontal: false, vertical: true)
+                    Card {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text(NSLocalizedString("Time", comment: ""))
+                                .appFont(.headline)
+
+                            HStack(spacing: 8) {
+                                quickDateButton(title: NSLocalizedString("Now", comment: "")) {
+                                    date = Date()
+                                }
+                                quickDateButton(title: NSLocalizedString("1h Ago", comment: "")) {
+                                    date = Date().addingTimeInterval(-3600)
+                                }
+                                quickDateButton(title: NSLocalizedString("Today 8 PM", comment: "")) {
+                                    let cal = Calendar.current
+                                    let candidate = cal.date(bySettingHour: 20, minute: 0, second: 0, of: Date()) ?? Date()
+                                    date = min(candidate, Date())
+                                }
+                            }
+
+                            DatePicker(NSLocalizedString("Date", comment: ""), selection: $date, in: ...Date())
+                                .datePickerStyle(.compact)
                         }
-                        .padding(.vertical, 8)
+                    }
+
+                    Card {
+                        DisclosureGroup(isExpanded: $showContextNotes) {
+                            TextField(NSLocalizedString("Optional context, symptoms, or meal timing", comment: ""), text: $note, axis: .vertical)
+                                .lineLimit(2...4)
+                                .textFieldStyle(.plain)
+                                .padding(12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .fill(Color(.secondarySystemBackground))
+                                )
+                                .padding(.top, 10)
+                        } label: {
+                            HStack {
+                                Text(NSLocalizedString("Add Context", comment: ""))
+                                    .appFont(.headline)
+                                Spacer()
+                                Text(note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? NSLocalizedString("Optional", comment: "") : NSLocalizedString("Added", comment: ""))
+                                    .appFont(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+
+                    if let message = validationMessage {
+                        Card {
+                            HStack(alignment: .top, spacing: 12) {
+                                Image(systemName: validationIsWarning ? "exclamationmark.triangle.fill" : "info.circle.fill")
+                                    .foregroundStyle(validationIsWarning ? .orange : .blue)
+                                    .font(.system(size: 20))
+                                Text(message)
+                                    .appFont(.caption)
+                                    .foregroundStyle(.primary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
                     }
                 }
+                .padding(16)
             }
             .navigationTitle("Add Measurement")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -192,6 +239,12 @@ struct AddMeasurementView: View {
                         validateAndSave()
                     }
                     .disabled(!canSave)
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button(NSLocalizedString("Done", comment: "")) {
+                        focusedField = nil
+                    }
                 }
             }
             .alert(validationIsWarning ? "Warning" : "Error", isPresented: $showValidationAlert) {
@@ -208,6 +261,10 @@ struct AddMeasurementView: View {
                     Text(message)
                 }
             }
+            .onAppear {
+                focusPrimaryField()
+                showContextNotes = !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
             .onChange(of: type) { newType in
                 validationMessage = nil
                 switch newType {
@@ -217,6 +274,7 @@ struct AddMeasurementView: View {
                     systolicInput = ""
                     diastolicInput = ""
                 }
+                focusPrimaryField()
             }
             .onChange(of: systolicInput) { _ in validateInput() }
             .onChange(of: diastolicInput) { _ in validateInput() }
@@ -307,12 +365,147 @@ struct AddMeasurementView: View {
 }
 
 private extension AddMeasurementView {
+    var bloodPressureEntryLayout: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                systolicEntryCard
+                diastolicEntryCard
+            }
+
+            VStack(spacing: 10) {
+                systolicEntryCard
+                diastolicEntryCard
+            }
+        }
+    }
+
+    var systolicEntryCard: some View {
+        measurementInputCard(
+            title: NSLocalizedString("Systolic", comment: ""),
+            text: $systolicInput,
+            placeholder: "120",
+            unit: "mmHg",
+            field: .systolic,
+            keyboard: .numberPad
+        )
+    }
+
+    var diastolicEntryCard: some View {
+        measurementInputCard(
+            title: NSLocalizedString("Diastolic", comment: ""),
+            text: $diastolicInput,
+            placeholder: "80",
+            unit: "mmHg",
+            field: .diastolic,
+            keyboard: .numberPad
+        )
+    }
+
+    var displayedUnitLabel: String {
+        if type == .bloodGlucose { return glucoseUnit.rawValue }
+        return type.unit
+    }
+
+    var suggestedPlaceholder: String {
+        switch type {
+        case .bloodGlucose:
+            return glucoseUnit == .mgdL ? "110" : "6.1"
+        case .weight:
+            return "68.5"
+        case .heartRate:
+            return "72"
+        case .bloodPressure:
+            return ""
+        }
+    }
+
     var canSave: Bool {
         switch type {
         case .bloodPressure:
             return Double(systolicInput) != nil && Double(diastolicInput) != nil
         default:
             return Double(valueInput) != nil
+        }
+    }
+
+    @ViewBuilder
+    func measurementTypeButton(for measurementType: MeasurementType) -> some View {
+        let selected = type == measurementType
+        Button {
+            type = measurementType
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(measurementType.tint)
+                        .frame(width: 8, height: 8)
+                    Text(measurementType.rawValue)
+                        .appFont(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
+                }
+                Text(measurementType.unit)
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(selected ? Color.accentColor.opacity(0.10) : Color(.secondarySystemBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(selected ? Color.accentColor.opacity(0.45) : Color.primary.opacity(0.06), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func measurementInputCard(
+        title: String,
+        text: Binding<String>,
+        placeholder: String,
+        unit: String,
+        field: EntryField,
+        keyboard: UIKeyboardType
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .appFont(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                TextField(placeholder, text: text)
+                    .keyboardType(keyboard)
+                    .focused($focusedField, equals: field)
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .multilineTextAlignment(.leading)
+
+                Text(unit)
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
+    }
+
+    @ViewBuilder
+    func quickDateButton(title: String, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+    }
+
+    func focusPrimaryField() {
+        DispatchQueue.main.async {
+            focusedField = type == .bloodPressure ? .systolic : .value
         }
     }
 

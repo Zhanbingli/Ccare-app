@@ -139,6 +139,15 @@ struct EmergencyCardView: View {
     @EnvironmentObject var store: DataStore
     @State private var showShare = false
     @State private var shareText = ""
+    @State private var showEdit = false
+
+    private var hasEmergencyDetails: Bool {
+        let info = store.emergencyInfo
+        return !(info?.bloodType?.isEmpty ?? true)
+            || !(info?.allergies?.isEmpty ?? true)
+            || !(info?.medicalConditions?.isEmpty ?? true)
+            || !((info?.emergencyContacts ?? []).isEmpty)
+    }
 
     var body: some View {
         ScrollView {
@@ -155,6 +164,18 @@ struct EmergencyCardView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 20)
                 .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.red))
+
+                if !hasEmergencyDetails && store.medications.isEmpty {
+                    Card {
+                        EmptyStateView(
+                            systemImage: "cross.case.fill",
+                            title: NSLocalizedString("Emergency information not set", comment: ""),
+                            subtitle: NSLocalizedString("Add blood type, allergies, conditions, or emergency contacts so this card is useful when you need it.", comment: ""),
+                            actionTitle: NSLocalizedString("Add Emergency Info", comment: ""),
+                            action: { showEdit = true }
+                        )
+                    }
+                }
 
                 // Blood type
                 if let bt = store.emergencyInfo?.bloodType, !bt.isEmpty {
@@ -201,7 +222,13 @@ struct EmergencyCardView: View {
                                     Text(contact.relationship).appFont(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()
-                                Link(destination: URL(string: "tel:\(contact.phone.filter { $0.isNumber || $0 == "+" })")!) {
+                                let sanitizedPhone = contact.phone.filter { $0.isNumber || $0 == "+" }
+                                if let callURL = URL(string: "tel:\(sanitizedPhone)") {
+                                    Link(destination: callURL) {
+                                        Label(contact.phone, systemImage: "phone.fill")
+                                            .appFont(.subheadline)
+                                    }
+                                } else {
                                     Label(contact.phone, systemImage: "phone.fill")
                                         .appFont(.subheadline)
                                 }
@@ -228,8 +255,21 @@ struct EmergencyCardView: View {
         }
         .navigationTitle(NSLocalizedString("Emergency Card", comment: ""))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(NSLocalizedString("Edit", comment: "")) {
+                    showEdit = true
+                }
+            }
+        }
         .sheet(isPresented: $showShare) {
             ShareSheet(activityItems: [shareText])
+        }
+        .sheet(isPresented: $showEdit) {
+            NavigationStack {
+                EmergencyInfoEditView()
+                    .environmentObject(store)
+            }
         }
     }
 

@@ -1,5 +1,5 @@
 import Foundation
-import Vision
+@preconcurrency import Vision
 
 struct MedicationOCRSuggestion: Identifiable, Equatable {
     let id = UUID()
@@ -58,22 +58,20 @@ enum MedicationOCRService {
             request.usesLanguageCorrection = true
             request.recognitionLanguages = ["en-US", "zh-Hans"]
 
-            DispatchQueue.global(qos: .userInitiated).async {
-                do {
-                    let handler = VNImageRequestHandler(data: imageData)
-                    try handler.perform([request])
-                } catch {
-                    continuation.resume(throwing: OCRFailure.unreadableImage)
-                }
+            do {
+                let handler = VNImageRequestHandler(data: imageData)
+                try handler.perform([request])
+            } catch {
+                continuation.resume(throwing: OCRFailure.unreadableImage)
             }
         }
     }
 }
 
 enum MedicationLabelParser {
-    private static let doseRegex: NSRegularExpression = {
+    private static let doseRegex: NSRegularExpression? = {
         let pattern = #"(?ix)\b\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?\s*(?:mg|mcg|ug|g|ml|mL|units?|iu|IU|%)\b"#
-        return try! NSRegularExpression(pattern: pattern)
+        return try? NSRegularExpression(pattern: pattern)
     }()
 
     private static let instructionPatterns: [(String, String?)] = [
@@ -114,6 +112,7 @@ enum MedicationLabelParser {
     }
 
     private static func extractDose(from lines: [String]) -> String? {
+        guard let doseRegex else { return nil }
         for line in lines {
             if let match = firstMatch(in: line, regex: doseRegex) {
                 return match.replacingOccurrences(of: "\\s+", with: "", options: .regularExpression)
@@ -125,6 +124,7 @@ enum MedicationLabelParser {
     }
 
     private static func extractName(from lines: [String]) -> String? {
+        guard let doseRegex else { return nil }
         var bestCandidate: (text: String, score: Int)?
 
         for line in lines {

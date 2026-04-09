@@ -51,7 +51,7 @@ struct AdherenceCalendarView: View {
 
                 // Weekday headers
                 HStack(spacing: 0) {
-                    ForEach(weekdaySymbols, id: \.self) { sym in
+                    ForEach(Array(weekdaySymbols.enumerated()), id: \.offset) { _, sym in
                         Text(sym)
                             .appFont(.caption)
                             .fontWeight(.medium)
@@ -64,7 +64,7 @@ struct AdherenceCalendarView: View {
                 // Calendar grid
                 let days = calendarDays()
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 8) {
-                    ForEach(days, id: \.self) { day in
+                    ForEach(Array(days.enumerated()), id: \.offset) { _, day in
                         if let day = day {
                             let data = adherenceData[calendar.startOfDay(for: day)]
                             calendarCell(day: day, data: data)

@@ -16,10 +16,13 @@ struct ProfileView: View {
     @State private var showSuccessAlert = false
     @State private var successMessage = ""
     @State private var showExportSheet = false
+    @State private var showAISection = false
+    @State private var showDataSection = false
     @AppStorage("hapticsEnabled") private var hapticsEnabled: Bool = true
     @AppStorage("units.glucose") private var glucoseUnitRaw: String = GlucoseUnit.mgdL.rawValue
     @AppStorage("prefs.graceMinutes") private var graceMinutes: Int = 30
     @AppStorage("prefs.refillThresholdDays") private var refillThresholdDays: Int = 7
+    @AppStorage("prefs.courseEndThresholdDays") private var courseEndThresholdDays: Int = 3
     @State private var notifStatus: UNAuthorizationStatus = .notDetermined
     @State private var aiProvider: AIProvider = .openai
     @State private var aiApiKey: String = ""
@@ -67,34 +70,42 @@ struct ProfileView: View {
                         Text(permissionHint())
                             .appFont(.caption)
                             .foregroundStyle(.secondary)
-                        if notifStatus != .authorized {
+                        if !notificationsEnabled {
                             permissionButton()
                         }
                     }
-                    HStack {
-                        Text(NSLocalizedString("Overdue Grace Period", comment: ""))
-                        Spacer()
-                        Picker("", selection: $graceMinutes) {
-                            Text("15m").tag(15)
-                            Text("30m").tag(30)
-                            Text("1h").tag(60)
+                    Text(notificationCoverageSummary)
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+
+                    DisclosureGroup(NSLocalizedString("Reminder Rules", comment: "")) {
+                        LabeledContent(NSLocalizedString("Overdue Grace Period", comment: "")) {
+                            Menu(graceMinutesLabel) {
+                                Button("15 min") { graceMinutes = 15 }
+                                Button("30 min") { graceMinutes = 30 }
+                                Button("1 hour") { graceMinutes = 60 }
+                            }
                         }
-                        .pickerStyle(.segmented)
-                        .frame(width: 160)
-                    }
-                    HStack {
-                        Text(NSLocalizedString("Refill Reminder", comment: ""))
-                        Spacer()
-                        Picker("", selection: $refillThresholdDays) {
-                            Text("3d").tag(3)
-                            Text("7d").tag(7)
-                            Text("14d").tag(14)
+                        LabeledContent(NSLocalizedString("Refill Reminder", comment: "")) {
+                            Menu(refillThresholdLabel) {
+                                Button("3 days") { refillThresholdDays = 3 }
+                                Button("7 days") { refillThresholdDays = 7 }
+                                Button("14 days") { refillThresholdDays = 14 }
+                            }
                         }
-                        .pickerStyle(.segmented)
-                        .frame(width: 140)
+                        LabeledContent(NSLocalizedString("Course End Reminder", comment: "")) {
+                            Menu(courseEndThresholdLabel) {
+                                Button("1 day") { courseEndThresholdDays = 1 }
+                                Button("3 days") { courseEndThresholdDays = 3 }
+                                Button("7 days") { courseEndThresholdDays = 7 }
+                            }
+                        }
                     }
                 } header: {
                     Text(NSLocalizedString("Notifications", comment: ""))
+                } footer: {
+                    Text(NSLocalizedString("Scheduled medications need both permission and reminder times before alerts can fire.", comment: ""))
+                        .appFont(.caption)
                 }
 
                 // MARK: - Goals
@@ -132,7 +143,7 @@ struct ProfileView: View {
                     Text(NSLocalizedString("Goals", comment: ""))
                 }
 
-                // MARK: - Emergency Info
+                // MARK: - Care & Emergency
                 Section {
                     NavigationLink {
                         EmergencyInfoEditView().environmentObject(store)
@@ -144,19 +155,16 @@ struct ProfileView: View {
                     } label: {
                         Label(NSLocalizedString("View Emergency Card", comment: ""), systemImage: "person.text.rectangle")
                     }
-                } header: {
-                    Text(NSLocalizedString("Emergency Info", comment: ""))
-                }
-
-                // MARK: - Caregivers
-                Section {
                     NavigationLink {
                         CaregiversView().environmentObject(store)
                     } label: {
                         Label(NSLocalizedString("Manage Caregivers", comment: ""), systemImage: "person.2")
                     }
                 } header: {
-                    Text(NSLocalizedString("Caregivers", comment: ""))
+                    Text(NSLocalizedString("Care & Emergency", comment: ""))
+                } footer: {
+                    Text(NSLocalizedString("Keep emergency details and caregiver access up to date for missed-dose support.", comment: ""))
+                        .appFont(.caption)
                 }
 
                 // MARK: - General
@@ -169,35 +177,41 @@ struct ProfileView: View {
 
                 // MARK: - AI Analysis
                 Section {
-                    Picker(NSLocalizedString("Provider", comment: ""), selection: $aiProvider) {
-                        ForEach(AIProvider.allCases, id: \.self) { p in
-                            Text(p.rawValue).tag(p)
-                        }
-                    }
-                    SecureField(NSLocalizedString("API Key", comment: ""), text: $aiApiKey)
-                        .textContentType(.password)
-                        .autocorrectionDisabled()
-                    Button {
-                        let urlStr: String
-                        switch aiProvider {
-                        case .openai: urlStr = "https://platform.openai.com/api-keys"
-                        case .anthropic: urlStr = "https://console.anthropic.com/settings/keys"
-                        }
-                        if let url = URL(string: urlStr) {
-                            UIApplication.shared.open(url)
-                        }
-                    } label: {
-                        Label(String(format: NSLocalizedString("Get %@ API Key", comment: ""), aiProvider.rawValue), systemImage: "key.fill")
-                            .appFont(.subheadline)
-                    }
                     Toggle(NSLocalizedString("Allow AI Analysis", comment: ""), isOn: $aiOptIn)
-                    if !aiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && aiOptIn {
-                        HStack {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                            Text(NSLocalizedString("AI insights enabled", comment: ""))
-                                .appFont(.caption)
-                                .foregroundStyle(.green)
+
+                    if aiOptIn {
+                        DisclosureGroup(NSLocalizedString("Provider & API Access", comment: ""), isExpanded: $showAISection) {
+                            Picker(NSLocalizedString("Provider", comment: ""), selection: $aiProvider) {
+                                ForEach(AIProvider.allCases, id: \.self) { p in
+                                    Text(p.rawValue).tag(p)
+                                }
+                            }
+                            SecureField(NSLocalizedString("API Key", comment: ""), text: $aiApiKey)
+                                .textContentType(.password)
+                                .autocorrectionDisabled()
+                            Button {
+                                let urlStr: String
+                                switch aiProvider {
+                                case .openai: urlStr = "https://platform.openai.com/api-keys"
+                                case .anthropic: urlStr = "https://console.anthropic.com/settings/keys"
+                                }
+                                if let url = URL(string: urlStr) {
+                                    UIApplication.shared.open(url)
+                                }
+                            } label: {
+                                Label(String(format: NSLocalizedString("Get %@ API Key", comment: ""), aiProvider.rawValue), systemImage: "key.fill")
+                                    .appFont(.subheadline)
+                            }
+                        }
+
+                        if !aiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            HStack {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                                Text(NSLocalizedString("AI insights enabled", comment: ""))
+                                    .appFont(.caption)
+                                    .foregroundStyle(.green)
+                            }
                         }
                     }
                     Text(NSLocalizedString("Used for drug interaction analysis and trend insights. Your API key is stored securely in Keychain.", comment: ""))
@@ -209,35 +223,49 @@ struct ProfileView: View {
 
                 // MARK: - Data
                 Section {
-                    Button { showExportSheet = true } label: {
-                        Label(NSLocalizedString("Export Reports", comment: ""), systemImage: "doc.richtext")
+                    DisclosureGroup(NSLocalizedString("Backup & Export", comment: ""), isExpanded: $showDataSection) {
+                        Button { showExportSheet = true } label: {
+                            Label(NSLocalizedString("Export Reports", comment: ""), systemImage: "doc.richtext")
+                        }
+                        Button { exportBackup() } label: {
+                            Label(NSLocalizedString("Export Backup", comment: ""), systemImage: "externaldrive.fill")
+                        }
+                        Button { showImporter = true } label: {
+                            Label(NSLocalizedString("Restore from Backup", comment: ""), systemImage: "arrow.down.doc")
+                        }
+                        #if DEBUG
+                        Button { showConfirmExportRecent = true } label: {
+                            Label("Export 10 to Health", systemImage: "arrow.up.doc.fill")
+                        }
+                        #endif
                     }
-                    Button { exportBackup() } label: {
-                        Label(NSLocalizedString("Export Backup", comment: ""), systemImage: "externaldrive.fill")
-                    }
-                    Button { showImporter = true } label: {
-                        Label(NSLocalizedString("Restore from Backup", comment: ""), systemImage: "arrow.down.doc")
-                    }
-                    #if DEBUG
-                    Button { showConfirmExportRecent = true } label: {
-                        Label("Export 10 to Health", systemImage: "arrow.up.doc.fill")
-                    }
-                    #endif
+                } header: {
+                    Text(NSLocalizedString("Data", comment: ""))
+                } footer: {
+                    Text(NSLocalizedString("Use backup before restoring or clearing data on this device.", comment: ""))
+                        .appFont(.caption)
+                }
+
+                Section {
                     Button(role: .destructive) { showConfirmClear = true } label: {
                         Label(NSLocalizedString("Clear All Data", comment: ""), systemImage: "trash.fill")
                     }
                 } header: {
-                    Text(NSLocalizedString("Data", comment: ""))
+                    Text(NSLocalizedString("Danger Zone", comment: ""))
+                } footer: {
+                    Text(NSLocalizedString("This permanently removes medications, measurements, and intake history from this device.", comment: ""))
+                        .appFont(.caption)
                 }
 
                 // MARK: - About
                 Section {
-                    Text(NSLocalizedString("Ccare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice.", comment: ""))
+                    Text(NSLocalizedString("ChronicCare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice.", comment: ""))
                         .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
             .navigationTitle(NSLocalizedString("Settings", comment: ""))
+            .navigationBarTitleDisplayMode(.inline)
             .alert("Clear all data?", isPresented: $showConfirmClear) {
                 Button("Cancel", role: .cancel) {}
                 Button("Clear", role: .destructive) {
@@ -276,10 +304,8 @@ struct ProfileView: View {
                         let current = store.medications
                         current.forEach { NotificationManager.shared.cancelAll(for: $0) }
                         store.importBackup(backup)
-                        for med in store.medications where med.remindersEnabled {
-                            NotificationManager.shared.schedule(for: med, intakeLogs: store.intakeLogs)
-                        }
-                        NotificationManager.shared.cleanOrphanedRequests(validMedicationIDs: Set(store.medications.map { $0.id }))
+                        NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
+                        NotificationManager.shared.updateBadge(store: store)
                         Haptics.success()
                         successMessage = NSLocalizedString("Backup restored successfully.", comment: "")
                         showSuccessAlert = true
@@ -310,6 +336,9 @@ struct ProfileView: View {
             aiApiKey = config.apiKey
             aiOptIn = AIService.shared.hasUserConsent
         }
+        .onChange(of: graceMinutes) { _ in refreshNotificationConfiguration() }
+        .onChange(of: refillThresholdDays) { _ in refreshNotificationConfiguration() }
+        .onChange(of: courseEndThresholdDays) { _ in refreshNotificationConfiguration() }
         .onChange(of: aiProvider) { _ in saveAIConfig() }
         .onChange(of: aiApiKey) { _ in saveAIConfig() }
         .onChange(of: aiOptIn) { newVal in AIService.shared.hasUserConsent = newVal }
@@ -327,6 +356,11 @@ struct ProfileView: View {
             errorMessage = String(format: NSLocalizedString("Could not create report: %@", comment: ""), error.localizedDescription)
             showErrorAlert = true
         }
+    }
+
+    private func refreshNotificationConfiguration() {
+        NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
+        NotificationManager.shared.updateBadge(store: store)
     }
 
     @MainActor
@@ -423,6 +457,67 @@ struct ProfileView: View {
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.mini)
+    }
+
+    private var graceMinutesLabel: String {
+        switch graceMinutes {
+        case 15: return "15 min"
+        case 30: return "30 min"
+        case 60: return "1 hour"
+        default: return "\(graceMinutes) min"
+        }
+    }
+
+    private var refillThresholdLabel: String {
+        switch refillThresholdDays {
+        case 3: return "3 days"
+        case 7: return "7 days"
+        case 14: return "14 days"
+        default: return "\(refillThresholdDays) days"
+        }
+    }
+
+    private var courseEndThresholdLabel: String {
+        switch courseEndThresholdDays {
+        case 1: return "1 day"
+        case 3: return "3 days"
+        case 7: return "7 days"
+        default: return "\(courseEndThresholdDays) days"
+        }
+    }
+
+    private var notificationsEnabled: Bool {
+        switch notifStatus {
+        case .authorized, .provisional, .ephemeral:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private var scheduledWithoutRemindersCount: Int {
+        store.medications.filter {
+            $0.isAsNeeded != true && !$0.timesOfDay.isEmpty && !$0.remindersEnabled
+        }.count
+    }
+
+    private var untimedScheduledCount: Int {
+        store.medications.filter {
+            $0.isAsNeeded != true && $0.timesOfDay.isEmpty
+        }.count
+    }
+
+    private var notificationCoverageSummary: String {
+        if notifStatus == .denied {
+            return NSLocalizedString("System notifications are currently off. Scheduled reminders will not fire until permission is restored.", comment: "")
+        }
+        if untimedScheduledCount > 0 {
+            return String(format: NSLocalizedString("%lld scheduled medications still need reminder times.", comment: ""), untimedScheduledCount)
+        }
+        if scheduledWithoutRemindersCount > 0 {
+            return String(format: NSLocalizedString("%lld scheduled medications currently have reminders turned off.", comment: ""), scheduledWithoutRemindersCount)
+        }
+        return NSLocalizedString("Reminder coverage looks healthy for your scheduled medications.", comment: "")
     }
 
     // MARK: - Glucose goals helpers

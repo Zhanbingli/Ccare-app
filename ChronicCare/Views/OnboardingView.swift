@@ -38,7 +38,7 @@ struct OnboardingView: View {
                     .foregroundStyle(Color.accentColor)
                     .symbolRenderingMode(.hierarchical)
 
-                Text(NSLocalizedString("Welcome to Ccare", comment: "onboarding"))
+                Text(NSLocalizedString("Welcome to ChronicCare", comment: "onboarding"))
                     .appFont(.title)
                     .fontWeight(.bold)
                     .multilineTextAlignment(.center)
@@ -262,7 +262,7 @@ struct OnboardingView: View {
                 remindersEnabled: true
             )
             store.addMedication(med)
-            NotificationManager.shared.schedule(for: med, intakeLogs: store.intakeLogs)
+            NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
             NotificationManager.shared.updateBadge(store: store)
         }
         Haptics.success()

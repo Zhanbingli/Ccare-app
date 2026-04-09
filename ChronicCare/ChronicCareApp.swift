@@ -28,11 +28,7 @@ struct ChronicCareApp: App {
                 .onAppear {
                     notifHandler.store = store
                     NotificationManager.shared.registerCategories()
-                    // Ensure all active medication reminders are scheduled on launch
-                    for med in store.medications where med.remindersEnabled {
-                        NotificationManager.shared.schedule(for: med, intakeLogs: store.intakeLogs)
-                    }
-                    NotificationManager.shared.cleanOrphanedRequests(validMedicationIDs: Set(store.medications.map { $0.id }))
+                    NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
                     // Start badge refresh observers and update once on launch
                     NotificationManager.shared.startBadgeAutoRefresh(store: store)
                     NotificationManager.shared.updateBadge(store: store)

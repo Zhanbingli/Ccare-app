@@ -39,7 +39,7 @@
 "Medication Update — %@" = "用药动态 — %@";
 "No medications scheduled today." = "今日无用药计划。";
 "  ⚠ %lld pills left — refill needed" = "  ⚠ 剩余 %lld 片 — 需要补药";
-"Sent from Ccare" = "来自 Ccare";
+"Sent from Ccare" = "来自 ChronicCare";
 
 /* Intake Notes */
 "Add a Note?" = "添加备注？";
@@ -203,7 +203,7 @@
 "Success" = "成功";
 
 /* PDF Report */
-"Ccare Health Report" = "Ccare 健康报告";
+"Ccare Health Report" = "ChronicCare 健康报告";
 "Generated: %@" = "生成时间：%@";
 "Report period: Last %lld days" = "报告周期：最近 %lld 天";
 "Overall Adherence" = "总体依从率";
@@ -226,7 +226,7 @@
 "This report is for informational purposes only. Consult your healthcare provider for medical advice." = "本报告仅供参考，不构成医疗建议。请咨询您的医生获取专业意见。";
 
 /* About */
-"Ccare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice." = "Ccare 将数据保存在本地，仅在你授权后使用 Apple 健康。本应用不提供医疗建议。";
+"Ccare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice." = "ChronicCare 将数据保存在本地，仅在你授权后使用 Apple 健康。本应用不提供医疗建议。";
 
 /* AI Analysis */
 "AI Analysis" = "AI 分析";
@@ -290,7 +290,7 @@
 "Your AI configuration has been updated successfully" = "AI 配置已更新成功";
 
 /* Onboarding */
-"Welcome to Ccare" = "欢迎使用 Ccare";
+"Welcome to Ccare" = "欢迎使用 ChronicCare";
 "Your personal medication companion. We'll help you stay on track with your health." = "您的个人用药助手，帮您按时服药、守护健康。";
 "Get Started" = "开始设置";
 "Skip for now" = "稍后再说";
@@ -339,7 +339,7 @@
 "When you miss medication for 2+ days, we'll remind you to share your status with this person." = "连续漏服2天以上时，我们会提醒您与此人分享用药状态。";
 "Medication Update — %@" = "用药更新 — %@";
 "Upcoming" = "待服用";
-"Sent from Ccare" = "来自 Ccare";
+"Sent from Ccare" = "来自 ChronicCare";
 "Share with Caregiver?" = "通知照护者？";
 "You haven't taken %@ for %lld days. Would you like to share your status with %@?" = "您已%lld天未服用%@，是否通知%@？";
 
@@ -435,3 +435,267 @@
 "No OCR text found." = "未识别到文本。";
 "Camera Unavailable" = "相机不可用";
 "This device does not currently provide camera access for label scanning." = "当前设备暂时无法使用相机进行标签扫描。";
+
+/* Inventory & Course */
+"Needs Review" = "需关注";
+"Out of pills" = "已无药片";
+"%lld pills · %lld d left" = "%lld 片 · 还可用 %lld 天";
+"Ends in %lld d" = "%lld 天后结束";
+"Ends today" = "今天结束";
+"Course ended" = "疗程已结束";
+"About %lld days of supply at your current schedule." = "按当前服用安排，大约还可用 %lld 天。";
+"Refill reminders start when about %lld days remain." = "当预计还剩约 %lld 天时，系统会开始补药提醒。";
+"Course ends in %lld days." = "疗程将在 %lld 天后结束。";
+"Course reminders start %lld days before the end date." = "系统会在结束日期前 %lld 天开始提醒。";
+"Course End Reminder" = "疗程结束提醒";
+"Course Reminder" = "疗程提醒";
+"%@ reached its end date %lld days ago. Review whether it should continue." = "%@ 已在 %lld 天前到达结束日期，请确认是否仍需继续服用。";
+"%@ is scheduled to end today. Review whether it should continue." = "%@ 计划于今天结束，请确认是否仍需继续服用。";
+"%@ is scheduled to end in %lld days. Review the plan soon." = "%@ 将在 %lld 天后结束，请尽快确认后续计划。";
+"Quick fill" = "快速补货";
+"Quick duration" = "快捷疗程";
+"Quick extend" = "快速延长";
+"+7 d" = "+7 天";
+"+14 d" = "+14 天";
+"+30 d" = "+30 天";
+"Maintenance Status" = "维护状态";
+"Inventory" = "库存";
+"Course" = "疗程";
+"You are out of pills. Refill now to keep reminders useful." = "药片已经用完，请及时补货以保持提醒有效。";
+"About %lld days of supply remain. Consider refilling now." = "预计还剩 %lld 天用量，建议现在补货。";
+"About %lld days of supply remain." = "预计还剩 %lld 天用量。";
+"%lld pills remaining." = "剩余 %lld 片。";
+"This course ended %lld days ago. Confirm whether it should continue." = "该疗程已在 %lld 天前结束，请确认是否仍需继续。";
+"This course ends today. Confirm whether it should continue." = "该疗程今天结束，请确认是否仍需继续。";
+"This course ends in %lld days." = "该疗程将在 %lld 天后结束。";
+"Refill +30" = "补货 +30";
+"Extend +7d" = "延长 +7 天";
+"Review" = "查看";
+
+/* DashboardView */
+"%@ is the next medication on your plan today." = "%@ 是你今天计划中的下一次用药。";
+"%lld due" = "%lld 项待处理";
+"1 due" = "1 项待处理";
+"Actionable" = "待处理";
+"Add your first medication to start daily reminders and logging." = "添加第一种药物后，即可开始每日提醒和记录。";
+"All caught up" = "当前都处理完了";
+"Clear these right after the current dose." = "处理完当前剂量后，请接着处理这些。";
+"Due Right Now" = "现在该服用";
+"Later Today" = "今天稍后";
+"More doses are ready once you clear the current task." = "完成当前任务后，还有更多剂量待处理。";
+"No Scheduled Doses" = "没有固定剂量";
+"No medications yet" = "还没有药物";
+"Nothing needs action yet. Your next scheduled dose is lined up." = "现在还不需要处理，下一次固定剂量已经排好。";
+"Overdue Dose" = "已逾期剂量";
+"Progress" = "完成度";
+"Remaining" = "剩余";
+"Snoozed Dose" = "稍后提醒的剂量";
+"Still Overdue" = "仍然逾期";
+"There are no scheduled doses waiting for you right now." = "当前没有固定剂量在等待你处理。";
+"This dose has moved past your grace window and should be handled first." = "这次剂量已超过宽限时间，应优先处理。";
+"This is the current dose to clear before anything else." = "这是当前最需要先完成的剂量。";
+"Today is PRN only" = "今天只有按需用药";
+"Today's Snapshot" = "今日概览";
+"Up Next" = "接下来";
+"Upcoming doses that are already on your schedule." = "今天计划里稍后将要服用的剂量。";
+"You do not have fixed doses waiting right now. Log as-needed medications below only when you actually take them." = "你现在没有固定剂量待处理。只有在实际服用时，再记录下面的按需药物。";
+"You snoozed this dose earlier. It is back at the top of the queue." = "你之前稍后提醒了这次剂量，现在它重新回到了最优先位置。";
+
+/* HealthView */
+"%lld follow-up reminders" = "%lld 次跟进提醒";
+"%lld medications are missing scheduled reminder times." = "%lld 种药物尚未设置固定提醒时间。";
+"%lld medications · %lld active" = "%lld 种药物 · %lld 种已启用";
+"%lld pills left, about %lld days remaining." = "剩余 %lld 片，约还可用 %lld 天。";
+"%lld pills left." = "剩余 %lld 片。";
+"%lld scheduled medications currently have reminders turned off." = "目前有 %lld 种固定药物的提醒已关闭。";
+"Add allergies, conditions, and contacts so emergency details are ready when needed." = "补充过敏、疾病和联系人信息，让紧急卡在需要时可直接使用。";
+"Add someone you trust so missed-dose support has a real contact path." = "添加一位你信任的人，让漏服支持在需要时能真正联系到人。";
+"All scheduled medications currently have reminder coverage." = "当前所有固定药物都已具备提醒覆盖。";
+"As Needed Medications" = "按需药物";
+"Authorized" = "已授权";
+"Balanced" = "平衡模式";
+"Caregivers are saved, but missed-dose support is still turned off for them." = "照护人已保存，但他们的漏服支持仍未开启。";
+"Choose a medication category if you want this page to connect the medication with related measurements like blood pressure or glucose." = "如果希望此页面关联血压、血糖等指标，请先为药物选择分类。";
+"Course ended %lld days ago." = "疗程已在 %lld 天前结束。";
+"Course ends today." = "疗程今天结束。";
+"Denied" = "已拒绝";
+"Ephemeral" = "临时授权";
+"Fix Reminder Setup" = "修复提醒设置";
+"Fixed reminders are turned off for this medication." = "这款药物的固定提醒当前已关闭。";
+"Health Workspace" = "健康工作台";
+"High Attention" = "高关注";
+"Last taken" = "最近一次服用";
+"Latest Measurement" = "最近一次测量";
+"Latest: %.1f %@" = "最近值：%.1f %@";
+"Latest: %@ %@" = "最近值：%@ %@";
+"Latest: %d/%d mmHg" = "最近值：%d/%d mmHg";
+"Light Touch" = "轻提醒";
+"Log doses from Today whenever you take this medication." = "每次实际服用这款药时，请在 Today 页面记录。";
+"Log doses when needed from Today." = "在需要时从 Today 页面记录服用。";
+"Log measurements like blood pressure or glucose to see whether this medication lines up with recent trends." = "记录血压、血糖等测量值后，就能看到这款药是否与近期趋势相符。";
+"Log this medication from Today whenever you actually take it." = "每次实际服用这款药时，请从 Today 页面记录。";
+"Maintenance" = "维护状态";
+"Manage medications, review trends, and keep your latest readings close." = "管理药物、查看趋势，并快速看到最新测量。";
+"Manual Logging" = "手动记录";
+"Medication Detail" = "药物详情";
+"Medication Library" = "药物库";
+"Missing Times" = "缺少时间";
+"Needs Schedule Times" = "需要设置时间";
+"Needs Setup" = "待设置";
+"Next dose" = "下一次剂量";
+"No fixed times are configured yet." = "尚未设置固定时间。";
+"No follow-up reminders" = "无后续提醒";
+"No linked health signals" = "暂无关联健康指标";
+"No obvious reminder gaps were detected for your scheduled medications." = "你的固定药物目前没有明显的提醒缺口。";
+"No recent readings." = "暂无最近读数。";
+"No recent trend available." = "暂无近期趋势。";
+"No related measurements yet" = "还没有相关测量";
+"No reminder times are set yet." = "尚未设置提醒时间。";
+"Not Determined" = "未决定";
+"Not scheduled" = "未安排";
+"Open" = "打开";
+"Open System Settings" = "打开系统设置";
+"PRN medications are logged manually and do not create fixed reminders." = "按需药物需要手动记录，不会生成固定提醒。";
+"Permission" = "权限";
+"Provisional" = "临时允许";
+"Quick Links" = "快捷入口";
+"Recent adherence is mixed. Keep an eye on upcoming doses." = "近期依从性较为一般，接下来的剂量需要多留意。";
+"Recent adherence is unstable. Review history and reminder setup." = "近期依从性不稳定，建议查看历史记录并检查提醒设置。";
+"Recent check-ins look consistent." = "近期记录整体比较稳定。";
+"Recent history looks consistent, so the app is keeping reminders lighter to reduce noise." = "近期记录较稳定，因此应用会采用更轻的提醒方式，减少打扰。";
+"Recent history shows a higher miss rate. The app is using a stronger reminder pattern with %lld follow-ups." = "近期漏服率偏高，应用会采用更强的提醒模式，并附带 %lld 次跟进提醒。";
+"Recent history shows some delays or snoozes. The app is keeping a balanced reminder pattern with %lld follow-ups." = "近期存在延迟或稍后提醒情况，应用会维持平衡型提醒模式，并附带 %lld 次跟进提醒。";
+"Recent readings are trending higher." = "近期读数呈上升趋势。";
+"Recent readings are trending lower." = "近期读数呈下降趋势。";
+"Recent readings look fairly stable." = "近期读数整体较稳定。";
+"Related Measurements" = "相关测量";
+"Reminder Coverage" = "提醒覆盖";
+"Reminder Strategy" = "提醒策略";
+"Reminder coverage looks healthy." = "提醒覆盖状态良好。";
+"Reminders Off" = "提醒关闭";
+"Reminders On" = "提醒开启";
+"Reminders Turned Off" = "提醒已关闭";
+"Reminders are currently off. Turn them back on if you want fixed notifications." = "提醒当前已关闭。如果你希望恢复固定通知，请重新开启。";
+"Review daily check-ins and missed doses." = "查看每日记录和漏服情况。";
+"Review your medication consistency across recent days." = "回顾你最近几天的用药一致性。";
+"Scheduled" = "固定用药";
+"Scheduled medication with reminder times, but reminders are off." = "这是一种已经设置时间、但提醒已关闭的固定药物。";
+"See blood pressure, glucose, weight, and heart rate trends." = "查看血压、血糖、体重和心率趋势。";
+"Set Up" = "去设置";
+"Snapshot" = "当前概况";
+"Some medications still need reminder setup or have reminders turned off." = "仍有部分药物尚未完成提醒设置，或提醒已被关闭。";
+"Starts %lld minutes early" = "提前 %lld 分钟开始";
+"Starts at the scheduled time" = "按计划时间开始";
+"System notifications are blocked, so medication reminders cannot fire until permission is restored." = "系统通知已被阻止，在恢复权限前，药物提醒无法触发。";
+"System notifications are off. Medication reminders will not fire." = "系统通知已关闭，药物提醒将不会触发。";
+"The reminder engine will adapt after you log more scheduled doses." = "当你记录更多固定剂量后，提醒引擎会开始自适应调整。";
+"These medications already have times, but fixed reminders are disabled." = "这些药物已经设置了时间，但固定提醒处于关闭状态。";
+"These medications are scheduled, but they still need reminder times." = "这些药物属于固定用药，但仍需要补充提醒时间。";
+"This medication is scheduled but does not yet have reminder times." = "这款药物属于固定用药，但尚未设置提醒时间。";
+"This medication is set to as-needed, so fixed reminders are off." = "这款药物已设置为按需用药，因此固定提醒已关闭。";
+"This medication still needs scheduled times before reminder coverage is complete." = "这款药物仍需设置固定时间，提醒覆盖才算完整。";
+"Times Missing" = "时间缺失";
+"Tracked manually from Today when you take a dose." = "当你服用时，请从 Today 页面手动记录。";
+"Turn On" = "开启";
+"Turn On All" = "全部开启";
+"Turn reminders back on if you want this medication to appear in notification scheduling." = "如果希望这款药重新进入通知调度，请重新开启提醒。";
+"Unknown" = "未知";
+"Use the top-right menu to log your first blood pressure, glucose, weight, or heart rate reading." = "使用右上角菜单记录你的第一条血压、血糖、体重或心率数据。";
+"View allergies, conditions, contacts, and current medications in one place." = "在一个页面查看过敏、疾病、联系人和当前用药。";
+"Your next scheduled touchpoint is %@." = "你下一次计划中的用药时间是 %@。";
+"Your support network is set up for missed-dose follow-up." = "你的支持网络已经准备好，可用于漏服后的后续协助。";
+
+/* MedicationsView */
+"14 days" = "14 天";
+"5 mg" = "5 毫克";
+"Added" = "已添加";
+"Additional Context" = "附加背景";
+"Amlodipine" = "氨氯地平";
+"As needed medication with no fixed reminder schedule." = "按需药物没有固定提醒时间安排。";
+"As-needed medications skip fixed reminder times. You can log each dose from the Today screen whenever you take it." = "按需药物不会使用固定提醒时间。每次实际服用时，你都可以在 Today 页面记录。";
+"As-needed medications skip fixed reminder times. You can still log each dose from the Today screen whenever you take it." = "按需药物不会使用固定提醒时间。你仍然可以在每次实际服用时，从 Today 页面记录剂量。";
+"Cardiology" = "心血管";
+"Category & Photo" = "分类与图片";
+"Choose a preset or add a custom time." = "选择一个预设，或添加自定义时间。";
+"Daily reminders" = "每日提醒";
+"Dose" = "剂量";
+"Has Course End Date" = "设置疗程结束日期";
+"How do you take it?" = "你如何服用？";
+"Instructions" = "服用说明";
+"Keep Scheduled" = "保留固定用药";
+"Last taken" = "最近一次服用";
+"Log only when taken" = "仅在服用时记录";
+"Medication" = "药物";
+"Medication Status" = "药物状态";
+"Medication name" = "药物名称";
+"Next dose" = "下一次剂量";
+"No course end date set." = "未设置疗程结束日期。";
+"No reminder times yet." = "还没有提醒时间。";
+"Notes" = "备注";
+"Optional" = "可选";
+"Optional context" = "可选背景";
+"PRN Medication" = "按需药物";
+"Remove Photo" = "移除图片";
+"Schedule" = "用药时间";
+"Scheduled at %@" = "安排在 %@";
+"Scheduled medication without reminders." = "固定药物未开启提醒。";
+"Special Instructions" = "特殊说明";
+"Summary" = "摘要";
+"Supply & Course" = "库存与疗程";
+"Supply tracking is off." = "库存跟踪已关闭。";
+"Switch" = "切换";
+"Switch to As Needed?" = "切换为按需用药？";
+"Take after dinner" = "晚饭后服用";
+"This will turn off fixed reminders for this medication and clear its scheduled times." = "这样会关闭这款药物的固定提醒，并清除已设置的固定时间。";
+"This will turn off fixed reminders for this medication and remove any scheduled times from the form." = "这样会关闭这款药物的固定提醒，并从表单中移除所有已安排时间。";
+"Time %lld" = "时间 %lld";
+"Times saved without reminders: %@" = "已保存但未开启提醒的时间：%@";
+
+/* MeasurementsView */
+"1h Ago" = "1 小时前";
+"Add Context" = "添加背景";
+"Date" = "日期";
+"Measurement" = "测量";
+"Now" = "现在";
+"Optional context, symptoms, or meal timing" = "可选填写背景、症状或进食时间";
+"Time" = "时间";
+"Today 8 PM" = "今天晚上 8 点";
+"Unit" = "单位";
+"Yesterday" = "昨天";
+
+/* ProfileView */
+"Backup & Export" = "备份与导出";
+"Care & Emergency" = "照护与紧急信息";
+"ChronicCare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice." = "ChronicCare 会将数据保存在本地，并仅在你授权后使用 Apple Health。它不提供医疗建议。";
+"Danger Zone" = "危险操作";
+"Edit Emergency Info" = "编辑紧急信息";
+"Keep emergency details and caregiver access up to date for missed-dose support." = "请及时更新紧急信息和照护人设置，以便在漏服支持时能顺利使用。";
+"Manage Caregivers" = "管理照护人";
+"Provider & API Access" = "提供商与 API 访问";
+"Reminder Rules" = "提醒规则";
+"Reminder coverage looks healthy for your scheduled medications." = "你的固定药物提醒覆盖情况良好。";
+"%lld scheduled medications still need reminder times." = "仍有 %lld 种固定药物需要设置提醒时间。";
+"Scheduled medications need both permission and reminder times before alerts can fire." = "固定药物必须同时具备通知权限和提醒时间，提醒才能正常触发。";
+"System notifications are currently off. Scheduled reminders will not fire until permission is restored." = "系统通知当前已关闭，在恢复权限前，固定提醒不会触发。";
+"This permanently removes medications, measurements, and intake history from this device." = "这会从当前设备中永久删除药物、测量记录和服药历史。";
+"Use backup before restoring or clearing data on this device." = "在恢复或清空设备数据前，请先做好备份。";
+
+/* CaregiversView */
+"%lld caregivers saved, but none are set for missed-dose support." = "已保存 %lld 位照护人，但尚未有人开启漏服支持。";
+"%lld caregivers saved. %lld will be included when missed-dose support is triggered." = "已保存 %lld 位照护人，其中 %lld 位会在触发漏服支持时被纳入。";
+"Add someone you trust so missed-dose support is easier to act on later." = "添加一位你信任的人，让之后的漏服支持更容易真正执行。";
+"Attention needed for:" = "需要关注：";
+"Configured caregivers:" = "已配置的照护人：";
+"Current Support Status" = "当前支持状态";
+"Medication Support Update" = "用药支持更新";
+"Missed for %lld days. Share reminders should now be active for caregivers with alerts enabled." = "已连续漏服 %lld 天。对于已开启提醒的照护人，现在应进入分享提醒状态。";
+"Name" = "姓名";
+"No medications currently meet the missed-dose support threshold." = "目前没有药物达到漏服支持触发阈值。";
+"Prepare Status Update" = "准备状态更新";
+"Support Network" = "支持网络";
+
+/* EmergencyInfoView */
+"Add Emergency Info" = "添加紧急信息";
+"Add blood type, allergies, conditions, or emergency contacts so this card is useful when you need it." = "添加血型、过敏、疾病或紧急联系人，让这张卡在需要时真正有用。";
+"Edit" = "编辑";
+"Emergency information not set" = "尚未设置紧急信息";

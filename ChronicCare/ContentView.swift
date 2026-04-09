@@ -42,11 +42,9 @@ struct ContentView: View {
         .dynamicTypeSize(.medium ... .accessibility5)
         .onChange(of: scenePhase) { newPhase in
             guard newPhase == .active else { return }
-            let meds = store.medications.filter { $0.remindersEnabled }
             let now = Date()
-            NotificationManager.shared.cleanOrphanedRequests(validMedicationIDs: Set(meds.map { $0.id }))
-            meds.forEach { NotificationManager.shared.schedule(for: $0, intakeLogs: store.intakeLogs, now: now) }
-            NotificationManager.shared.checkRefillReminders(medications: store.medications)
+            NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs, now: now)
+            NotificationManager.shared.updateBadge(store: store)
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("openMedicationDetail"))) { notification in
             selectedTab = 1

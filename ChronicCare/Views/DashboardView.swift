@@ -2,11 +2,10 @@ import SwiftUI
 
 struct DashboardView: View {
     @EnvironmentObject var store: DataStore
+    @State private var showAddMedication = false
     @State private var showTakenConfirmation = false
     @State private var takenMedName: String = ""
-    @State private var showNoteInput = false
     @State private var pendingNoteItem: MedSchedule?
-    @State private var intakeNote: String = ""
     @State private var showDuplicateAlert = false
     @State private var duplicateAlertMinutes: Int = 0
     @State private var safetyAlerts: [String] = []
@@ -65,6 +64,20 @@ struct DashboardView: View {
             let totalCount = schedules.count
             let adherence = totalCount > 0 ? Double(takenCount) / Double(totalCount) : 0
             let actionableSchedules = schedules.filter { canLogDose(for: $0, status: statusCache[$0.id] ?? .none) }
+            let currentActionID = actionableSchedules.first?.id
+            let followUpActionable = actionableSchedules.filter { $0.id != currentActionID }
+            let overdueQueue = followUpActionable.filter {
+                if case .overdue = statusCache[$0.id] ?? .none { return true }
+                return false
+            }
+            let readyQueue = followUpActionable.filter {
+                switch statusCache[$0.id] ?? .none {
+                case .dueSoon, .snoozed:
+                    return true
+                default:
+                    return false
+                }
+            }
             let laterSchedules = schedules.filter {
                 !isFinalStatus(statusCache[$0.id] ?? .none) &&
                 !canLogDose(for: $0, status: statusCache[$0.id] ?? .none)
@@ -72,71 +85,92 @@ struct DashboardView: View {
             let prnMeds = store.medications.filter { $0.isAsNeeded == true }
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    focusHeroCard(schedules: schedules, statusCache: statusCache, takenCount: takenCount, totalCount: totalCount)
-
-                    progressOverviewCard(
-                        adherence: adherence,
-                        taken: takenCount,
-                        total: totalCount,
-                        actionableCount: actionableSchedules.count,
-                        prnCount: prnMeds.count
-                    )
-
-                    if !actionableSchedules.isEmpty {
-                        groupedScheduleCard(
-                            title: NSLocalizedString("Needs Attention", comment: ""),
-                            subtitle: actionableSchedules.count == 1
-                                ? NSLocalizedString("One dose is waiting for action.", comment: "")
-                                : String(format: NSLocalizedString("%lld doses are waiting for action.", comment: ""), actionableSchedules.count),
-                            items: actionableSchedules,
-                            statusCache: statusCache
+                VStack(alignment: .leading, spacing: 16) {
+                    if store.medications.isEmpty {
+                        Card {
+                            EmptyStateView(
+                                systemImage: "pills.circle.fill",
+                                title: NSLocalizedString("No medications yet", comment: ""),
+                                subtitle: NSLocalizedString("Add your first medication to start daily reminders and logging.", comment: ""),
+                                actionTitle: NSLocalizedString("Add Medication", comment: ""),
+                                action: { showAddMedication = true }
+                            )
+                        }
+                    } else {
+                        focusHeroCard(
+                            schedules: schedules,
+                            statusCache: statusCache,
+                            takenCount: takenCount,
+                            totalCount: totalCount,
+                            prnCount: prnMeds.count
                         )
-                    }
 
-                    if !laterSchedules.isEmpty {
-                        groupedScheduleCard(
-                            title: NSLocalizedString("Later Today", comment: ""),
-                            subtitle: NSLocalizedString("Upcoming doses that are already on your schedule.", comment: ""),
-                            items: laterSchedules,
-                            statusCache: statusCache
+                        progressOverviewCard(
+                            adherence: adherence,
+                            taken: takenCount,
+                            total: totalCount,
+                            actionableCount: actionableSchedules.count,
+                            overdueCount: overdueQueue.count + (actionableSchedules.contains {
+                                if case .overdue = statusCache[$0.id] ?? .none { return true }
+                                return false
+                            } ? 1 : 0)
                         )
-                    }
 
-                    if !prnMeds.isEmpty {
-                        prnCard(medications: prnMeds)
+                        if !overdueQueue.isEmpty {
+                            groupedScheduleCard(
+                                title: NSLocalizedString("Still Overdue", comment: ""),
+                                subtitle: NSLocalizedString("Clear these right after the current dose.", comment: ""),
+                                items: overdueQueue,
+                                statusCache: statusCache
+                            )
+                        }
+
+                        if !readyQueue.isEmpty {
+                            groupedScheduleCard(
+                                title: NSLocalizedString("Up Next", comment: ""),
+                                subtitle: NSLocalizedString("More doses are ready once you clear the current task.", comment: ""),
+                                items: readyQueue,
+                                statusCache: statusCache
+                            )
+                        }
+
+                        if !laterSchedules.isEmpty {
+                            groupedScheduleCard(
+                                title: NSLocalizedString("Later Today", comment: ""),
+                                subtitle: NSLocalizedString("Upcoming doses that are already on your schedule.", comment: ""),
+                                items: laterSchedules,
+                                statusCache: statusCache
+                            )
+                        }
+
+                        if !prnMeds.isEmpty {
+                            prnCard(medications: prnMeds)
+                        }
                     }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 6)
                 .padding(.bottom, 24)
             }
+            .sheet(isPresented: $showAddMedication) {
+                AddMedicationView { med in
+                    store.addMedication(med)
+                    NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
+                    NotificationManager.shared.updateBadge(store: store)
+                }
+            }
             .refreshable {
-                let meds = store.medications.filter { $0.remindersEnabled }
                 let now = Date()
-                NotificationManager.shared.cleanOrphanedRequests(validMedicationIDs: Set(meds.map { $0.id }))
-                meds.forEach { NotificationManager.shared.schedule(for: $0, intakeLogs: store.intakeLogs, now: now) }
-                NotificationManager.shared.checkRefillReminders(medications: store.medications)
+                NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs, now: now)
+                NotificationManager.shared.updateBadge(store: store)
                 store.objectWillChange.send()
             }
             .toolbar(.hidden, for: .navigationBar)
             .onReceive(refreshTimer) { _ in tick.toggle() }
-            .alert(NSLocalizedString("Add a Note?", comment: ""), isPresented: $showNoteInput) {
-                TextField(NSLocalizedString("e.g., felt dizzy, took with food", comment: ""), text: $intakeNote)
-                Button(NSLocalizedString("Save with Note", comment: "")) {
-                    commitTaken(note: intakeNote.isEmpty ? nil : intakeNote)
-                }
-                Button(NSLocalizedString("No Note", comment: ""), role: .cancel) {
-                    commitTaken(note: nil)
-                }
-            } message: {
-                Text(NSLocalizedString("Optional: add context like side effects or timing.", comment: ""))
-            }
             // Rule 1: Duplicate taken confirmation
             .alert(NSLocalizedString("Already Taken", comment: ""), isPresented: $showDuplicateAlert) {
                 Button(NSLocalizedString("Take Again", comment: ""), role: .destructive) {
-                    intakeNote = ""
-                    showNoteInput = true
+                    commitTaken(note: nil)
                 }
                 Button(NSLocalizedString("Cancel", comment: ""), role: .cancel) {
                     pendingNoteItem = nil
@@ -214,7 +248,8 @@ private extension DashboardView {
         schedules: [MedSchedule],
         statusCache: [String: TodayMedStatus],
         takenCount: Int,
-        totalCount: Int
+        totalCount: Int,
+        prnCount: Int
     ) -> some View {
         let nextActionableItem = schedules.first { item in
             canLogDose(for: item, status: statusCache[item.id] ?? .none)
@@ -279,6 +314,20 @@ private extension DashboardView {
                         .foregroundStyle(.secondary)
                 }
             }
+        } else if prnCount > 0 {
+            Card {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(NSLocalizedString("No Scheduled Doses", comment: ""))
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(NSLocalizedString("Today is PRN only", comment: ""))
+                        .appFont(.title)
+                        .fontWeight(.bold)
+                    Text(NSLocalizedString("You do not have fixed doses waiting right now. Log as-needed medications below only when you actually take them.", comment: ""))
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         } else {
             TintedCard(tint: .green) {
                 HStack(alignment: .center, spacing: 14) {
@@ -290,7 +339,7 @@ private extension DashboardView {
                             .appFont(.title)
                             .fontWeight(.bold)
                         Text(NSLocalizedString("There are no scheduled doses waiting for you right now.", comment: ""))
-                            .appFont(.subheadline)
+                            .appFont(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -303,7 +352,7 @@ private extension DashboardView {
         taken: Int,
         total: Int,
         actionableCount: Int,
-        prnCount: Int
+        overdueCount: Int
     ) -> some View {
         Card {
             VStack(alignment: .leading, spacing: 12) {
@@ -321,9 +370,9 @@ private extension DashboardView {
                         tint: actionableCount > 0 ? .orange : .secondary
                     )
                     overviewMetric(
-                        value: "\(prnCount)",
-                        label: NSLocalizedString("PRN", comment: ""),
-                        tint: .blue
+                        value: "\(actionableCount)",
+                        label: overdueCount > 0 ? NSLocalizedString("Overdue", comment: "") : NSLocalizedString("Actionable", comment: ""),
+                        tint: overdueCount > 0 ? .red : actionableCount > 0 ? .orange : .secondary
                     )
                 }
             }
@@ -337,29 +386,15 @@ private extension DashboardView {
         statusCache: [String: TodayMedStatus]
     ) -> some View {
         let tint = attentionTint(for: items, statusCache: statusCache)
-
-        return Group {
-            if let tint {
-                TintedCard(tint: tint) {
-                    groupedScheduleCardContent(
-                        title: title,
-                        subtitle: subtitle,
-                        items: items,
-                        statusCache: statusCache,
-                        emphasized: true
-                    )
-                }
-            } else {
-                Card {
-                    groupedScheduleCardContent(
-                        title: title,
-                        subtitle: subtitle,
-                        items: items,
-                        statusCache: statusCache,
-                        emphasized: false
-                    )
-                }
-            }
+        return Card {
+            groupedScheduleCardContent(
+                title: title,
+                subtitle: subtitle,
+                items: items,
+                statusCache: statusCache,
+                emphasized: tint != nil,
+                accentTint: tint
+            )
         }
     }
 
@@ -368,7 +403,8 @@ private extension DashboardView {
         subtitle: String,
         items: [MedSchedule],
         statusCache: [String: TodayMedStatus],
-        emphasized: Bool
+        emphasized: Bool,
+        accentTint: Color?
     ) -> some View {
         VStack(alignment: .leading, spacing: emphasized ? 12 : 14) {
             HStack(alignment: .top, spacing: 10) {
@@ -378,17 +414,12 @@ private extension DashboardView {
                 Spacer()
                 if emphasized {
                     let count = items.count
-                    Text(count == 1
-                         ? NSLocalizedString("1 due", comment: "")
-                         : String(format: NSLocalizedString("%lld due", comment: ""), count))
-                        .appFont(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.primary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule().fill(Color.white.opacity(0.65))
-                        )
+                    AppBadge(
+                        text: count == 1
+                            ? NSLocalizedString("1 due", comment: "")
+                            : String(format: NSLocalizedString("%lld due", comment: ""), count),
+                        tint: accentTint ?? .primary
+                    )
                 } else {
                     Text(subtitle)
                         .appFont(.caption)
@@ -399,7 +430,7 @@ private extension DashboardView {
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 medRow(item: item, status: statusCache[item.id] ?? .none, emphasizeUrgency: emphasized)
                 if index < items.count - 1 {
-                    Divider().opacity(emphasized ? 0.45 : 1)
+                    Divider().opacity(emphasized ? 0.55 : 1)
                 }
             }
         }
@@ -408,13 +439,8 @@ private extension DashboardView {
     private func prnCard(medications: [Medication]) -> some View {
         Card {
             VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(NSLocalizedString("As Needed", comment: ""))
-                        .appFont(.headline)
-                    Text(NSLocalizedString("Log these only when you actually take them.", comment: ""))
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text(NSLocalizedString("As Needed", comment: ""))
+                    .appFont(.headline)
 
                 ForEach(Array(medications.enumerated()), id: \.element.id) { index, med in
                     prnMedRow(med: med)
@@ -523,17 +549,7 @@ private extension DashboardView {
     private func statusBadge(for item: MedSchedule, status: TodayMedStatus) -> some View {
         let tint = statusBadgeTint(for: status)
         if let label = statusBadgeLabel(for: item, status: status) {
-            Label(label, systemImage: statusBadgeIcon(for: status))
-                .appFont(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(tint)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .background(Capsule().fill(tint.opacity(0.14)))
-                .overlay(
-                    Capsule()
-                        .stroke(tint.opacity(0.22), lineWidth: 1)
-                )
+            AppBadge(text: label, tint: tint, icon: statusBadgeIcon(for: status))
         }
     }
 
@@ -643,8 +659,7 @@ private extension DashboardView {
             showDuplicateAlert = true
         } else {
             pendingNoteItem = item
-            intakeNote = ""
-            showNoteInput = true
+            commitTaken(note: nil)
         }
     }
 
@@ -716,15 +731,7 @@ private extension DashboardView {
         let tint = statusBadgeTint(for: status)
         let label = actionStatusLabel(for: status) ?? ""
 
-        return Label(label, systemImage: statusBadgeIcon(for: status))
-            .appFont(.caption)
-            .fontWeight(.semibold)
-            .foregroundStyle(tint)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-                Capsule().fill(tint.opacity(0.14))
-            )
+        return AppBadge(text: label, tint: tint, icon: statusBadgeIcon(for: status))
     }
 
     private func rowBackgroundTint(for status: TodayMedStatus, emphasized: Bool) -> Color {
@@ -762,29 +769,6 @@ private extension DashboardView {
         }.count
 
         return HStack(alignment: .center, spacing: 12) {
-            Button {
-                let now = Date()
-                let comps = cal.dateComponents([.hour, .minute], from: now)
-                store.upsertIntake(
-                    medicationID: med.id,
-                    status: .taken,
-                    scheduleTime: comps,
-                    scheduledDate: now,
-                    scheduleKeyOverride: "prn_\(now.timeIntervalSince1970)"
-                )
-                store.decrementPills(for: med.id)
-                Haptics.success()
-            } label: {
-                Text(NSLocalizedString("Take Now", comment: ""))
-                    .appFont(.caption)
-                    .fontWeight(.semibold)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.blue)
-            .controlSize(.small)
-
             VStack(alignment: .leading, spacing: 2) {
                 Text(med.name).appFont(.body)
                 Text(med.dose).appFont(.caption).foregroundStyle(.secondary)
@@ -792,9 +776,35 @@ private extension DashboardView {
 
             Spacer(minLength: 4)
 
-            if todayCount > 0 {
-                Text(String(format: NSLocalizedString("Taken %lld×", comment: ""), todayCount))
-                    .appFont(.caption).foregroundStyle(.green)
+            HStack(spacing: 10) {
+                if todayCount > 0 {
+                    Text(String(format: NSLocalizedString("Taken %lld×", comment: ""), todayCount))
+                        .appFont(.caption)
+                        .foregroundStyle(.green)
+                }
+
+                Button {
+                    let now = Date()
+                    let comps = cal.dateComponents([.hour, .minute], from: now)
+                    store.upsertIntake(
+                        medicationID: med.id,
+                        status: .taken,
+                        scheduleTime: comps,
+                        scheduledDate: now,
+                        scheduleKeyOverride: "prn_\(now.timeIntervalSince1970)"
+                    )
+                    store.decrementPills(for: med.id)
+                    Haptics.success()
+                } label: {
+                    Text(NSLocalizedString("Take Now", comment: ""))
+                        .appFont(.caption)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
+                .controlSize(.small)
             }
         }
         .contentShape(Rectangle())

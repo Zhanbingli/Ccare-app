@@ -49,6 +49,8 @@ struct ChronicCareTests {
         #expect(NotificationManager.hasValidMedication(identifier: "streak_7_2026-04-08", validMedicationIDs: validIDs))
         #expect(NotificationManager.hasValidMedication(identifier: "refill_\(validID.uuidString)", validMedicationIDs: validIDs))
         #expect(NotificationManager.hasValidMedication(identifier: "refill_\(invalidID.uuidString)", validMedicationIDs: validIDs) == false)
+        #expect(NotificationManager.hasValidMedication(identifier: "course_\(validID.uuidString)", validMedicationIDs: validIDs))
+        #expect(NotificationManager.hasValidMedication(identifier: "course_\(invalidID.uuidString)", validMedicationIDs: validIDs) == false)
     }
 
     @Test func outstandingCountHonorsTakenLogPerSchedule() {
@@ -179,6 +181,73 @@ struct ChronicCareTests {
 
         #expect(result.name == "苯磺酸氨氯地平片")
         #expect(result.dose == "5mg")
+    }
+
+    @Test func reminderEligibilityRejectsPRNAndUntimedMeds() {
+        let scheduled = Medication(name: "A", dose: "5mg", timesOfDay: [DateComponents(hour: 8, minute: 0)], remindersEnabled: true)
+        let prn = Medication(name: "B", dose: "5mg", timesOfDay: [], remindersEnabled: true, isAsNeeded: true)
+        let untimed = Medication(name: "C", dose: "5mg", timesOfDay: [], remindersEnabled: true)
+
+        #expect(NotificationManager.shared.isReminderEligible(scheduled))
+        #expect(NotificationManager.shared.isReminderEligible(prn) == false)
+        #expect(NotificationManager.shared.isReminderEligible(untimed) == false)
+    }
+
+    @Test func outstandingCountIgnoresPRNMedicationWithoutSchedule() {
+        let prn = Medication(name: "Ibuprofen", dose: "200mg", timesOfDay: [], remindersEnabled: true, isAsNeeded: true)
+        let count = NotificationManager.computeOutstandingCount(medications: [prn], intakeLogs: [], graceMinutes: 0)
+        #expect(count == 0)
+    }
+
+    @Test func medicationCourseStateTracksEndingSoonAndEnded() {
+        let calendar = Calendar.current
+        let now = calendar.date(from: DateComponents(year: 2026, month: 4, day: 9, hour: 10, minute: 0))!
+
+        let endingSoon = Medication(
+            name: "Antibiotic",
+            dose: "250mg",
+            timesOfDay: [DateComponents(hour: 8, minute: 0)],
+            remindersEnabled: true,
+            courseEndDate: calendar.date(byAdding: .day, value: 2, to: now)
+        )
+        let ended = Medication(
+            name: "Steroid",
+            dose: "5mg",
+            timesOfDay: [DateComponents(hour: 8, minute: 0)],
+            remindersEnabled: true,
+            courseEndDate: calendar.date(byAdding: .day, value: -1, to: now)
+        )
+
+        #expect(endingSoon.courseState(thresholdDays: 3, reference: now) == .endingSoon(daysRemaining: 2))
+        #expect(ended.courseState(thresholdDays: 3, reference: now) == .ended(daysPast: 1))
+    }
+
+    @Test func prnSupplyDaysRemainUnknownWithoutFixedSchedule() {
+        let prn = Medication(
+            name: "Ibuprofen",
+            dose: "200mg",
+            timesOfDay: [],
+            remindersEnabled: false,
+            pillsRemaining: 24,
+            pillsPerDose: 2,
+            isAsNeeded: true
+        )
+
+        #expect(prn.daysOfSupplyRemaining == nil)
+        #expect(prn.isLowSupply == false)
+    }
+
+    @Test func upcomingFireDatesKeepsJustMissedDoseWithinCatchUpWindow() {
+        let manager = NotificationManager.shared
+        let calendar = Calendar.current
+        let now = calendar.date(from: DateComponents(year: 2026, month: 4, day: 9, hour: 8, minute: 0, second: 30))!
+        let comps = DateComponents(hour: 8, minute: 0)
+
+        let dates = manager.upcomingFireDates(for: comps, horizonDays: 1, from: now, catchUpWindow: 90)
+
+        #expect(dates.count == 1)
+        #expect(calendar.component(.hour, from: dates[0]) == 8)
+        #expect(calendar.component(.minute, from: dates[0]) == 0)
     }
 
 }

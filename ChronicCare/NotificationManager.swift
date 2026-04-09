@@ -103,6 +103,7 @@ final class NotificationManager {
     private let defaults = UserDefaults.standard
     private let suppressKey = "suppress.today.ids"
     private let suppressDateKey = "suppress.today.date"
+    private let dueCatchUpWindow: TimeInterval = 90
     private let isoFormatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -193,6 +194,25 @@ final class NotificationManager {
 
     private let scheduleHorizonDays = 14
 
+    func isReminderEligible(_ medication: Medication) -> Bool {
+        medication.remindersEnabled && medication.isAsNeeded != true && !medication.timesOfDay.isEmpty
+    }
+
+    func syncAll(medications: [Medication], intakeLogs: [IntakeLog], now: Date = Date()) {
+        let validMedicationIDs = Set(medications.map { $0.id })
+        cleanOrphanedRequests(validMedicationIDs: validMedicationIDs)
+
+        let activeReminderIDs = Set(medications.filter(isReminderEligible).map { $0.id })
+        let inactiveMedications = medications.filter { !activeReminderIDs.contains($0.id) }
+        inactiveMedications.forEach { cancelAll(for: $0) }
+
+        medications.filter(isReminderEligible).forEach {
+            schedule(for: $0, intakeLogs: intakeLogs, now: now)
+        }
+
+        checkLifecycleReminders(medications: medications, now: now)
+    }
+
     func schedule(for medication: Medication, intakeLogs: [IntakeLog], now: Date = Date()) {
         let center = UNUserNotificationCenter.current()
         let prefix = medication.id.uuidString
@@ -208,7 +228,7 @@ final class NotificationManager {
                 if !delivered.isEmpty { center.removeDeliveredNotifications(withIdentifiers: delivered) }
             }
 
-            guard medication.remindersEnabled else { return }
+            guard self.isReminderEligible(medication) else { return }
             for t in medication.timesOfDay {
                 self.scheduleUpcomingInstances(
                     for: medication,
@@ -222,15 +242,22 @@ final class NotificationManager {
     }
 
     // MARK: - Instance-level scheduling (non-repeating)
-    private func upcomingFireDates(for time: DateComponents, horizonDays: Int, from now: Date = Date(), calendar: Calendar = .current) -> [Date] {
+    func upcomingFireDates(
+        for time: DateComponents,
+        horizonDays: Int,
+        from now: Date = Date(),
+        catchUpWindow: TimeInterval = 0,
+        calendar: Calendar = .current
+    ) -> [Date] {
         guard let h = time.hour, let m = time.minute, horizonDays > 0 else { return [] }
         let startOfToday = calendar.startOfDay(for: now)
         var result: [Date] = []
         for offset in 0..<horizonDays {
             guard let day = calendar.date(byAdding: .day, value: offset, to: startOfToday),
-                  let scheduled = calendar.date(bySettingHour: h, minute: m, second: 0, of: day),
-                  scheduled >= now else { continue }
-            result.append(scheduled)
+                  let scheduled = calendar.date(bySettingHour: h, minute: m, second: 0, of: day) else { continue }
+            if scheduled >= now || now.timeIntervalSince(scheduled) <= catchUpWindow {
+                result.append(scheduled)
+            }
         }
         return result
     }
@@ -242,12 +269,22 @@ final class NotificationManager {
         strategy: AdaptiveReminderStrategy,
         now: Date = Date()
     ) {
-        let doseDates = upcomingFireDates(for: timeComponents, horizonDays: horizonDays, from: now)
+        let doseDates = upcomingFireDates(
+            for: timeComponents,
+            horizonDays: horizonDays,
+            from: now,
+            catchUpWindow: dueCatchUpWindow
+        )
         guard !doseDates.isEmpty else { return }
         let calendar = Calendar.current
         let center = UNUserNotificationCenter.current()
         doseDates.forEach { doseDate in
-            let primaryFireDate = adaptivePrimaryFireDate(for: doseDate, leadMinutes: strategy.leadMinutes, now: now)
+            guard let primaryFireDate = resolvedPrimaryFireDate(
+                for: doseDate,
+                leadMinutes: strategy.leadMinutes,
+                now: now,
+                catchUpWindow: dueCatchUpWindow
+            ) else { return }
             let comps = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: primaryFireDate)
             let id = instanceId(for: medication.id, date: doseDate, comps: timeComponents)
             let content = makeContent(
@@ -286,6 +323,28 @@ final class NotificationManager {
         guard leadMinutes > 0 else { return doseDate }
         let reminderDate = doseDate.addingTimeInterval(TimeInterval(-leadMinutes * 60))
         return reminderDate > now ? reminderDate : doseDate
+    }
+
+    private func resolvedPrimaryFireDate(
+        for doseDate: Date,
+        leadMinutes: Int,
+        now: Date,
+        catchUpWindow: TimeInterval,
+        calendar: Calendar = .current
+    ) -> Date? {
+        let desiredDate = adaptivePrimaryFireDate(for: doseDate, leadMinutes: leadMinutes, now: now)
+        if desiredDate > now {
+            return desiredDate
+        }
+
+        let age = now.timeIntervalSince(desiredDate)
+        guard age >= 0,
+              age <= catchUpWindow,
+              calendar.isDate(desiredDate, inSameDayAs: now) else {
+            return nil
+        }
+
+        return now.addingTimeInterval(2)
     }
 
     private func followUpId(index: Int, for medID: UUID, date: Date, comps: DateComponents) -> String {
@@ -571,7 +630,7 @@ final class NotificationManager {
             Task { @MainActor in
                 let meds = store.medications
                 let logs = store.intakeLogs
-                meds.filter({ $0.remindersEnabled }).forEach { self?.schedule(for: $0, intakeLogs: logs) }
+                self?.syncAll(medications: meds, intakeLogs: logs)
             }
         }
         center.addObserver(forName: NSNotification.Name.NSCalendarDayChanged, object: nil, queue: .main) { [weak self] _ in
@@ -579,7 +638,7 @@ final class NotificationManager {
             Task { @MainActor in
                 let meds = store.medications
                 let logs = store.intakeLogs
-                meds.filter({ $0.remindersEnabled }).forEach { self?.schedule(for: $0, intakeLogs: logs) }
+                self?.syncAll(medications: meds, intakeLogs: logs)
             }
         }
         center.addObserver(forName: NSNotification.Name.NSSystemTimeZoneDidChange, object: nil, queue: .main) { [weak self] _ in
@@ -587,27 +646,62 @@ final class NotificationManager {
             Task { @MainActor in
                 let meds = store.medications
                 let logs = store.intakeLogs
-                meds.filter({ $0.remindersEnabled }).forEach { self?.schedule(for: $0, intakeLogs: logs) }
+                self?.syncAll(medications: meds, intakeLogs: logs)
             }
         }
     }
 
-    // MARK: - Refill Reminders
+    // MARK: - Inventory & Course Reminders
     private static let refillCategoryId = "MED_REFILL"
+    private static let courseCategoryId = "MED_COURSE_END"
+    private let courseCatchUpTokensKey = "course.reminder.catchup.tokens"
 
     private func refillIdentifier(for medID: UUID) -> String {
         "refill_\(medID.uuidString)"
     }
 
+    private func courseIdentifier(for medID: UUID) -> String {
+        "course_\(medID.uuidString)"
+    }
+
+    private func courseToken(for medication: Medication, calendar: Calendar = .current) -> String? {
+        guard let courseEndDate = medication.courseEndDate else { return nil }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd"
+        let day = formatter.string(from: calendar.startOfDay(for: courseEndDate))
+        return "\(medication.id.uuidString)_\(day)"
+    }
+
+    private func storedCourseCatchUpToken(for medicationID: UUID) -> String? {
+        let dict = defaults.dictionary(forKey: courseCatchUpTokensKey) as? [String: String] ?? [:]
+        return dict[medicationID.uuidString]
+    }
+
+    private func setStoredCourseCatchUpToken(_ token: String?, for medicationID: UUID) {
+        var dict = defaults.dictionary(forKey: courseCatchUpTokensKey) as? [String: String] ?? [:]
+        dict[medicationID.uuidString] = token
+        if token == nil { dict.removeValue(forKey: medicationID.uuidString) }
+        defaults.set(dict, forKey: courseCatchUpTokensKey)
+    }
+
+    private func removeLifecycleNotifications(identifier: String) {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [identifier])
+        center.removeDeliveredNotifications(withIdentifiers: [identifier])
+    }
+
     func scheduleRefillReminder(for medication: Medication) {
-        guard let days = medication.daysOfSupplyRemaining else { return }
-        let threshold = UserDefaults.standard.object(forKey: "prefs.refillThresholdDays") as? Int ?? 7
         let id = refillIdentifier(for: medication.id)
+        guard let days = medication.daysOfSupplyRemaining else {
+            removeLifecycleNotifications(identifier: id)
+            return
+        }
+        let threshold = UserDefaults.standard.object(forKey: "prefs.refillThresholdDays") as? Int ?? 7
         let center = UNUserNotificationCenter.current()
 
         if days > threshold {
             // Not low yet — cancel any existing refill reminder
-            center.removePendingNotificationRequests(withIdentifiers: [id])
+            removeLifecycleNotifications(identifier: id)
             return
         }
 
@@ -619,6 +713,7 @@ final class NotificationManager {
             content.body = String(format: NSLocalizedString("%@ has %lld days of supply left. Consider refilling soon.", comment: ""), medication.name, days)
         }
         content.sound = .default
+        content.categoryIdentifier = Self.refillCategoryId
         content.userInfo = ["medicationID": medication.id.uuidString]
 
         // Fire at 9 AM tomorrow to avoid spamming
@@ -635,13 +730,86 @@ final class NotificationManager {
     }
 
     func cancelRefillReminder(for medID: UUID) {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [refillIdentifier(for: medID)])
+        removeLifecycleNotifications(identifier: refillIdentifier(for: medID))
     }
 
-    /// Check all medications for low supply and schedule refill reminders
-    func checkRefillReminders(medications: [Medication]) {
+    func scheduleCourseReminder(for medication: Medication, now: Date = Date()) {
+        let id = courseIdentifier(for: medication.id)
+        guard let courseEndDate = medication.courseEndDate else {
+            setStoredCourseCatchUpToken(nil, for: medication.id)
+            removeLifecycleNotifications(identifier: id)
+            return
+        }
+
+        let threshold = UserDefaults.standard.object(forKey: "prefs.courseEndThresholdDays") as? Int ?? 3
+        let calendar = Calendar.current
+        let endDay = calendar.startOfDay(for: courseEndDate)
+        guard let endOfCourseWindow = calendar.date(byAdding: .day, value: 1, to: endDay) else {
+            setStoredCourseCatchUpToken(nil, for: medication.id)
+            removeLifecycleNotifications(identifier: id)
+            return
+        }
+
+        if now >= endOfCourseWindow {
+            setStoredCourseCatchUpToken(nil, for: medication.id)
+            removeLifecycleNotifications(identifier: id)
+            return
+        }
+
+        let warningDay = calendar.date(byAdding: .day, value: -max(threshold, 0), to: endDay) ?? endDay
+        let preferredFire = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: warningDay) ?? warningDay
+        let currentToken = courseToken(for: medication, calendar: calendar)
+        let fireDate: Date
+        if preferredFire > now {
+            fireDate = preferredFire
+        } else if storedCourseCatchUpToken(for: medication.id) == currentToken {
+            removeLifecycleNotifications(identifier: id)
+            return
+        } else {
+            fireDate = now.addingTimeInterval(5)
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = NSLocalizedString("Course Reminder", comment: "")
+        guard let courseState = medication.courseState(thresholdDays: threshold, reference: now, calendar: calendar) else {
+            removeLifecycleNotifications(identifier: id)
+            return
+        }
+        switch courseState {
+        case .ended(let daysPast):
+            content.body = String(format: NSLocalizedString("%@ reached its end date %lld days ago. Review whether it should continue.", comment: ""), medication.name, daysPast)
+        case .endsToday:
+            content.body = String(format: NSLocalizedString("%@ is scheduled to end today. Review whether it should continue.", comment: ""), medication.name)
+        case .endingSoon(let daysRemaining):
+            content.body = String(format: NSLocalizedString("%@ is scheduled to end in %lld days. Review the plan soon.", comment: ""), medication.name, daysRemaining)
+        case .scheduled(let daysRemaining):
+            content.body = String(format: NSLocalizedString("%@ is scheduled to end in %lld days. Review the plan soon.", comment: ""), medication.name, daysRemaining)
+        }
+        content.sound = .default
+        content.categoryIdentifier = Self.courseCategoryId
+        content.userInfo = ["medicationID": medication.id.uuidString]
+
+        let comps = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
+        let req = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+        if fireDate != preferredFire {
+            setStoredCourseCatchUpToken(currentToken, for: medication.id)
+        } else {
+            setStoredCourseCatchUpToken(nil, for: medication.id)
+        }
+        UNUserNotificationCenter.current().add(req, withCompletionHandler: nil)
+    }
+
+    func cancelCourseReminder(for medID: UUID) {
+        setStoredCourseCatchUpToken(nil, for: medID)
+        removeLifecycleNotifications(identifier: courseIdentifier(for: medID))
+    }
+
+    /// Keep inventory and course reminders aligned with the current medication list.
+    func checkLifecycleReminders(medications: [Medication], now: Date = Date()) {
         for med in medications {
             scheduleRefillReminder(for: med)
+            scheduleCourseReminder(for: med, now: now)
         }
     }
 
@@ -707,6 +875,10 @@ extension NotificationManager {
         }
 
         if parts.count >= 2, parts[0] == "refill", UUID(uuidString: String(parts[1])) != nil {
+            return String(parts[1])
+        }
+
+        if parts.count >= 2, parts[0] == "course", UUID(uuidString: String(parts[1])) != nil {
             return String(parts[1])
         }
 

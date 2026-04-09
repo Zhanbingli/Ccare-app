@@ -63,7 +63,7 @@ enum IconGenerator {
         renderer.isOpaque = true
         renderer.scale = 1.0
         if let uiImage = renderer.uiImage, let data = uiImage.pngData() {
-            let url = FileManager.default.temporaryDirectory.appendingPathComponent("Ccare_AppIcon_\(Int(Date().timeIntervalSince1970)).png")
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("ChronicCare_AppIcon_\(Int(Date().timeIntervalSince1970)).png")
             try data.write(to: url, options: .atomic)
             return url
         }
@@ -81,7 +81,7 @@ enum IconGenerator {
         guard let data = image.pngData() else {
             throw NSError(domain: "IconGenerator", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to render icon image (fallback)"])
         }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Ccare_AppIcon_\(Int(Date().timeIntervalSince1970)).png")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("ChronicCare_AppIcon_\(Int(Date().timeIntervalSince1970)).png")
         try data.write(to: url, options: .atomic)
         return url
     }
