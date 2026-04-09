@@ -374,15 +374,18 @@ h3 {
 .screens-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
+  gap: 20px;
+  align-items: start;
 }
 
 .screen-card {
   display: grid;
-  gap: 16px;
+  justify-items: center;
+  gap: 12px;
 }
 
 .screen-frame {
+  width: min(100%, 270px);
   padding: 12px;
   border-radius: 30px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(251, 246, 239, 0.8));
@@ -397,21 +400,15 @@ h3 {
 
 .screen-copy {
   padding: 0 4px;
+  text-align: center;
 }
 
 .screen-label {
-  margin-bottom: 8px;
   color: var(--green);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-}
-
-.screen-copy p:last-child {
-  margin-top: 10px;
-  color: var(--muted);
-  line-height: 1.62;
 }
 
 .journey-card-strong {
@@ -508,13 +505,18 @@ h3 {
   .hero-grid,
   .intro-pillars,
   .journey-grid,
-  .screens-grid,
   .split-section {
     grid-template-columns: 1fr;
   }
 
   .hero-metrics {
     grid-template-columns: 1fr;
+  }
+
+  .screens-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow-x: auto;
+    padding-bottom: 8px;
   }
 
   h1,
@@ -541,6 +543,11 @@ h3 {
 
   .hero-actions .button {
     width: 100%;
+  }
+
+  .screens-grid {
+    grid-template-columns: 1fr;
+    overflow: visible;
   }
 
   .stack-row {
