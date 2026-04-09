@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChronicCare</title>
+  <meta
+    name="description"
+    content="Offline-first medication management for chronic care. Reliable reminders, fast logging, medication detail views, and local-first health tracking."
+  >
+  <link rel="stylesheet" href="site.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <nav class="topbar">
+        <div class="brand">
+          <span class="brand-mark">C</span>
+          <span class="brand-name">ChronicCare</span>
+        </div>
+        <div class="topbar-links">
+          <a href="https://github.com/Zhanbingli/Ccare-app" target="_blank" rel="noreferrer">GitHub</a>
+          <a href="https://github.com/Zhanbingli/Ccare-app/releases" target="_blank" rel="noreferrer">Releases</a>
+        </div>
+      </nav>
+
+      <div class="hero-grid">
+        <section class="hero-copy">
+          <p class="eyebrow">Offline-first iOS medication management</p>
+          <h1>Medication reminders that feel calm, clear, and trustworthy.</h1>
+          <p class="hero-text">
+            ChronicCare is a SwiftUI app for daily medication tracking, health logging,
+            reminder diagnostics, medication-specific detail views, and local-first chronic care workflows.
+          </p>
+
+          <div class="hero-actions">
+            <a class="button button-primary" href="https://github.com/Zhanbingli/Ccare-app" target="_blank" rel="noreferrer">
+              View Source
+            </a>
+            <a class="button button-secondary" href="https://github.com/Zhanbingli/Ccare-app/releases/tag/v0.1.0-alpha" target="_blank" rel="noreferrer">
+              Latest Release
+            </a>
+          </div>
+
+          <div class="status-row">
+            <span class="badge badge-green">Current status: alpha</span>
+            <span class="badge badge-blue">iOS 16+</span>
+            <span class="badge badge-neutral">English + zh-Hans</span>
+          </div>
+        </section>
+
+        <section class="hero-shot">
+          <div class="shot-frame">
+            <img src="assets/hero.jpg" alt="ChronicCare app screenshot">
+          </div>
+        </section>
+      </div>
+    </header>
+
+    <main>
+      <section class="section">
+        <div class="section-heading">
+          <p class="section-kicker">Why it exists</p>
+          <h2>Built around everyday reliability, not feature clutter.</h2>
+        </div>
+        <div class="card-grid three-up">
+          <article class="feature-card">
+            <h3>Reliable reminders</h3>
+            <p>
+              Scheduled notifications, snooze, follow-ups, lifecycle reminders,
+              suppression handling, and reminder diagnostics for missed setup.
+            </p>
+          </article>
+          <article class="feature-card">
+            <h3>Low-friction logging</h3>
+            <p>
+              Fast measurement entry, PRN support, medication OCR from camera,
+              and streamlined add/edit flows for daily use.
+            </p>
+          </article>
+          <article class="feature-card">
+            <h3>Single-medication clarity</h3>
+            <p>
+              Medication detail views connect adherence, reminder state,
+              inventory, course status, and related health measurements.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-heading">
+          <p class="section-kicker">Product structure</p>
+          <h2>Three screens, three jobs.</h2>
+        </div>
+        <div class="card-grid three-up">
+          <article class="structure-card">
+            <span class="card-index">01</span>
+            <h3>Today</h3>
+            <p>
+              A focused execution screen for what needs attention now, what is overdue,
+              and what is coming later today.
+            </p>
+          </article>
+          <article class="structure-card">
+            <span class="card-index">02</span>
+            <h3>Health</h3>
+            <p>
+              A management workspace for medications, reminder coverage, latest measurements,
+              trends, emergency card access, and caregiver support.
+            </p>
+          </article>
+          <article class="structure-card">
+            <span class="card-index">03</span>
+            <h3>Medication Detail</h3>
+            <p>
+              A single-medication view for adherence snapshot, reminder strategy,
+              related measurements, and maintenance state.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split">
+        <div class="split-copy">
+          <p class="section-kicker">Core capabilities</p>
+          <h2>What the app already does well.</h2>
+          <ul class="feature-list">
+            <li>Adaptive reminder scheduling with snooze and follow-up logic</li>
+            <li>Measurement logging for blood pressure, glucose, weight, and heart rate</li>
+            <li>Reminder diagnostics for missing times, disabled reminders, and permission issues</li>
+            <li>Inventory and course-end reminders</li>
+            <li>Emergency card and caregiver support flows</li>
+            <li>HealthKit integration, backup/restore, and PDF export</li>
+          </ul>
+        </div>
+        <div class="split-panel">
+          <div class="panel">
+            <p class="panel-kicker">Current focus</p>
+            <h3>Polishing reliability and product clarity</h3>
+            <p>
+              The project is past the “feature prototype” stage and is now being refined around
+              notification trust, UI consistency, localization, and medication-specific workflows.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-heading">
+          <p class="section-kicker">Tech stack</p>
+          <h2>Native SwiftUI, local-first architecture.</h2>
+        </div>
+        <div class="stack-grid">
+          <div class="stack-row"><span>UI</span><strong>SwiftUI, Swift Charts, custom design system</strong></div>
+          <div class="stack-row"><span>Data</span><strong>Codable JSON persistence through DataStore</strong></div>
+          <div class="stack-row"><span>Notifications</span><strong>UNUserNotificationCenter with custom scheduling flow</strong></div>
+          <div class="stack-row"><span>Health</span><strong>HealthKit import/export helpers</strong></div>
+          <div class="stack-row"><span>Export</span><strong>PDF reports, backup/restore, share sheets</strong></div>
+          <div class="stack-row"><span>Testing</span><strong>Swift Testing in ChronicCareTests</strong></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-heading">
+          <p class="section-kicker">Open source</p>
+          <h2>Repository and release</h2>
+        </div>
+        <div class="cta-card">
+          <p>
+            Browse the source, read the README, or follow tagged releases directly on GitHub.
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="https://github.com/Zhanbingli/Ccare-app" target="_blank" rel="noreferrer">
+              Open Repository
+            </a>
+            <a class="button button-secondary" href="https://github.com/Zhanbingli/Ccare-app/releases" target="_blank" rel="noreferrer">
+              View Releases
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>ChronicCare stores data locally by default and is intended for self-management support.</p>
+      <p>It is not a medical device and does not provide medical advice.</p>
+    </footer>
+  </div>
+</body>
+</html>
