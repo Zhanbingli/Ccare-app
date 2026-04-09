@@ -371,6 +371,49 @@ h3 {
   gap: 16px;
 }
 
+.screens-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.screen-card {
+  display: grid;
+  gap: 16px;
+}
+
+.screen-frame {
+  padding: 12px;
+  border-radius: 30px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(251, 246, 239, 0.8));
+  border: 1px solid rgba(255, 255, 255, 0.84);
+  box-shadow: var(--shadow-soft);
+}
+
+.screen-frame img {
+  width: 100%;
+  border-radius: 20px;
+}
+
+.screen-copy {
+  padding: 0 4px;
+}
+
+.screen-label {
+  margin-bottom: 8px;
+  color: var(--green);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.screen-copy p:last-child {
+  margin-top: 10px;
+  color: var(--muted);
+  line-height: 1.62;
+}
+
 .journey-card-strong {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 243, 235, 0.82));
 }
@@ -465,6 +508,7 @@ h3 {
   .hero-grid,
   .intro-pillars,
   .journey-grid,
+  .screens-grid,
   .split-section {
     grid-template-columns: 1fr;
   }
