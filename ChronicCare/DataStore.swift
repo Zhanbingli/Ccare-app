@@ -187,21 +187,33 @@ final class DataStore: ObservableObject {
             self.measurements = decoded.sorted(by: { $0.date > $1.date })
         } catch {
             // First launch or decode error; start empty but log
-            if (error as NSError).domain != NSCocoaErrorDomain { print("Load measurements error: \(error)") }
+            if (error as NSError).domain != NSCocoaErrorDomain {
+                #if DEBUG
+                print("Load measurements error: \(error)")
+                #endif
+            }
         }
         do {
             let data = try Data(contentsOf: medicationsURL)
             let decoded = try JSONDecoder().decode([Medication].self, from: data)
             self.medications = decoded
         } catch {
-            if (error as NSError).domain != NSCocoaErrorDomain { print("Load medications error: \(error)") }
+            if (error as NSError).domain != NSCocoaErrorDomain {
+                #if DEBUG
+                print("Load medications error: \(error)")
+                #endif
+            }
         }
         do {
             let data = try Data(contentsOf: intakeLogsURL)
             let decoded = try JSONDecoder().decode([IntakeLog].self, from: data)
             self.intakeLogs = decoded
         } catch {
-            if (error as NSError).domain != NSCocoaErrorDomain { print("Load intake logs error: \(error)") }
+            if (error as NSError).domain != NSCocoaErrorDomain {
+                #if DEBUG
+                print("Load intake logs error: \(error)")
+                #endif
+            }
         }
         do {
             let data = try Data(contentsOf: emergencyInfoURL)
@@ -254,7 +266,9 @@ final class DataStore: ObservableObject {
                 }
                 try? (url as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
             } catch {
+                #if DEBUG
                 print("Failed to save \(label): \(error)")
+                #endif
             }
         }
     }

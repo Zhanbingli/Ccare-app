@@ -61,9 +61,9 @@ import UserNotifications
                     )
                     store?.decrementPills(for: medID)
                 }
-                if let med = store?.medications.first(where: { $0.id == medID }) {
+                if let store, store.medications.contains(where: { $0.id == medID }) {
                     NotificationManager.shared.cancelDoseNotifications(for: medID, timeComponents: comps, now: logAt)
-                    NotificationManager.shared.schedule(for: med, intakeLogs: store?.intakeLogs ?? [])
+                    NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
                 }
             } else {
                 await MainActor.run {
@@ -88,9 +88,9 @@ import UserNotifications
                         recordedAt: actionTimestamp
                     )
                 }
-                if let med = store?.medications.first(where: { $0.id == medID }) {
+                if let store, store.medications.contains(where: { $0.id == medID }) {
                     NotificationManager.shared.cancelDoseNotifications(for: medID, timeComponents: comps, now: logAt)
-                    NotificationManager.shared.schedule(for: med, intakeLogs: store?.intakeLogs ?? [])
+                    NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
                 }
             } else {
                 await MainActor.run { store?.upsertIntake(medicationID: medID, status: .skipped, scheduleTime: nil, recordedAt: actionTimestamp) }
@@ -143,9 +143,9 @@ import UserNotifications
                             recordedAt: actionTimestamp
                         )
                     }
-                    if let med = store?.medications.first(where: { $0.id == medID }) {
+                    if let store, store.medications.contains(where: { $0.id == medID }) {
                         NotificationManager.shared.cancelDoseNotifications(for: medID, timeComponents: comps, now: logAt)
-                        NotificationManager.shared.schedule(for: med, intakeLogs: store?.intakeLogs ?? [])
+                        NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
                     }
                 } else {
                     await MainActor.run { store?.upsertIntake(medicationID: medID, status: .skipped, scheduleTime: nil, recordedAt: actionTimestamp) }

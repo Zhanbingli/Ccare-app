@@ -15,19 +15,19 @@ enum AppFontStyle {
         case .largeTitle:
             return Font.system(size: 28, weight: .semibold, design: .rounded)
         case .title:
-            return Font.system(size: 24, weight: .semibold, design: .rounded)
+            return Font.system(size: 23, weight: .semibold, design: .rounded)
         case .headline:
-            return Font.system(size: 20, weight: .semibold, design: .rounded)
+            return Font.system(size: 19, weight: .semibold, design: .rounded)
         case .subheadline:
-            return Font.system(size: 18, weight: .medium, design: .rounded)
-        case .body:
-            return Font.system(size: 18, weight: .regular, design: .rounded)
-        case .label:
             return Font.system(size: 17, weight: .medium, design: .rounded)
+        case .body:
+            return Font.system(size: 17, weight: .regular, design: .rounded)
+        case .label:
+            return Font.system(size: 16, weight: .medium, design: .rounded)
         case .footnote:
-            return Font.system(size: 16, weight: .regular, design: .rounded)
-        case .caption:
             return Font.system(size: 15, weight: .regular, design: .rounded)
+        case .caption:
+            return Font.system(size: 14, weight: .regular, design: .rounded)
         }
     }
 }

@@ -144,9 +144,13 @@ final class NotificationManager {
     func requestAuthorization() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if let error = error {
+                #if DEBUG
                 print("Notification auth error: \(error)")
+                #endif
             } else {
+                #if DEBUG
                 print("Notifications granted: \(granted)")
+                #endif
             }
         }
     }
@@ -215,16 +219,20 @@ final class NotificationManager {
 
     func schedule(for medication: Medication, intakeLogs: [IntakeLog], now: Date = Date()) {
         let center = UNUserNotificationCenter.current()
-        let prefix = medication.id.uuidString
         let strategy = AdaptiveReminderEngine.strategy(for: medication, intakeLogs: intakeLogs, now: now)
         center.getPendingNotificationRequests { list in
-            // Remove base schedule IDs, snoozes, and follow-ups for this medication
-            let ids = list.map { $0.identifier }.filter { $0.contains(prefix) }
+            // Only reschedule dose-level reminders here. Lifecycle reminders such
+            // as refill/course alerts are maintained by checkLifecycleReminders.
+            let ids = list.map { $0.identifier }.filter {
+                Self.isDoseReminder(identifier: $0, medicationID: medication.id)
+            }
             if !ids.isEmpty { center.removePendingNotificationRequests(withIdentifiers: ids) }
 
             // Clean delivered notifications to avoid stale banners/badges
             center.getDeliveredNotifications { notes in
-                let delivered = notes.map { $0.request.identifier }.filter { $0.contains(prefix) }
+                let delivered = notes.map { $0.request.identifier }.filter {
+                    Self.isDoseReminder(identifier: $0, medicationID: medication.id)
+                }
                 if !delivered.isEmpty { center.removeDeliveredNotifications(withIdentifiers: delivered) }
             }
 
@@ -296,7 +304,9 @@ final class NotificationManager {
             let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
             let req = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
             center.add(req) { error in
+                #if DEBUG
                 if let error = error { print("Notification schedule error: \(error)") }
+                #endif
             }
 
             // Schedule follow-up reminders after the original dose time.
@@ -892,6 +902,15 @@ extension NotificationManager {
     static func hasValidMedication(identifier: String, validMedicationIDs: Set<String>) -> Bool {
         guard let medicationID = medicationID(from: identifier) else { return true }
         return validMedicationIDs.contains(medicationID)
+    }
+
+    static func isDoseReminder(identifier: String, medicationID: UUID) -> Bool {
+        let medID = medicationID.uuidString
+        if identifier.hasPrefix("\(medID)_") { return true }
+        if identifier.hasPrefix("followup_"), identifier.contains("_\(medID)_") { return true }
+        if identifier == "snooze_\(medID)" { return true }
+        if identifier.hasPrefix("snooze_\(medID)_") { return true }
+        return false
     }
 
     static func scheduleComponents(from userInfo: [AnyHashable: Any]) -> DateComponents? {

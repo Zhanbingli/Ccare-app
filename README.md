@@ -2,32 +2,43 @@
 
 ![ChronicCare screenshot](docs/assets/hero.png)
 
-ChronicCare is an offline-first SwiftUI app for chronic medication management. It combines reliable medication reminders, fast health logging, medication-specific detail views, and lightweight adherence insights in a product designed for daily use.
+ChronicCare is a privacy-first iOS app prototype for chronic medication routines. It helps users reduce missed doses, log health measurements, track inventory/course status, and understand whether their reminders are actually set up correctly.
 
-## Why This Project
+The project is intentionally focused on one product question: **can a real chronic-care user complete setup and keep returning for a 7-day medication routine?**
 
-ChronicCare is built around a simple goal: make routine medication tracking feel trustworthy, calm, and actionable.
+## Product Thesis
 
-It focuses on:
+Medication reminders are only useful when they are reliable, low-friction, and easy to explain. ChronicCare is designed around a small daily loop:
 
-- reliable scheduled reminders with snooze, follow-up, badge updates, and lifecycle cleanup
-- low-friction logging for medications and measurements
-- medication detail views that connect adherence, reminder status, and related health trends
-- local-first storage with backup, restore, PDF export, and optional HealthKit integration
+1. Add medications quickly, including camera-based OCR label suggestions.
+2. Receive scheduled reminders with snooze and follow-up handling.
+3. Mark doses as taken from Today.
+4. Review adherence, reminder coverage, inventory, and related health measurements.
 
-## Current Product Structure
+## Demo Flow
 
-- **Today**: the execution screen for what needs attention now, what is overdue, and what is coming later today
-- **Health**: the management workspace for medications, reminder diagnostics, emergency card access, caregivers, trends, and latest measurements
-- **Medication Detail**: a single-medication view for snapshot status, reminder strategy, adherence history, related measurements, and maintenance state
+For a public demo, use this path:
+
+```text
+Add Medication -> Scan Label -> Set Reminder -> Today Check-in -> Medication Detail -> Reminder Coverage
+```
+
+Recommended sample data:
+
+- Medications: `Amlodipine 5 mg`, `Metformin 500 mg`, `Atorvastatin 20 mg`
+- Measurements: blood pressure `128/82 mmHg`, glucose `105 mg/dL`
+- Scenario: one medication due now, one later today, one with inventory tracking
 
 ## Core Features
 
-- **Adaptive reminders**: scheduled notifications, follow-up reminders, snooze flows, same-day suppression, badge math, refill reminders, and course-end reminders
-- **Medication management**: add/edit flows, OCR label scan via camera, PRN vs. scheduled logic, inventory tracking, and course duration handling
-- **Measurement logging**: blood pressure, glucose, weight, and heart rate with unit handling and trend views
-- **Reminder diagnostics**: explain why a medication will or will not notify, including missing times, reminders off, or notification permission issues
-- **Safety & support**: emergency card, caregiver support flow, and missed-dose support context
+- **Today**: task-first check-in surface for due, overdue, snoozed, later, and PRN medications
+- **7-day rhythm**: lightweight first-week feedback to show whether the setup is ready and whether the user is returning
+- **Medication setup**: add/edit flows, camera OCR suggestions, scheduled vs. PRN modes, inventory, and course duration
+- **Reminder reliability**: scheduled notifications, snooze, follow-up reminders, same-day suppression, badge updates, refill alerts, and course-end alerts
+- **Reminder coverage**: diagnostics for missing times, reminders off, notification permission issues, and PRN behavior
+- **Health context**: blood pressure, glucose, weight, and heart-rate logging with medication-linked detail views
+- **Safety support**: emergency card, caregiver records, and missed-dose support context
+- **Local-first storage**: Codable JSON persistence, backup/restore, PDF export, and optional HealthKit integration
 - **Localization**: English and Simplified Chinese (`zh-Hans`)
 
 ## Tech Stack
@@ -40,6 +51,14 @@ It focuses on:
 | Health | HealthKit import/export helpers |
 | Export | PDF generation, backup/restore, share sheets |
 | Testing | Swift Testing in `ChronicCareTests` |
+
+## Privacy & Safety
+
+- Data is stored locally on device by default.
+- OCR suggestions are treated as editable candidates; users must confirm medication name and dose before applying.
+- ChronicCare is for self-management support and product experimentation.
+- It is not a medical device, does not diagnose conditions, and does not provide medical advice.
+- Medication changes should always be discussed with a clinician.
 
 ## Project Layout
 
@@ -83,8 +102,18 @@ Requirements:
 - notification permission for reminder testing
 - HealthKit entitlement and usage descriptions if Health features are enabled
 
-## Notes
+## Current Limitations
 
-- Data is stored locally on device by default.
-- AI-related configuration exists in Settings, but the core reminder engine does not depend on AI.
-- This app is intended for self-management support and product experimentation. It is not a medical device and does not provide medical advice.
+- This is an alpha product prototype, not an App Store release.
+- Notification reliability still needs real-device regression testing across foreground/background, cross-day, time-zone, snooze, taken, skip, refill, and course-end flows.
+- OCR can misread medication labels and should only reduce typing, not replace user confirmation.
+- Caregiver support is local/product-prototype level and not a clinical escalation system.
+- AI configuration exists, but the core reminder system does not depend on AI.
+
+## Roadmap
+
+- Real-device notification regression checklist
+- More conservative OCR review and correction flow
+- More consistent large-text accessibility review for older users
+- Cleaner Medication Detail vs. Edit Medication separation
+- Public demo video and TestFlight-ready build once Apple Developer Program access is available

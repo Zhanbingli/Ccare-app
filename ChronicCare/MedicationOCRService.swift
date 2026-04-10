@@ -91,7 +91,17 @@ enum MedicationLabelParser {
         "tablet", "tablets", "tab", "tabs", "capsule", "capsules", "cap", "caps",
         "prescription", "rx", "doctor", "pharmacy", "label", "instructions",
         "take", "daily", "refill", "route", "qty", "quantity", "patient", "use",
-        "mouth", "oral", "generic", "extended", "release", "delayed", "strength"
+        "mouth", "oral", "generic", "extended", "release", "delayed", "strength",
+        "warning", "caution", "keep", "children", "store", "temperature", "lot",
+        "batch", "exp", "expires", "manufacturer", "distributed", "dispense",
+        "date", "address", "phone", "only", "labeler", "ndc", "barcode"
+    ]
+
+    private static let lineRejectPatterns = [
+        #"(?i)\b(rx|ndc|lot|batch|exp|expires?|qty|quantity|refills?|pharmacy|doctor|patient|address|phone|barcode|store at|keep out|warning|caution|manufacturer|distributed by)\b"#,
+        #"(?i)\b(take|use)\b.*\b(daily|mouth|tablet|capsule|food|bedtime|hours?)\b"#,
+        #"^\W*$"#,
+        #"^\d[\d\s\-\/:.]*$"#
     ]
 
     static func parse(recognizedLines: [String]) -> MedicationOCRSuggestion {
@@ -128,6 +138,8 @@ enum MedicationLabelParser {
         var bestCandidate: (text: String, score: Int)?
 
         for line in lines {
+            guard !shouldRejectNameLine(line) else { continue }
+
             var candidate = line
             let range = NSRange(candidate.startIndex..<candidate.endIndex, in: candidate)
             candidate = doseRegex.stringByReplacingMatches(in: candidate, options: [], range: range, withTemplate: " ")
@@ -138,19 +150,24 @@ enum MedicationLabelParser {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
 
             let loweredWords = candidate.lowercased().split(separator: " ").map(String.init)
+            let wordCount = loweredWords.count
             guard !candidate.isEmpty else { continue }
-            guard loweredWords.count <= 6 else { continue }
+            guard wordCount <= 4 else { continue }
             guard candidate.range(of: "[A-Za-z\\u4e00-\\u9fff]", options: .regularExpression) != nil else { continue }
+            guard candidate.count >= 3 else { continue }
+            guard !candidate.contains(":") else { continue }
+            guard candidate.filter({ $0.isNumber }).count <= 1 else { continue }
 
             let penalty = loweredWords.reduce(into: 0) { result, word in
                 if noiseWords.contains(word) { result += 3 }
             }
             let alphaCount = candidate.filter { $0.isLetter || $0.isWhitespace }.count
-            let score = alphaCount - penalty
-            guard score > 2 else { continue }
+            let score = alphaCount - penalty - max(0, wordCount - 2)
+            guard score >= 5 else { continue }
 
             let cleaned = cleanupMedicationName(candidate)
             guard !cleaned.isEmpty else { continue }
+            guard !shouldRejectNameLine(cleaned) else { continue }
 
             if bestCandidate == nil || score > bestCandidate!.score {
                 bestCandidate = (cleaned, score)
@@ -190,6 +207,25 @@ enum MedicationLabelParser {
         }
 
         return cleaned
+    }
+
+    private static func shouldRejectNameLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return true }
+
+        if trimmed.count > 36 { return true }
+        for pattern in lineRejectPatterns {
+            if trimmed.range(of: pattern, options: .regularExpression) != nil {
+                return true
+            }
+        }
+
+        let lower = trimmed.lowercased()
+        let words = lower.split(separator: " ").map(String.init)
+        let noiseCount = words.filter { noiseWords.contains($0) }.count
+        if noiseCount >= max(1, words.count / 2) { return true }
+
+        return false
     }
 
     private static func firstMatch(in text: String, regex: NSRegularExpression) -> String? {

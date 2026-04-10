@@ -25,7 +25,7 @@ struct MeasurementsView: View {
                                         .frame(width: 4)
                                     VStack(alignment: .leading, spacing: 6) {
                                         HStack(alignment: .firstTextBaseline) {
-                                            Text(m.type.rawValue).appFont(.headline)
+                                            Text(m.type.displayName).appFont(.headline)
                                             Spacer()
                                             if m.type == .bloodPressure, let d = m.diastolic {
                                                 Text("\(Int(m.value))/\(Int(d)) \(m.type.unit)")
@@ -63,7 +63,7 @@ struct MeasurementsView: View {
                                 }
                                 .contextMenu {
                                     Button(role: .destructive) { if let i = store.measurements.firstIndex(where: { $0.id == m.id }) { store.removeMeasurement(at: IndexSet(integer: i)) } } label: { Label("Delete", systemImage: "trash") }
-                                    Button { UIPasteboard.general.string = "\(m.type.rawValue): \(m.value)" } label: { Label("Copy", systemImage: "doc.on.doc") }
+                                    Button { UIPasteboard.general.string = "\(m.type.displayName): \(m.value)" } label: { Label("Copy", systemImage: "doc.on.doc") }
                                 }
                             }
                         }
@@ -77,7 +77,7 @@ struct MeasurementsView: View {
                     Picker("Type", selection: $selectedType) {
                         Text("All").tag(MeasurementType?.none)
                         ForEach(MeasurementType.allCases) { t in
-                            Text(t.rawValue).tag(Optional(t))
+                            Text(t.displayName).tag(Optional(t))
                         }
                     }
                     .pickerStyle(.segmented)
@@ -439,7 +439,7 @@ private extension AddMeasurementView {
                     Circle()
                         .fill(measurementType.tint)
                         .frame(width: 8, height: 8)
-                    Text(measurementType.rawValue)
+                    Text(measurementType.displayName)
                         .appFont(.subheadline)
                         .fontWeight(.semibold)
                         .foregroundStyle(.primary)

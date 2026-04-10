@@ -687,7 +687,7 @@ private extension HealthView {
                 store.decrementPills(for: med.id)
                 NotificationManager.shared.suppressToday(for: med.id, timeComponents: dose.comps)
                 NotificationManager.shared.cancelDoseNotifications(for: med.id, timeComponents: dose.comps)
-                NotificationManager.shared.schedule(for: med, intakeLogs: store.intakeLogs)
+                NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
                 NotificationManager.shared.updateBadge(store: store)
                 Haptics.success()
             } label: {
@@ -964,17 +964,17 @@ private struct MedicationDetailView: View {
         return lastTakenLog.effectiveRecordedAt.formatted(date: .abbreviated, time: .shortened)
     }
 
-    private var statusFocusText: String {
+    private var detailStatusLine: String {
         if medication.isAsNeeded == true {
-            return NSLocalizedString("Log this medication from Today whenever you actually take it.", comment: "")
+            return NSLocalizedString("Manual logging only.", comment: "")
         }
         if !medication.remindersEnabled {
-            return NSLocalizedString("Reminders are currently off. Turn them back on if you want fixed notifications.", comment: "")
+            return NSLocalizedString("Fixed reminders are off.", comment: "")
         }
         if medication.timesOfDay.isEmpty {
-            return NSLocalizedString("This medication still needs scheduled times before reminder coverage is complete.", comment: "")
+            return NSLocalizedString("Reminder times need setup.", comment: "")
         }
-        return String(format: NSLocalizedString("Your next scheduled touchpoint is %@.", comment: ""), nextDoseText)
+        return String(format: NSLocalizedString("Next: %@", comment: ""), nextDoseText)
     }
 
     private var reminderSummary: String {
@@ -999,34 +999,23 @@ private struct MedicationDetailView: View {
 
     private var reminderExplanation: String {
         if medication.isAsNeeded == true {
-            return NSLocalizedString("Log doses from Today whenever you take this medication.", comment: "")
+            return NSLocalizedString("No fixed notifications for PRN medications.", comment: "")
         }
         if !medication.remindersEnabled {
-            return NSLocalizedString("Turn reminders back on if you want this medication to appear in notification scheduling.", comment: "")
+            return NSLocalizedString("Turn reminders on to include this medication in scheduling.", comment: "")
         }
         if reminderProfile.sampleCount == 0 {
-            return NSLocalizedString("The reminder engine will adapt after you log more scheduled doses.", comment: "")
+            return NSLocalizedString("The reminder pattern will adapt after more scheduled logs.", comment: "")
         }
 
         switch reminderStrategy.riskLevel {
         case .high:
-            return String(format: NSLocalizedString("Recent history shows a higher miss rate. The app is using a stronger reminder pattern with %lld follow-ups.", comment: ""), reminderStrategy.followUpIntervals.count)
+            return String(format: NSLocalizedString("Higher recent miss risk. Using %lld follow-ups.", comment: ""), reminderStrategy.followUpIntervals.count)
         case .medium:
-            return String(format: NSLocalizedString("Recent history shows some delays or snoozes. The app is keeping a balanced reminder pattern with %lld follow-ups.", comment: ""), reminderStrategy.followUpIntervals.count)
+            return String(format: NSLocalizedString("Some recent delays or snoozes. Using %lld follow-ups.", comment: ""), reminderStrategy.followUpIntervals.count)
         case .low:
-            return NSLocalizedString("Recent history looks consistent, so the app is keeping reminders lighter to reduce noise.", comment: "")
+            return NSLocalizedString("Recent history looks consistent. Keeping reminders lighter.", comment: "")
         }
-    }
-
-    private var adherenceSummary: String {
-        let score = max(adherence7, adherence30)
-        if score >= 0.8 {
-            return NSLocalizedString("Recent check-ins look consistent.", comment: "")
-        }
-        if score >= 0.5 {
-            return NSLocalizedString("Recent adherence is mixed. Keep an eye on upcoming doses.", comment: "")
-        }
-        return NSLocalizedString("Recent adherence is unstable. Review history and reminder setup.", comment: "")
     }
 
     private var reminderRiskLabel: String {
@@ -1150,22 +1139,18 @@ private struct MedicationDetailView: View {
 
                     Card {
                         VStack(alignment: .leading, spacing: 14) {
-                            Text(NSLocalizedString("Snapshot", comment: ""))
-                                .appFont(.headline)
+                            HStack {
+                                Text(NSLocalizedString("Snapshot", comment: ""))
+                                    .appFont(.headline)
+                                Spacer()
+                                reminderBadge(detailStatusLine, tint: reminderStateTint)
+                            }
                             LazyVGrid(columns: snapshotColumns, spacing: 10) {
                                 detailMetric(value: lastTakenText, label: NSLocalizedString("Last taken", comment: ""), tint: .green)
                                 detailMetric(value: nextDoseText, label: NSLocalizedString("Next dose", comment: ""), tint: .blue)
                                 detailMetric(value: String(format: "%.0f%%", adherence7 * 100), label: NSLocalizedString("7-day", comment: ""), tint: adherence7 >= 0.8 ? .green : adherence7 >= 0.5 ? .orange : .red)
                                 detailMetric(value: "\(streakCount)", label: NSLocalizedString("day streak", comment: ""), tint: .blue)
                             }
-                            Text(adherenceSummary)
-                                .appFont(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                            Text(statusFocusText)
-                                .appFont(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
 
@@ -1200,6 +1185,7 @@ private struct MedicationDetailView: View {
                             }
                             Text(reminderSummary)
                                 .appFont(.subheadline)
+                                .fontWeight(.semibold)
                             Text(reminderExplanation)
                                 .appFont(.caption)
                                 .foregroundStyle(.secondary)
@@ -1232,7 +1218,7 @@ private struct MedicationDetailView: View {
                                         VStack(alignment: .leading, spacing: 4) {
                                             Text(NSLocalizedString("Related Measurements", comment: ""))
                                                 .appFont(.headline)
-                                            Text(measurementType.rawValue)
+                                            Text(measurementType.displayName)
                                                 .appFont(.subheadline)
                                                 .foregroundStyle(measurementType.tint)
                                         }
@@ -1257,7 +1243,7 @@ private struct MedicationDetailView: View {
                                         .foregroundStyle(measurementType.tint)
                                         .symbolSize(18)
                                     }
-                                    .frame(height: 140)
+                                    .frame(height: 120)
                                     .chartXAxis(.hidden)
                                     .chartYAxis {
                                         AxisMarks(position: .leading, values: .automatic(desiredCount: 3))
@@ -1287,10 +1273,16 @@ private struct MedicationDetailView: View {
                                 Text(NSLocalizedString("Maintenance", comment: ""))
                                     .appFont(.headline)
                                 ForEach(maintenanceSummary, id: \.self) { item in
-                                    Text(item)
-                                        .appFont(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
+                                    HStack(alignment: .top, spacing: 8) {
+                                        Circle()
+                                            .fill(Color.secondary.opacity(0.45))
+                                            .frame(width: 5, height: 5)
+                                            .padding(.top, 7)
+                                        Text(item)
+                                            .appFont(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
                                 }
                             }
                         }

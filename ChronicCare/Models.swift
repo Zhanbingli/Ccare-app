@@ -8,6 +8,10 @@ enum MeasurementType: String, CaseIterable, Codable, Identifiable {
 
     var id: String { rawValue }
 
+    var displayName: String {
+        NSLocalizedString(rawValue, comment: "")
+    }
+
     var unit: String {
         switch self {
         case .bloodPressure: return "mmHg"

@@ -105,16 +105,24 @@ struct DashboardView: View {
                             prnCount: prnMeds.count
                         )
 
-                        progressOverviewCard(
-                            adherence: adherence,
-                            taken: takenCount,
-                            total: totalCount,
-                            actionableCount: actionableSchedules.count,
-                            overdueCount: overdueQueue.count + (actionableSchedules.contains {
-                                if case .overdue = statusCache[$0.id] ?? .none { return true }
-                                return false
-                            } ? 1 : 0)
+                        sevenDayRhythmCard(
+                            scheduledMedicationCount: store.medications.filter { $0.isAsNeeded != true }.count,
+                            setupIssueCount: firstWeekSetupIssueCount,
+                            checkInDays: sevenDayCheckInCount
                         )
+
+                        if totalCount > 0 {
+                            progressOverviewCard(
+                                adherence: adherence,
+                                taken: takenCount,
+                                total: totalCount,
+                                actionableCount: actionableSchedules.count,
+                                overdueCount: overdueQueue.count + (actionableSchedules.contains {
+                                    if case .overdue = statusCache[$0.id] ?? .none { return true }
+                                    return false
+                                } ? 1 : 0)
+                            )
+                        }
 
                         if !overdueQueue.isEmpty {
                             groupedScheduleCard(
@@ -227,6 +235,23 @@ private struct TakenConfirmationOverlay: View {
 }
 
 private extension DashboardView {
+    private var firstWeekSetupIssueCount: Int {
+        store.medications.filter {
+            $0.isAsNeeded != true && (!$0.remindersEnabled || $0.timesOfDay.isEmpty)
+        }.count
+    }
+
+    private var sevenDayCheckInCount: Int {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        guard let start = calendar.date(byAdding: .day, value: -6, to: today) else { return 0 }
+        let dayStarts = Set(store.intakeLogs.compactMap { log -> Date? in
+            guard log.status == .taken, log.date >= start else { return nil }
+            return calendar.startOfDay(for: log.date)
+        })
+        return min(dayStarts.count, 7)
+    }
+
     private func todaySchedules() -> [MedSchedule] {
         let cal = Calendar.current
         let now = Date()
@@ -379,6 +404,71 @@ private extension DashboardView {
         }
     }
 
+    private func sevenDayRhythmCard(
+        scheduledMedicationCount: Int,
+        setupIssueCount: Int,
+        checkInDays: Int
+    ) -> some View {
+        let hasSetupIssues = setupIssueCount > 0
+        let tint: Color = hasSetupIssues ? .orange : (checkInDays >= 7 ? .green : .blue)
+        let title = hasSetupIssues
+            ? NSLocalizedString("Finish Reminder Setup", comment: "")
+            : NSLocalizedString("7-Day Rhythm", comment: "")
+        let message: String = {
+            if hasSetupIssues {
+                return String(format: NSLocalizedString("%lld scheduled medications need reminder times or reminders turned on before a 7-day trial is reliable.", comment: ""), setupIssueCount)
+            }
+            if scheduledMedicationCount == 0 {
+                return NSLocalizedString("No fixed medications are scheduled. Log as-needed doses only when you actually take them.", comment: "")
+            }
+            if checkInDays == 0 {
+                return NSLocalizedString("Start today: respond to each due dose, then come back tomorrow.", comment: "")
+            }
+            if checkInDays >= 7 {
+                return NSLocalizedString("You have checked in across the last 7 days. Keep the same rhythm.", comment: "")
+            }
+            return String(format: NSLocalizedString("%lld of 7 days checked in. Keep logging each due dose for one week.", comment: ""), checkInDays)
+        }()
+
+        return Card {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: hasSetupIssues ? "bell.badge.fill" : "calendar.badge.checkmark")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 42, height: 42)
+                    .background(
+                        Circle()
+                            .fill(tint.opacity(0.10))
+                    )
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .appFont(.headline)
+                    Text(message)
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 8)
+
+                if !hasSetupIssues, scheduledMedicationCount > 0 {
+                    Text("\(min(checkInDays, 7))/7")
+                        .appFont(.label)
+                        .fontWeight(.semibold)
+                        .monospacedDigit()
+                        .foregroundStyle(tint)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(tint.opacity(0.10))
+                        )
+                }
+            }
+        }
+    }
+
     private func groupedScheduleCard(
         title: String,
         subtitle: String,
@@ -412,19 +502,13 @@ private extension DashboardView {
                     .appFont(.headline)
                     .fontWeight(emphasized ? .bold : .semibold)
                 Spacer()
-                if emphasized {
-                    let count = items.count
-                    AppBadge(
-                        text: count == 1
-                            ? NSLocalizedString("1 due", comment: "")
-                            : String(format: NSLocalizedString("%lld due", comment: ""), count),
-                        tint: accentTint ?? .primary
-                    )
-                } else {
-                    Text(subtitle)
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                let count = items.count
+                AppBadge(
+                    text: count == 1
+                        ? NSLocalizedString("1 item", comment: "")
+                        : String(format: NSLocalizedString("%lld items", comment: ""), count),
+                    tint: accentTint ?? .secondary
+                )
             }
 
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
@@ -517,13 +601,13 @@ private extension DashboardView {
     private func heroSupportText(for item: MedSchedule, status: TodayMedStatus) -> String {
         switch status {
         case .overdue:
-            return NSLocalizedString("This dose has moved past your grace window and should be handled first.", comment: "")
+            return NSLocalizedString("Past your grace window. Handle this first.", comment: "")
         case .dueSoon:
-            return NSLocalizedString("This is the current dose to clear before anything else.", comment: "")
+            return NSLocalizedString("Current dose. Clear this before the rest.", comment: "")
         case .snoozed:
-            return NSLocalizedString("You snoozed this dose earlier. It is back at the top of the queue.", comment: "")
+            return NSLocalizedString("Snoozed earlier. Back at the top.", comment: "")
         default:
-            return String(format: NSLocalizedString("%@ is the next medication on your plan today.", comment: ""), item.med.name)
+            return NSLocalizedString("Next scheduled medication today.", comment: "")
         }
     }
 
@@ -830,7 +914,7 @@ private extension DashboardView {
         store.decrementPills(for: item.med.id)
         NotificationManager.shared.suppressToday(for: item.med.id, timeComponents: comps)
         NotificationManager.shared.cancelDoseNotifications(for: item.med.id, timeComponents: comps)
-        NotificationManager.shared.schedule(for: item.med, intakeLogs: store.intakeLogs)
+        NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
         NotificationManager.shared.updateBadge(store: store)
         Haptics.success()
         takenMedName = item.med.name

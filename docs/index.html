@@ -6,7 +6,7 @@
   <title>ChronicCare</title>
   <meta
     name="description"
-    content="ChronicCare is an offline-first iOS app for calm, reliable medication reminders, health logging, and medication-specific detail."
+    content="ChronicCare is a privacy-first iOS prototype for chronic medication routines, reminder reliability, and local health tracking."
   >
   <link rel="stylesheet" href="site.css">
 </head>
@@ -21,7 +21,7 @@
           <span class="brand-mark">C</span>
           <span class="brand-copy">
             <strong>ChronicCare</strong>
-            <span>Medication management for daily life</span>
+            <span>Chronic medication routines</span>
           </span>
         </a>
 
@@ -36,12 +36,12 @@
 
       <div class="hero-grid" id="top">
         <section class="hero-copy">
-          <p class="eyebrow">Offline-first iOS medication management</p>
-          <h1>Medication reminders that feel calm, clear, and dependable.</h1>
+          <p class="eyebrow">Privacy-first iOS prototype</p>
+          <h1>A calmer daily loop for chronic medication routines.</h1>
           <p class="hero-text">
-            ChronicCare is built for chronic care routines that need more than a timer.
-            It combines reliable reminders, fast logging, medication-specific detail,
-            and local-first health tracking in a product designed for everyday use.
+            ChronicCare helps users set up medication reminders, check in from Today,
+            review reminder coverage, and connect medications with local health measurements.
+            The current product goal is simple: support a reliable 7-day routine before adding more complexity.
           </p>
 
           <div class="hero-actions">
@@ -54,19 +54,19 @@
           </div>
 
           <div class="status-row">
-            <span class="badge badge-green">Alpha product</span>
+            <span class="badge badge-green">Alpha prototype</span>
             <span class="badge badge-blue">iOS 16+</span>
-            <span class="badge badge-neutral">English + zh-Hans</span>
+            <span class="badge badge-neutral">Local-first</span>
           </div>
 
           <div class="hero-metrics">
             <article class="metric-card">
-              <span class="metric-label">Core surfaces</span>
-              <strong>Today, Health, Medication Detail</strong>
+              <span class="metric-label">Prototype question</span>
+              <strong>Can a user complete setup and return for 7 days?</strong>
             </article>
             <article class="metric-card">
-              <span class="metric-label">Reminder model</span>
-              <strong>Scheduled, PRN, snooze, follow-up, lifecycle</strong>
+              <span class="metric-label">Core loop</span>
+              <strong>Add medication, get reminded, check in, review coverage</strong>
             </article>
           </div>
         </section>
@@ -86,28 +86,28 @@
       <section class="section intro-band" id="product">
         <div class="intro-band-copy">
           <p class="section-kicker">What makes it different</p>
-          <h2>Designed around trust, not feature clutter.</h2>
+          <h2>Designed around reminder trust, not feature clutter.</h2>
         </div>
         <div class="intro-pillars">
           <article class="pillar-card">
             <h3>Reliable reminder behavior</h3>
             <p>
               Scheduled reminders, snooze, follow-up logic, reminder diagnostics,
-              refill alerts, and course-end reminders are treated as a core product system.
+              refill alerts, and course-end reminders are treated as the core product system.
             </p>
           </article>
           <article class="pillar-card">
             <h3>Low-friction daily use</h3>
             <p>
               Fast medication setup, camera-based OCR label scan, PRN support,
-              streamlined logging, and medication-specific detail views reduce routine friction.
+              streamlined logging, and a 7-day rhythm card reduce routine friction.
             </p>
           </article>
           <article class="pillar-card">
             <h3>Local-first by default</h3>
             <p>
-              Data stays on device by default, with backup, restore, export,
-              and optional HealthKit integration instead of a cloud-first dependency.
+              Data stays on device by default. OCR suggestions are editable candidates,
+              and the app does not provide diagnosis or medical advice.
             </p>
           </article>
         </div>
@@ -116,35 +116,33 @@
       <section class="section">
         <div class="section-heading">
           <p class="section-kicker">Product flow</p>
-          <h2>Three screens, three clear jobs.</h2>
+          <h2>A focused demo path, not a tour of every feature.</h2>
           <p class="section-body">
-            The product is intentionally compressed around execution, management, and medication-specific context.
+            The public demo is built around one path: add a medication, set a reminder,
+            complete a Today check-in, then review medication context and reminder coverage.
           </p>
         </div>
 
         <div class="journey-grid">
           <article class="journey-card journey-card-strong">
             <span class="card-index">01</span>
-            <h3>Today</h3>
+            <h3>Execute</h3>
             <p>
-              A task-first execution screen for what needs attention now, what is overdue,
-              and what comes later in the day.
+              Today shows what needs action now, what is overdue, and whether the first-week routine is forming.
             </p>
           </article>
           <article class="journey-card">
             <span class="card-index">02</span>
-            <h3>Health</h3>
+            <h3>Diagnose</h3>
             <p>
-              A management workspace for medications, reminder coverage, emergency access,
-              caregiver support, and latest measurements.
+              Reminder Coverage explains missing times, reminders off, system permission issues, and PRN behavior.
             </p>
           </article>
           <article class="journey-card">
             <span class="card-index">03</span>
-            <h3>Medication Detail</h3>
+            <h3>Review</h3>
             <p>
-              A single-medication surface for adherence snapshot, reminder strategy,
-              maintenance state, and related health measurements.
+              Medication Detail connects adherence, reminder state, inventory/course status, and related measurements.
             </p>
           </article>
         </div>
@@ -153,9 +151,9 @@
       <section class="section" id="screens">
         <div class="section-heading">
           <p class="section-kicker">Screens</p>
-          <h2>Three product surfaces, shown more simply.</h2>
+          <h2>Core product surfaces.</h2>
           <p class="section-body">
-            These screenshots are here to show structure and visual direction, not to explain every workflow in detail.
+            These screenshots show the current visual direction. They are not clinical claims or complete workflow documentation.
           </p>
         </div>
 
@@ -192,10 +190,10 @@
       <section class="section split-section" id="trust">
         <div class="split-copy">
           <p class="section-kicker">Core capabilities</p>
-          <h2>Built for the workflows that matter every day.</h2>
+          <h2>Built around the workflows that decide whether users return.</h2>
           <ul class="feature-list">
             <li>Adaptive reminders with scheduled notifications, snooze, and follow-up logic</li>
-            <li>Medication add/edit flows with PRN logic, inventory, course duration, and OCR label scan</li>
+            <li>Medication add/edit flows with PRN logic, inventory, course duration, and camera OCR suggestions</li>
             <li>Measurement logging for blood pressure, glucose, weight, and heart rate</li>
             <li>Medication detail views with reminder explanation and related measurement trends</li>
             <li>Emergency card and caregiver support flows</li>
@@ -206,22 +204,38 @@
         <div class="trust-panel">
           <article class="panel trust-card">
             <p class="panel-kicker">Current focus</p>
-            <h3>Polishing reminder trust and product clarity</h3>
+            <h3>Proving the 7-day routine</h3>
             <p>
-              ChronicCare is already beyond a prototype. The current work is focused on
-              notification reliability, visual consistency, medication detail refinement,
-              and release-ready product polish.
+              The current work is focused on a narrow validation path: setup friction,
+              notification reliability, daily check-in clarity, OCR correction, and first-week retention.
             </p>
           </article>
 
           <article class="panel trust-card">
             <p class="panel-kicker">Privacy posture</p>
-            <h3>Local-first by design</h3>
+            <h3>Local-first, with clear medical boundaries</h3>
             <p>
-              Data is stored locally by default. Health and reminder workflows are designed
-              around personal tracking, not medical diagnosis or cloud dependency.
+              Data is stored locally by default. OCR results must be confirmed by the user.
+              The app is for self-management support and does not provide medical advice.
             </p>
           </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-heading">
+          <p class="section-kicker">Demo checklist</p>
+          <h2>What a reviewer should be able to verify in under one minute.</h2>
+          <p class="section-body">
+            ChronicCare is best evaluated through a short, realistic chronic-care routine rather than a broad feature tour.
+          </p>
+        </div>
+
+        <div class="checklist-grid">
+          <article class="check-card"><span>01</span><strong>Add a medication with OCR suggestions.</strong></article>
+          <article class="check-card"><span>02</span><strong>Set a fixed reminder time and confirm reminder coverage.</strong></article>
+          <article class="check-card"><span>03</span><strong>Mark a due medication as taken from Today.</strong></article>
+          <article class="check-card"><span>04</span><strong>Review adherence, inventory, and related measurements in detail.</strong></article>
         </div>
       </section>
 
@@ -244,13 +258,34 @@
         </div>
       </section>
 
+      <section class="section split-section">
+        <div class="split-copy">
+          <p class="section-kicker">Alpha limitations</p>
+          <h2>Transparent about what still needs validation.</h2>
+          <ul class="feature-list">
+            <li>Real-device notification regression is still required before any App Store release.</li>
+            <li>OCR can misread medication labels and is only used to reduce typing.</li>
+            <li>Caregiver support is a product prototype, not a clinical escalation system.</li>
+            <li>The app is not a medical device and does not provide medical advice.</li>
+          </ul>
+        </div>
+        <article class="panel trust-card">
+          <p class="panel-kicker">Next milestone</p>
+          <h3>Small real-user trial</h3>
+          <p>
+            The next meaningful milestone is a 5-10 person, 7-day test focused on setup success,
+            reminder trust, daily check-ins, and whether users return without being prompted by the developer.
+          </p>
+        </article>
+      </section>
+
       <section class="section">
         <div class="cta-shell">
           <article class="cta-card">
             <p class="section-kicker">Open source</p>
             <h2>Browse the source or follow release progress on GitHub.</h2>
             <p class="cta-text">
-              The repository contains the iOS app, README, release history, and the current product direction.
+              The repository contains the iOS app, README, product website, release notes, and the current alpha roadmap.
             </p>
             <div class="hero-actions">
               <a class="button button-primary" href="https://github.com/Zhanbingli/Ccare-app" target="_blank" rel="noreferrer">
@@ -268,7 +303,7 @@
     <footer class="footer">
       <div>
         <strong>ChronicCare</strong>
-        <p>Offline-first medication management for chronic care.</p>
+        <p>Privacy-first medication routine support.</p>
       </div>
       <div class="footer-copy">
         <p>Built for self-management support.</p>

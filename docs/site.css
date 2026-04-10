@@ -371,6 +371,44 @@ h3 {
   gap: 16px;
 }
 
+.checklist-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.check-card {
+  min-height: 150px;
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at top right, rgba(47, 107, 79, 0.1), transparent 34%),
+    var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-soft);
+}
+
+.check-card span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 34px;
+  border-radius: 999px;
+  color: var(--green);
+  background: var(--green-soft);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.check-card strong {
+  display: block;
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.36;
+}
+
 .screens-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -505,6 +543,7 @@ h3 {
   .hero-grid,
   .intro-pillars,
   .journey-grid,
+  .checklist-grid,
   .split-section {
     grid-template-columns: 1fr;
   }

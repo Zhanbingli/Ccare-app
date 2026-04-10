@@ -246,12 +246,16 @@ struct AddMedicationView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
+            ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 16) {
                     Card {
                         VStack(alignment: .leading, spacing: 14) {
-                            Text(NSLocalizedString("Medication", comment: ""))
-                                .appFont(.headline)
+                            HStack(alignment: .center, spacing: 10) {
+                                Text(NSLocalizedString("Medication", comment: ""))
+                                    .appFont(.headline)
+                                Spacer()
+                                scanLabelButton
+                            }
 
                             textInputCard(
                                 title: NSLocalizedString("Medication Name", comment: ""),
@@ -266,36 +270,6 @@ struct AddMedicationView: View {
                                 text: $dose,
                                 field: .dose
                             )
-
-                            Button {
-                                if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                                    showOCRCamera = true
-                                } else {
-                                    showCameraUnavailableAlert = true
-                                }
-                            } label: {
-                                HStack(spacing: 10) {
-                                    Image(systemName: "camera.viewfinder")
-                                    Text(NSLocalizedString("Scan Label", comment: ""))
-                                        .appFont(.subheadline)
-                                        .fontWeight(.semibold)
-                                    Spacer()
-                                    if isOCRLoading {
-                                        ProgressView()
-                                            .controlSize(.small)
-                                    } else {
-                                        Image(systemName: "chevron.right")
-                                            .font(.system(size: 12, weight: .semibold))
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                                .padding(12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .fill(Color(.secondarySystemBackground))
-                                )
-                            }
-                            .buttonStyle(.plain)
 
                             if isOCRLoading {
                                 Text(NSLocalizedString("Reading label...", comment: ""))
@@ -369,10 +343,9 @@ struct AddMedicationView: View {
                                     schedulePreset = .custom
                                     times.append(defaultCustomTime(after: times.last))
                                 } label: {
-                                    Label(NSLocalizedString("Add Time", comment: ""), systemImage: "plus.circle.fill")
-                                        .frame(maxWidth: .infinity)
+                                    secondaryActionLabel(NSLocalizedString("Add Time", comment: ""), systemImage: "plus.circle.fill")
                                 }
-                                .buttonStyle(.bordered)
+                                .buttonStyle(.plain)
 
                                 HStack(spacing: 10) {
                                     Text(NSLocalizedString("Remind Me", comment: ""))
@@ -494,34 +467,7 @@ struct AddMedicationView: View {
                                 )
                             }
 
-                            HStack(spacing: 12) {
-                                photoPreview
-
-                                VStack(alignment: .leading, spacing: 8) {
-                                    PhotosPicker(selection: $pickedItem, matching: .images) {
-                                        Label(NSLocalizedString("Choose Photo", comment: ""), systemImage: "photo")
-                                            .frame(maxWidth: .infinity)
-                                    }
-                                    .buttonStyle(.bordered)
-                                    .onChange(of: pickedItem) { newItem in
-                                        Task {
-                                            if let data = try? await newItem?.loadTransferable(type: Data.self),
-                                               let ui = UIImage(data: data) {
-                                                pickedImage = ui
-                                            }
-                                        }
-                                    }
-
-                                    if pickedImage != nil {
-                                        Button(role: .destructive) {
-                                            pickedImage = nil
-                                        } label: {
-                                            Text(NSLocalizedString("Remove Photo", comment: ""))
-                                        }
-                                        .buttonStyle(.borderless)
-                                    }
-                                }
-                            }
+                            photoAttachmentRow
                         }
                     }
 
@@ -710,6 +656,40 @@ struct AddMedicationView: View {
 }
 
 private extension AddMedicationView {
+    private var scanLabelButton: some View {
+        Button {
+            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                showOCRCamera = true
+            } else {
+                showCameraUnavailableAlert = true
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "camera.viewfinder")
+                    .font(.system(size: 12, weight: .semibold))
+                Text(NSLocalizedString("Scan Label", comment: ""))
+                    .appFont(.caption)
+                    .fontWeight(.semibold)
+                if isOCRLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+            .foregroundStyle(Color.accentColor)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.accentColor.opacity(0.10))
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(Color.accentColor.opacity(0.18), lineWidth: 0.8)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     var photoPreview: some View {
         Group {
             if let img = pickedImage {
@@ -728,6 +708,57 @@ private extension AddMedicationView {
                     )
             }
         }
+    }
+
+    var photoAttachmentRow: some View {
+        HStack(spacing: 12) {
+            photoPreview
+
+            Spacer(minLength: 8)
+
+            PhotosPicker(selection: $pickedItem, matching: .images) {
+                Image(systemName: pickedImage == nil ? "photo" : "arrow.triangle.2.circlepath")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 38, height: 38)
+                    .background(
+                        Circle()
+                            .fill(Color.accentColor.opacity(0.10))
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(pickedImage == nil ? NSLocalizedString("Add Photo", comment: "") : NSLocalizedString("Change Photo", comment: ""))
+            .onChange(of: pickedItem) { newItem in
+                Task {
+                    if let data = try? await newItem?.loadTransferable(type: Data.self),
+                       let ui = UIImage(data: data) {
+                        pickedImage = ui
+                    }
+                }
+            }
+
+            if pickedImage != nil {
+                Button(role: .destructive) {
+                    pickedImage = nil
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.red)
+                        .frame(width: 38, height: 38)
+                        .background(
+                            Circle()
+                                .fill(Color.red.opacity(0.10))
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(NSLocalizedString("Remove Photo", comment: ""))
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
     }
 
     var summaryLine: String {
@@ -778,7 +809,7 @@ private extension AddMedicationView {
                 .focused($focusedField, equals: field)
                 .lineLimit(lineLimit)
                 .textFieldStyle(.plain)
-                .appFont(field == .name || field == .dose ? .headline : .subheadline)
+                .appFont(field == .name || field == .dose ? .subheadline : .body)
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -793,9 +824,9 @@ private extension AddMedicationView {
                 .appFont(.caption)
                 .fontWeight(.semibold)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                .padding(.vertical, 7)
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    Capsule(style: .continuous)
                         .fill(Color(.secondarySystemBackground))
                 )
         }
@@ -812,14 +843,14 @@ private extension AddMedicationView {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(title)
-                    .appFont(.subheadline)
+                    .appFont(.label)
                     .fontWeight(.semibold)
                 Text(subtitle)
                     .appFont(.caption)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
+            .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(isSelected ? Color.accentColor.opacity(0.12) : Color(.secondarySystemBackground))
@@ -845,17 +876,21 @@ private extension AddMedicationView {
                 applySchedulePreset(preset)
             }
         } label: {
-            VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
                 Text(preset.title)
-                    .appFont(.subheadline)
+                    .appFont(.label)
                     .fontWeight(.semibold)
                     .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
-                Text(preset.subtitle)
-                    .appFont(.caption)
-                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(isSelected ? Color.accentColor.opacity(0.12) : Color(.secondarySystemBackground))
@@ -866,6 +901,27 @@ private extension AddMedicationView {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    private func secondaryActionLabel(_ title: String, systemImage: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .semibold))
+            Text(title)
+                .appFont(.label)
+                .fontWeight(.semibold)
+        }
+        .foregroundStyle(Color.accentColor)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.accentColor.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.accentColor.opacity(0.14), lineWidth: 0.8)
+        )
     }
 
     @ViewBuilder
@@ -932,6 +988,12 @@ private struct MedicationOCRReviewSheet: View {
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    Label(NSLocalizedString("OCR suggestions can be wrong. Confirm the medication name and dose before applying.", comment: ""), systemImage: "exclamationmark.triangle.fill")
+                        .appFont(.caption)
+                        .foregroundStyle(.orange)
+                }
+
                 if let name = suggestion.name, !name.isEmpty {
                     Section(NSLocalizedString("Detected Name", comment: "")) {
                         Text(name)
@@ -1101,7 +1163,7 @@ struct EditMedicationView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
+            ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 16) {
                     Card {
                         VStack(alignment: .leading, spacing: 14) {
@@ -1165,8 +1227,21 @@ struct EditMedicationView: View {
                     } else {
                         Card {
                             VStack(alignment: .leading, spacing: 14) {
-                                Text(NSLocalizedString("Schedule", comment: ""))
-                                    .appFont(.headline)
+                                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                    Text(NSLocalizedString("Schedule", comment: ""))
+                                        .appFont(.headline)
+                                    Spacer()
+                                    Text(times.isEmpty ? NSLocalizedString("Needs time", comment: "") : scheduleTimeCountText)
+                                        .appFont(.caption)
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(times.isEmpty ? .orange : Color.accentColor)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            Capsule(style: .continuous)
+                                                .fill((times.isEmpty ? Color.orange : Color.accentColor).opacity(0.10))
+                                        )
+                                }
 
                                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                                     ForEach(EditSchedulePreset.allCases) { preset in
@@ -1174,32 +1249,39 @@ struct EditMedicationView: View {
                                     }
                                 }
 
-                                if times.isEmpty {
-                                    Text(NSLocalizedString("Choose a preset or add a custom time.", comment: ""))
-                                        .appFont(.caption)
-                                        .foregroundStyle(.secondary)
-                                } else {
-                                    ForEach(Array(times.indices), id: \.self) { idx in
-                                        editTimeRow(for: idx)
+                                VStack(alignment: .leading, spacing: 10) {
+                                    if times.isEmpty {
+                                        Text(NSLocalizedString("Choose a preset or add a custom time.", comment: ""))
+                                            .appFont(.caption)
+                                            .foregroundStyle(.secondary)
+                                    } else {
+                                        ForEach(Array(times.indices), id: \.self) { idx in
+                                            editTimeRow(for: idx)
+                                        }
                                     }
                                 }
+                                .padding(12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .fill(Color(.secondarySystemBackground))
+                                )
 
                                 Button {
                                     schedulePreset = .custom
                                     times.append(defaultEditCustomTime(after: times.last))
                                 } label: {
-                                    Label(NSLocalizedString("Add Time", comment: ""), systemImage: "plus.circle.fill")
-                                        .frame(maxWidth: .infinity)
+                                    editSecondaryActionLabel(NSLocalizedString("Add Time", comment: ""), systemImage: "plus.circle.fill")
                                 }
-                                .buttonStyle(.bordered)
+                                .buttonStyle(.plain)
 
-                                HStack(spacing: 10) {
-                                    Text(NSLocalizedString("Remind Me", comment: ""))
-                                        .appFont(.subheadline)
-                                    Spacer()
-                                    Toggle(NSLocalizedString("Remind Me", comment: ""), isOn: $remindersEnabled)
-                                        .labelsHidden()
-                                }
+                                editToggleRow(
+                                    title: NSLocalizedString("Remind Me", comment: ""),
+                                    subtitle: remindersEnabled
+                                        ? NSLocalizedString("Notifications will be scheduled for these times.", comment: "")
+                                        : NSLocalizedString("Times are saved, but notifications are off.", comment: ""),
+                                    systemImage: remindersEnabled ? "bell.fill" : "bell.slash.fill",
+                                    isOn: $remindersEnabled
+                                )
 
                                 if remindersEnabled && times.isEmpty {
                                     Label(NSLocalizedString("Add at least one time for reminders", comment: ""), systemImage: "exclamationmark.triangle.fill")
@@ -1215,7 +1297,11 @@ struct EditMedicationView: View {
                             Text(NSLocalizedString("Instructions", comment: ""))
                                 .appFont(.headline)
 
-                            Picker(NSLocalizedString("Food Instruction", comment: ""), selection: $foodInstruction) {
+                            editPickerRow(
+                                title: NSLocalizedString("Food Instruction", comment: ""),
+                                systemImage: "fork.knife",
+                                selection: $foodInstruction
+                            ) {
                                 Text(NSLocalizedString("None", comment: "")).tag(FoodInstruction?.none)
                                 ForEach(FoodInstruction.allCases) { fi in
                                     Text(fi.displayName).tag(FoodInstruction?.some(fi))
@@ -1300,7 +1386,11 @@ struct EditMedicationView: View {
                             Text(NSLocalizedString("Category & Photo", comment: ""))
                                 .appFont(.headline)
 
-                            Picker(NSLocalizedString("Category", comment: ""), selection: $category) {
+                            editPickerRow(
+                                title: NSLocalizedString("Category", comment: ""),
+                                systemImage: "tag.fill",
+                                selection: $category
+                            ) {
                                 ForEach(MedicationCategory.allCases) { c in
                                     Text(c.displayName).tag(c)
                                 }
@@ -1315,36 +1405,7 @@ struct EditMedicationView: View {
                                 )
                             }
 
-                            HStack(spacing: 12) {
-                                editPhotoPreview
-
-                                VStack(alignment: .leading, spacing: 8) {
-                                    PhotosPicker(selection: $pickedItem, matching: .images) {
-                                        Label(NSLocalizedString("Choose Photo", comment: ""), systemImage: "photo")
-                                            .frame(maxWidth: .infinity)
-                                    }
-                                    .buttonStyle(.bordered)
-                                    .onChange(of: pickedItem) { newItem in
-                                        Task {
-                                            if let data = try? await newItem?.loadTransferable(type: Data.self),
-                                               let ui = UIImage(data: data) {
-                                                pickedImage = ui
-                                                removePhoto = false
-                                            }
-                                        }
-                                    }
-
-                                    if pickedImage != nil || (medication.imagePath != nil && !removePhoto) {
-                                        Button(role: .destructive) {
-                                            pickedImage = nil
-                                            removePhoto = true
-                                        } label: {
-                                            Text(NSLocalizedString("Remove Photo", comment: ""))
-                                        }
-                                        .buttonStyle(.borderless)
-                                    }
-                                }
-                            }
+                            editPhotoAttachmentRow
                         }
                     }
 
@@ -1767,26 +1828,88 @@ private extension EditMedicationView {
         return currentCategory?.correlatedMeasurementTypes ?? []
     }
 
+    var scheduleTimeCountText: String {
+        String(format: NSLocalizedString("%lld times", comment: ""), times.count)
+    }
+
+    var editHasPhoto: Bool {
+        pickedImage != nil || (medication.imagePath != nil && !removePhoto)
+    }
+
+    var editPhotoAttachmentRow: some View {
+        HStack(spacing: 12) {
+            editPhotoPreview
+
+            Spacer(minLength: 8)
+
+            PhotosPicker(selection: $pickedItem, matching: .images) {
+                Image(systemName: editHasPhoto ? "arrow.triangle.2.circlepath" : "photo")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 38, height: 38)
+                    .background(
+                        Circle()
+                            .fill(Color.accentColor.opacity(0.10))
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(editHasPhoto ? NSLocalizedString("Change Photo", comment: "") : NSLocalizedString("Add Photo", comment: ""))
+            .onChange(of: pickedItem) { newItem in
+                Task {
+                    if let data = try? await newItem?.loadTransferable(type: Data.self),
+                       let ui = UIImage(data: data) {
+                        pickedImage = ui
+                        removePhoto = false
+                    }
+                }
+            }
+
+            if editHasPhoto {
+                Button(role: .destructive) {
+                    pickedImage = nil
+                    removePhoto = true
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.red)
+                        .frame(width: 38, height: 38)
+                        .background(
+                            Circle()
+                                .fill(Color.red.opacity(0.10))
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(NSLocalizedString("Remove Photo", comment: ""))
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
+    }
+
     var editPhotoPreview: some View {
         Group {
             if let img = pickedImage {
                 Image(uiImage: img)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 64, height: 64)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .frame(width: 72, height: 72)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             } else if !removePhoto, let existing = loadMedImage(path: medication.imagePath) {
                 Image(uiImage: existing)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 64, height: 64)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .frame(width: 72, height: 72)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             } else {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(Color(.secondarySystemBackground))
-                    .frame(width: 64, height: 64)
+                    .frame(width: 72, height: 72)
                     .overlay(
                         Image(systemName: "photo")
+                            .font(.system(size: 22, weight: .semibold))
                             .foregroundStyle(.secondary)
                     )
             }
@@ -1851,7 +1974,7 @@ private extension EditMedicationView {
                 .focused($focusedField, equals: field)
                 .lineLimit(lineLimit)
                 .textFieldStyle(.plain)
-                .appFont(field == .name || field == .dose ? .headline : .subheadline)
+                .appFont(field == .name || field == .dose ? .subheadline : .body)
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -1860,15 +1983,90 @@ private extension EditMedicationView {
         }
     }
 
+    @ViewBuilder
+    private func editPickerRow<SelectionValue: Hashable, Content: View>(
+        title: String,
+        systemImage: String,
+        selection: Binding<SelectionValue>,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 28, height: 28)
+                .background(
+                    Circle()
+                        .fill(Color.accentColor.opacity(0.10))
+                )
+
+            Text(title)
+                .appFont(.label)
+                .fontWeight(.semibold)
+
+            Spacer(minLength: 8)
+
+            Picker(title, selection: selection) {
+                content()
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
+    }
+
+    @ViewBuilder
+    private func editToggleRow(
+        title: String,
+        subtitle: String,
+        systemImage: String,
+        isOn: Binding<Bool>
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(isOn.wrappedValue ? Color.accentColor : Color.secondary)
+                .frame(width: 28, height: 28)
+                .background(
+                    Circle()
+                        .fill((isOn.wrappedValue ? Color.accentColor : Color.secondary).opacity(0.10))
+                )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .appFont(.label)
+                    .fontWeight(.semibold)
+                Text(subtitle)
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 8)
+
+            Toggle(title, isOn: isOn)
+                .labelsHidden()
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
+    }
+
     private func editQuickSupplyButton(title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
                 .appFont(.caption)
                 .fontWeight(.semibold)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                .padding(.vertical, 7)
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    Capsule(style: .continuous)
                         .fill(Color(.secondarySystemBackground))
                 )
         }
@@ -1885,14 +2083,14 @@ private extension EditMedicationView {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(title)
-                    .appFont(.subheadline)
+                    .appFont(.label)
                     .fontWeight(.semibold)
                 Text(subtitle)
                     .appFont(.caption)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
+            .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(isSelected ? Color.accentColor.opacity(0.12) : Color(.secondarySystemBackground))
@@ -1918,17 +2116,21 @@ private extension EditMedicationView {
                 applyEditSchedulePreset(preset)
             }
         } label: {
-            VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
                 Text(preset.title)
-                    .appFont(.subheadline)
+                    .appFont(.label)
                     .fontWeight(.semibold)
                     .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
-                Text(preset.subtitle)
-                    .appFont(.caption)
-                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(isSelected ? Color.accentColor.opacity(0.12) : Color(.secondarySystemBackground))
@@ -1939,6 +2141,27 @@ private extension EditMedicationView {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    private func editSecondaryActionLabel(_ title: String, systemImage: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .semibold))
+            Text(title)
+                .appFont(.label)
+                .fontWeight(.semibold)
+        }
+        .foregroundStyle(Color.accentColor)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.accentColor.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.accentColor.opacity(0.14), lineWidth: 0.8)
+        )
     }
 
     @ViewBuilder
@@ -2286,7 +2509,7 @@ private extension MedicationsView {
                 store.decrementPills(for: med.id)
                 NotificationManager.shared.suppressToday(for: med.id, timeComponents: dose.comps)
                 NotificationManager.shared.cancelDoseNotifications(for: med.id, timeComponents: dose.comps)
-                NotificationManager.shared.schedule(for: med, intakeLogs: store.intakeLogs)
+                NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
                 NotificationManager.shared.updateBadge(store: store)
                 Haptics.success()
             } label: {

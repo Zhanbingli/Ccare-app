@@ -11,10 +11,6 @@ import Testing
 
 struct ChronicCareTests {
 
-    @Test func example() async throws {
-        // Write your test here and use APIs like `#expect(...)` to check expected conditions.
-    }
-
     @Test func scheduleComponentsFromUserInfo() {
         let comps = NotificationManager.scheduleComponents(from: ["scheduleHour": 8, "scheduleMinute": 45])
         #expect(comps?.hour == 8)
@@ -51,6 +47,20 @@ struct ChronicCareTests {
         #expect(NotificationManager.hasValidMedication(identifier: "refill_\(invalidID.uuidString)", validMedicationIDs: validIDs) == false)
         #expect(NotificationManager.hasValidMedication(identifier: "course_\(validID.uuidString)", validMedicationIDs: validIDs))
         #expect(NotificationManager.hasValidMedication(identifier: "course_\(invalidID.uuidString)", validMedicationIDs: validIDs) == false)
+    }
+
+    @Test func doseReminderScopeDoesNotIncludeLifecycleReminders() {
+        let medID = UUID()
+        let base = "\(medID.uuidString)_20260410_08_00"
+        let followUp = "followup_1_\(base)"
+        let snooze = "snooze_\(medID.uuidString)_08_00"
+
+        #expect(NotificationManager.isDoseReminder(identifier: base, medicationID: medID))
+        #expect(NotificationManager.isDoseReminder(identifier: followUp, medicationID: medID))
+        #expect(NotificationManager.isDoseReminder(identifier: snooze, medicationID: medID))
+        #expect(NotificationManager.isDoseReminder(identifier: "refill_\(medID.uuidString)", medicationID: medID) == false)
+        #expect(NotificationManager.isDoseReminder(identifier: "course_\(medID.uuidString)", medicationID: medID) == false)
+        #expect(NotificationManager.isDoseReminder(identifier: "miss_warn_\(medID.uuidString)_2026-04-10", medicationID: medID) == false)
     }
 
     @Test func outstandingCountHonorsTakenLogPerSchedule() {
@@ -181,6 +191,30 @@ struct ChronicCareTests {
 
         #expect(result.name == "苯磺酸氨氯地平片")
         #expect(result.dose == "5mg")
+    }
+
+    @Test func medicationLabelParserDoesNotUsePharmacyNoiseAsName() {
+        let result = MedicationLabelParser.parse(recognizedLines: [
+            "Main Street Pharmacy",
+            "Patient: Jane Smith",
+            "NDC 12345-6789",
+            "Take 1 tablet by mouth daily",
+            "METFORMIN 500 mg tablets"
+        ])
+
+        #expect(result.name == "Metformin")
+        #expect(result.dose == "500mg")
+    }
+
+    @Test func medicationLabelParserLeavesNameEmptyWhenOnlyInstructionsAreVisible() {
+        let result = MedicationLabelParser.parse(recognizedLines: [
+            "Take 1 tablet by mouth daily",
+            "Qty 30",
+            "Refill before 04/30/2026"
+        ])
+
+        #expect(result.name == nil)
+        #expect(result.dose == nil)
     }
 
     @Test func reminderEligibilityRejectsPRNAndUntimedMeds() {
