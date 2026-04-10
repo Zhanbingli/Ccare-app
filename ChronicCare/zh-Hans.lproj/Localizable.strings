@@ -428,10 +428,12 @@
 "Couldn't Read Label" = "无法识别标签";
 "We couldn't confidently extract medication details from that image. Try a clearer photo of the label." = "无法可靠地从该图片中提取药物信息。请尝试更清晰的标签照片。";
 "Review OCR Result" = "确认识别结果";
+"Review Fields" = "检查字段";
 "Detected Name" = "识别到的药名";
 "Detected Dose" = "识别到的剂量";
 "Detected Notes" = "识别到的备注";
 "OCR suggestions can be wrong. Confirm the medication name and dose before applying." = "OCR 识别结果可能不准确。应用前请确认药名和剂量。";
+"No confident fields were detected. You can still copy from the raw text below." = "未可靠识别出字段。你仍可以从下面的原始文本中复制。";
 "Raw Text" = "原始文本";
 "Apply" = "应用";
 "No OCR text found." = "未识别到文本。";
@@ -489,17 +491,26 @@
 "Finish Reminder Setup" = "完成提醒设置";
 "Later Today" = "今天稍后";
 "More doses are ready once you clear the current task." = "完成当前任务后，还有更多剂量待处理。";
+"%lld more later today." = "今天稍后还有 %lld 次。";
 "%lld of 7 days checked in. Keep logging each due dose for one week." = "过去 7 天已打卡 %lld 天。继续记录每次到期剂量，坚持一周。";
 "%lld scheduled medications need reminder times or reminders turned on before a 7-day trial is reliable." = "有 %lld 种固定药物需要补充提醒时间或开启提醒，7 天试用才可靠。";
+"%lld medications have reminders turned off." = "有 %lld 种药物的提醒已关闭。";
 "No Scheduled Doses" = "没有固定剂量";
+"No fixed doses scheduled today." = "今天没有固定剂量。";
+"%lld of %lld fixed doses handled today." = "今天已处理 %lld/%lld 次固定剂量。";
 "No fixed medications are scheduled. Log as-needed doses only when you actually take them." = "当前没有固定用药。按需药物只在实际服用时记录。";
+"Log PRN medication only when you actually take it." = "只有在实际服用按需药时再记录。";
+"%lld more as-needed medications saved." = "还有 %lld 种按需药已保存。";
 "No medications yet" = "还没有药物";
 "Nothing needs action yet. Your next scheduled dose is lined up." = "现在还不需要处理，下一次固定剂量已经排好。";
 "Overdue Dose" = "已逾期剂量";
 "Progress" = "完成度";
 "Remaining" = "剩余";
+"Reminder Setup Needs Attention" = "提醒设置需要处理";
+"Set Time" = "设置时间";
 "Snoozed Dose" = "稍后提醒的剂量";
 "Still Overdue" = "仍然逾期";
+"System notifications are blocked. Scheduled medication reminders cannot fire." = "系统通知已被阻止，固定用药提醒无法触发。";
 "There are no scheduled doses waiting for you right now." = "当前没有固定剂量在等待你处理。";
 "This dose has moved past your grace window and should be handled first." = "这次剂量已超过宽限时间，应优先处理。";
 "This is the current dose to clear before anything else." = "这是当前最需要先完成的剂量。";
@@ -515,6 +526,8 @@
 "You have checked in across the last 7 days. Keep the same rhythm." = "你过去 7 天都有打卡。继续保持这个节奏。";
 "You do not have fixed doses waiting right now. Log as-needed medications below only when you actually take them." = "你现在没有固定剂量待处理。只有在实际服用时，再记录下面的按需药物。";
 "You snoozed this dose earlier. It is back at the top of the queue." = "你之前稍后提醒了这次剂量，现在它重新回到了最优先位置。";
+"%@ needs a reminder time before it can notify you." = "%@ 需要设置提醒时间后才能通知你。";
+"%@ has reminder times, but reminders are turned off." = "%@ 已设置提醒时间，但提醒已关闭。";
 
 /* HealthView */
 "%lld follow-up reminders" = "%lld 次跟进提醒";
@@ -639,6 +652,7 @@
 "Has Course End Date" = "设置疗程结束日期";
 "How do you take it?" = "你如何服用？";
 "Instructions" = "服用说明";
+"Instructions, inventory, category, and photo." = "服用说明、库存、分类和图片。";
 "Keep Scheduled" = "保留固定用药";
 "Last taken" = "最近一次服用";
 "Manual logging only." = "仅手动记录。";
@@ -657,6 +671,7 @@
 "Notifications will be scheduled for these times." = "会按这些时间安排通知。";
 "Optional" = "可选";
 "Optional context" = "可选背景";
+"Optional Details" = "可选详情";
 "Optional label photo for visual identification." = "可选添加标签图片，便于识别。";
 "Photo attached for visual identification." = "已添加图片，便于识别。";
 "PRN Medication" = "按需药物";
@@ -740,5 +755,19 @@
 /* EmergencyInfoView */
 "Add Emergency Info" = "添加紧急信息";
 "Add blood type, allergies, conditions, or emergency contacts so this card is useful when you need it." = "添加血型、过敏、疾病或紧急联系人，让这张卡在需要时真正有用。";
+"Add allergies, conditions, and contacts so doctor visit details are ready." = "补充过敏、疾病和联系人信息，让问诊资料提前准备好。";
+"Doctor Visit Snapshot" = "问诊摘要";
 "Edit" = "编辑";
 "Emergency information not set" = "尚未设置紧急信息";
+"Medical Summary" = "医疗摘要";
+"Review current meds, allergies, conditions, and recent readings for doctor visits." = "查看当前用药、过敏、疾病和最近指标，方便问诊时快速说明。";
+"Use this during appointments to answer common questions quickly." = "就诊时用它快速回答医生常问的问题。";
+"7-day adherence" = "7天依从率";
+"All Medications" = "全部药物";
+"allergies" = "过敏";
+"Medication Workbench" = "用药工作台";
+"medications" = "用药";
+"Needs review" = "需要检查";
+"View All Medications" = "查看全部药物";
+"%lld medications need setup, refill, course, or reminder attention." = "有 %lld 种药物需要处理设置、补药、疗程或提醒问题。";
+"%lld more saved in your library." = "药物库中还有 %lld 种药物。";

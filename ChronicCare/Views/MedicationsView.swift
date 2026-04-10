@@ -149,6 +149,7 @@ struct AddMedicationView: View {
     @State private var schedulePreset: SchedulePreset = .custom
     @State private var showPRNConfirmation = false
     @State private var showAdditionalContext = false
+    @State private var showOptionalDetails = false
     @FocusState private var focusedField: EntryField?
 
     private enum EntryField: Hashable {
@@ -365,109 +366,124 @@ struct AddMedicationView: View {
                     }
 
                     Card {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text(NSLocalizedString("Instructions", comment: ""))
-                                .appFont(.headline)
+                        DisclosureGroup(isExpanded: $showOptionalDetails) {
+                            VStack(alignment: .leading, spacing: 16) {
+                                Divider()
 
-                            Picker(NSLocalizedString("Food Instruction", comment: ""), selection: $foodInstruction) {
-                                Text(NSLocalizedString("None", comment: "")).tag(FoodInstruction?.none)
-                                ForEach(FoodInstruction.allCases) { f in
-                                    Text(f.displayName).tag(Optional(f))
+                                VStack(alignment: .leading, spacing: 14) {
+                                    Text(NSLocalizedString("Instructions", comment: ""))
+                                        .appFont(.headline)
+
+                                    Picker(NSLocalizedString("Food Instruction", comment: ""), selection: $foodInstruction) {
+                                        Text(NSLocalizedString("None", comment: "")).tag(FoodInstruction?.none)
+                                        ForEach(FoodInstruction.allCases) { f in
+                                            Text(f.displayName).tag(Optional(f))
+                                        }
+                                    }
+
+                                    textInputCard(
+                                        title: NSLocalizedString("Special Instructions", comment: ""),
+                                        placeholder: NSLocalizedString("Take after dinner", comment: ""),
+                                        text: $specialInstructions,
+                                        field: .specialInstructions
+                                    )
+
+                                    DisclosureGroup(isExpanded: $showAdditionalContext) {
+                                        textInputCard(
+                                            title: NSLocalizedString("Notes", comment: ""),
+                                            placeholder: NSLocalizedString("Optional context", comment: ""),
+                                            text: $notes,
+                                            field: .notes,
+                                            axis: .vertical,
+                                            lineLimit: 2...4
+                                        )
+                                        .padding(.top, 6)
+                                    } label: {
+                                        HStack {
+                                            Text(NSLocalizedString("Additional Context", comment: ""))
+                                                .appFont(.subheadline)
+                                                .fontWeight(.semibold)
+                                            Spacer()
+                                            Text(notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? NSLocalizedString("Optional", comment: "") : NSLocalizedString("Added", comment: ""))
+                                                .appFont(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                }
+
+                                Divider()
+
+                                VStack(alignment: .leading, spacing: 14) {
+                                    Text(NSLocalizedString("Supply & Course", comment: ""))
+                                        .appFont(.headline)
+
+                                    Toggle(NSLocalizedString("Track Supply", comment: ""), isOn: $trackSupply)
+                                    if trackSupply {
+                                        Stepper(value: $pillsRemaining, in: 0...999) {
+                                            Text(String(format: NSLocalizedString("Pills remaining: %lld", comment: ""), pillsRemaining))
+                                        }
+                                        Stepper(value: $pillsPerDose, in: 1...10) {
+                                            Text(String(format: NSLocalizedString("Pills per dose: %lld", comment: ""), pillsPerDose))
+                                        }
+                                        quickPillButtons
+                                        if let estimatedSupplyDays {
+                                            Text(String(format: NSLocalizedString("About %lld days of supply at your current schedule.", comment: ""), estimatedSupplyDays))
+                                                .appFont(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Text(String(format: NSLocalizedString("Refill reminders start when about %lld days remain.", comment: ""), refillThresholdDays))
+                                            .appFont(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+
+                                    Toggle(NSLocalizedString("Has Course End Date", comment: ""), isOn: $hasCourseEnd)
+                                    if hasCourseEnd {
+                                        DatePicker(NSLocalizedString("End Date", comment: ""), selection: $courseEndDate, displayedComponents: .date)
+                                        quickCourseButtons
+                                        if let courseDaysRemaining {
+                                            Text(String(format: NSLocalizedString("Course ends in %lld days.", comment: ""), max(courseDaysRemaining, 0)))
+                                                .appFont(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Text(String(format: NSLocalizedString("Course reminders start %lld days before the end date.", comment: ""), courseReminderThresholdDays))
+                                            .appFont(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+
+                                Divider()
+
+                                VStack(alignment: .leading, spacing: 14) {
+                                    Text(NSLocalizedString("Category & Photo", comment: ""))
+                                        .appFont(.headline)
+
+                                    Picker(NSLocalizedString("Category", comment: ""), selection: $category) {
+                                        ForEach(MedicationCategory.allCases) { c in
+                                            Text(c.displayName).tag(c)
+                                        }
+                                    }
+
+                                    if category == .custom {
+                                        textInputCard(
+                                            title: NSLocalizedString("Custom Category", comment: ""),
+                                            placeholder: NSLocalizedString("Cardiology", comment: ""),
+                                            text: $customCategoryName,
+                                            field: .customCategory
+                                        )
+                                    }
+
+                                    photoAttachmentRow
                                 }
                             }
-
-                            textInputCard(
-                                title: NSLocalizedString("Special Instructions", comment: ""),
-                                placeholder: NSLocalizedString("Take after dinner", comment: ""),
-                                text: $specialInstructions,
-                                field: .specialInstructions
-                            )
-
-                            DisclosureGroup(isExpanded: $showAdditionalContext) {
-                                textInputCard(
-                                    title: NSLocalizedString("Notes", comment: ""),
-                                    placeholder: NSLocalizedString("Optional context", comment: ""),
-                                    text: $notes,
-                                    field: .notes,
-                                    axis: .vertical,
-                                    lineLimit: 2...4
-                                )
-                                .padding(.top, 6)
-                            } label: {
-                                HStack {
-                                    Text(NSLocalizedString("Additional Context", comment: ""))
-                                        .appFont(.subheadline)
-                                        .fontWeight(.semibold)
-                                    Spacer()
-                                    Text(notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? NSLocalizedString("Optional", comment: "") : NSLocalizedString("Added", comment: ""))
-                                        .appFont(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-
-                    Card {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text(NSLocalizedString("Supply & Course", comment: ""))
-                                .appFont(.headline)
-
-                            Toggle(NSLocalizedString("Track Supply", comment: ""), isOn: $trackSupply)
-                            if trackSupply {
-                                Stepper(value: $pillsRemaining, in: 0...999) {
-                                    Text(String(format: NSLocalizedString("Pills remaining: %lld", comment: ""), pillsRemaining))
-                                }
-                                Stepper(value: $pillsPerDose, in: 1...10) {
-                                    Text(String(format: NSLocalizedString("Pills per dose: %lld", comment: ""), pillsPerDose))
-                                }
-                                quickPillButtons
-                                if let estimatedSupplyDays {
-                                    Text(String(format: NSLocalizedString("About %lld days of supply at your current schedule.", comment: ""), estimatedSupplyDays))
-                                        .appFont(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Text(String(format: NSLocalizedString("Refill reminders start when about %lld days remain.", comment: ""), refillThresholdDays))
+                            .padding(.top, 10)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(NSLocalizedString("Optional Details", comment: ""))
+                                    .appFont(.headline)
+                                Text(NSLocalizedString("Instructions, inventory, category, and photo.", comment: ""))
                                     .appFont(.caption)
                                     .foregroundStyle(.secondary)
                             }
-
-                            Toggle(NSLocalizedString("Has Course End Date", comment: ""), isOn: $hasCourseEnd)
-                            if hasCourseEnd {
-                                DatePicker(NSLocalizedString("End Date", comment: ""), selection: $courseEndDate, displayedComponents: .date)
-                                quickCourseButtons
-                                if let courseDaysRemaining {
-                                    Text(String(format: NSLocalizedString("Course ends in %lld days.", comment: ""), max(courseDaysRemaining, 0)))
-                                        .appFont(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Text(String(format: NSLocalizedString("Course reminders start %lld days before the end date.", comment: ""), courseReminderThresholdDays))
-                                    .appFont(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-
-                    Card {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text(NSLocalizedString("Category & Photo", comment: ""))
-                                .appFont(.headline)
-
-                            Picker(NSLocalizedString("Category", comment: ""), selection: $category) {
-                                ForEach(MedicationCategory.allCases) { c in
-                                    Text(c.displayName).tag(c)
-                                }
-                            }
-
-                            if category == .custom {
-                                textInputCard(
-                                    title: NSLocalizedString("Custom Category", comment: ""),
-                                    placeholder: NSLocalizedString("Cardiology", comment: ""),
-                                    text: $customCategoryName,
-                                    field: .customCategory
-                                )
-                            }
-
-                            photoAttachmentRow
                         }
                     }
 
@@ -526,8 +542,8 @@ struct AddMedicationView: View {
                 Text(NSLocalizedString("Reminders are enabled but no times are set. Add a time or save without reminders.", comment: ""))
             }
             .sheet(item: $ocrSuggestion) { suggestion in
-                MedicationOCRReviewSheet(suggestion: suggestion) {
-                    applyOCRSuggestion(suggestion)
+                MedicationOCRReviewSheet(suggestion: suggestion) { editedSuggestion in
+                    applyOCRSuggestion(editedSuggestion)
                 }
             }
             .fullScreenCover(isPresented: $showOCRCamera) {
@@ -590,6 +606,8 @@ struct AddMedicationView: View {
            let detectedNotes = suggestion.notes,
            !detectedNotes.isEmpty {
             notes = detectedNotes
+            showOptionalDetails = true
+            showAdditionalContext = true
         }
         ocrSuggestion = nil
     }
@@ -982,8 +1000,32 @@ private extension AddMedicationView {
 
 private struct MedicationOCRReviewSheet: View {
     let suggestion: MedicationOCRSuggestion
-    let onApply: () -> Void
+    let onApply: (MedicationOCRSuggestion) -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var editedName: String
+    @State private var editedDose: String
+    @State private var editedNotes: String
+
+    private var editedSuggestion: MedicationOCRSuggestion {
+        MedicationOCRSuggestion(
+            name: trimmedOrNil(editedName),
+            dose: trimmedOrNil(editedDose),
+            notes: trimmedOrNil(editedNotes),
+            rawText: suggestion.rawText
+        )
+    }
+
+    private var canApply: Bool {
+        editedSuggestion.hasUsefulContent
+    }
+
+    init(suggestion: MedicationOCRSuggestion, onApply: @escaping (MedicationOCRSuggestion) -> Void) {
+        self.suggestion = suggestion
+        self.onApply = onApply
+        _editedName = State(initialValue: suggestion.name ?? "")
+        _editedDose = State(initialValue: suggestion.dose ?? "")
+        _editedNotes = State(initialValue: suggestion.notes ?? "")
+    }
 
     var body: some View {
         NavigationStack {
@@ -994,21 +1036,22 @@ private struct MedicationOCRReviewSheet: View {
                         .foregroundStyle(.orange)
                 }
 
-                if let name = suggestion.name, !name.isEmpty {
-                    Section(NSLocalizedString("Detected Name", comment: "")) {
-                        Text(name)
+                Section(NSLocalizedString("Review Fields", comment: "")) {
+                    TextField(NSLocalizedString("Medication Name", comment: ""), text: $editedName)
+                        .textInputAutocapitalization(.words)
+                    TextField(NSLocalizedString("Dose", comment: ""), text: $editedDose)
+                    TextField(NSLocalizedString("Special Instructions", comment: ""), text: $editedNotes, axis: .vertical)
+                        .lineLimit(2...4)
+                }
+
+                if !suggestion.hasUsefulContent {
+                    Section {
+                        Text(NSLocalizedString("No confident fields were detected. You can still copy from the raw text below.", comment: ""))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
-                if let dose = suggestion.dose, !dose.isEmpty {
-                    Section(NSLocalizedString("Detected Dose", comment: "")) {
-                        Text(dose)
-                    }
-                }
-                if let notes = suggestion.notes, !notes.isEmpty {
-                    Section(NSLocalizedString("Detected Notes", comment: "")) {
-                        Text(notes)
-                    }
-                }
+
                 Section(NSLocalizedString("Raw Text", comment: "")) {
                     Text(suggestion.rawText.isEmpty ? NSLocalizedString("No OCR text found.", comment: "") : suggestion.rawText)
                         .appFont(.caption)
@@ -1023,13 +1066,18 @@ private struct MedicationOCRReviewSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(NSLocalizedString("Apply", comment: "")) {
-                        onApply()
+                        onApply(editedSuggestion)
                         dismiss()
                     }
-                    .disabled(!suggestion.hasUsefulContent)
+                    .disabled(!canApply)
                 }
             }
         }
+    }
+
+    private func trimmedOrNil(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 
@@ -2246,8 +2294,8 @@ private extension MedicationsView {
             let matchesFilter: Bool = {
                 switch filter {
                 case .all: return true
-                case .remindersOn: return med.remindersEnabled
-                case .remindersOff: return !med.remindersEnabled
+                case .remindersOn: return med.isAsNeeded != true && med.remindersEnabled
+                case .remindersOff: return med.isAsNeeded != true && !med.remindersEnabled
                 }
             }()
             let matchesSearch: Bool
@@ -2263,8 +2311,8 @@ private extension MedicationsView {
 
     var summaryCard: some View {
         let total = store.medications.count
-        let active = store.medications.filter { $0.remindersEnabled }.count
-        let paused = max(total - active, 0)
+        let active = store.medications.filter { $0.isAsNeeded != true && $0.remindersEnabled }.count
+        let paused = store.medications.filter { $0.isAsNeeded != true && !$0.remindersEnabled }.count
         return HStack(spacing: 0) {
             summaryStat(value: "\(total)", label: NSLocalizedString("Medications", comment: ""))
             summaryDivider
@@ -2358,7 +2406,7 @@ private extension MedicationsView {
                         Text(med.name)
                             .appFont(.headline)
                             .lineLimit(1)
-                        if !med.remindersEnabled {
+                        if med.isAsNeeded != true && !med.remindersEnabled {
                             Text(NSLocalizedString("Paused", comment: ""))
                                 .appFont(.caption)
                                 .foregroundStyle(.orange)
@@ -2387,7 +2435,9 @@ private extension MedicationsView {
                     }
                 }
                 Spacer(minLength: 4)
-                reminderToggle(for: med)
+                if med.isAsNeeded != true {
+                    reminderToggle(for: med)
+                }
             }
 
             // Row 2: supply + status + quick-take (all inline)
@@ -2400,7 +2450,7 @@ private extension MedicationsView {
                     inlineStatusLabel(status: status, date: date)
                 }
                 Spacer(minLength: 0)
-                if med.remindersEnabled {
+                if med.isAsNeeded != true && med.remindersEnabled {
                     compactQuickTakeButton(for: med)
                 }
             }

@@ -25,7 +25,7 @@ struct HealthView: View {
                         }
 
                         healthOverviewCard
-                        quickLinksCard
+                        medicationLibrary
 
                         if let latest = store.measurements.first {
                             latestMeasurementCard(latest)
@@ -33,7 +33,7 @@ struct HealthView: View {
                             emptyMeasurementCard
                         }
 
-                        medicationLibrary
+                        quickLinksCard
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
@@ -195,6 +195,34 @@ private extension HealthView {
         String(format: NSLocalizedString("%lld medications · %lld active", comment: ""), store.medications.count, activeMedicationCount)
     }
 
+    var attentionMedicationIDs: Set<UUID> {
+        Set(attentionMedications.map(\.id))
+    }
+
+    var attentionMedications: [Medication] {
+        store.medications.filter { med in
+            med.isLowSupply
+                || needsCourseAttention(med)
+                || (med.isAsNeeded != true && med.timesOfDay.isEmpty)
+                || (med.isAsNeeded != true && !med.timesOfDay.isEmpty && !med.remindersEnabled)
+        }
+    }
+
+    var recentActiveMedications: [Medication] {
+        store.medications.filter { med in
+            !attentionMedicationIDs.contains(med.id)
+                && (latestTodayAction(for: med) != nil || nextUntakenDose(for: med) != nil)
+        }
+    }
+
+    var medicationWorkbenchItems: [Medication] {
+        Array((attentionMedications + recentActiveMedications + store.medications).uniquedByID().prefix(4))
+    }
+
+    var hiddenMedicationCount: Int {
+        max(store.medications.count - medicationWorkbenchItems.count, 0)
+    }
+
     var hasEmergencyCardContent: Bool {
         let info = store.emergencyInfo
         return !(info?.bloodType?.isEmpty ?? true)
@@ -205,8 +233,8 @@ private extension HealthView {
 
     var emergencyCardSubtitle: String {
         hasEmergencyCardContent
-            ? NSLocalizedString("View allergies, conditions, contacts, and current medications in one place.", comment: "")
-            : NSLocalizedString("Add allergies, conditions, and contacts so emergency details are ready when needed.", comment: "")
+            ? NSLocalizedString("Review current meds, allergies, conditions, and recent readings for doctor visits.", comment: "")
+            : NSLocalizedString("Add allergies, conditions, and contacts so doctor visit details are ready.", comment: "")
     }
 
     var caregiversSubtitle: String {
@@ -325,7 +353,7 @@ private extension HealthView {
 
                 VStack(spacing: 10) {
                     quickLinkRow(
-                        title: NSLocalizedString("Emergency Card", comment: ""),
+                        title: NSLocalizedString("Medical Summary", comment: ""),
                         subtitle: emergencyCardSubtitle,
                         systemImage: "person.text.rectangle",
                         tint: .red
@@ -402,7 +430,7 @@ private extension HealthView {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(NSLocalizedString("Medication Library", comment: ""))
+                    Text(NSLocalizedString("Medication Workbench", comment: ""))
                         .appFont(.headline)
                     Text(medicationSectionSubtitle)
                         .appFont(.caption)
@@ -422,12 +450,97 @@ private extension HealthView {
                     )
                 }
             } else {
+                if !attentionMedications.isEmpty {
+                    workbenchSummaryRow(
+                        title: NSLocalizedString("Needs review", comment: ""),
+                        subtitle: String(format: NSLocalizedString("%lld medications need setup, refill, course, or reminder attention.", comment: ""), attentionMedications.count),
+                        tint: .orange,
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                }
+
+                ForEach(medicationWorkbenchItems) { med in
+                    medicationCard(for: med)
+                        .id(med.id)
+                }
+
+                if hiddenMedicationCount > 0 {
+                    NavigationLink {
+                        allMedicationsDestination
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "list.bullet")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.blue)
+                                .frame(width: 34, height: 34)
+                                .background(Circle().fill(Color.blue.opacity(0.12)))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(NSLocalizedString("View All Medications", comment: ""))
+                                    .appFont(.subheadline)
+                                    .foregroundStyle(.primary)
+                                Text(String(format: NSLocalizedString("%lld more saved in your library.", comment: ""), hiddenMedicationCount))
+                                    .appFont(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color(.secondarySystemBackground))
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func workbenchSummaryRow(title: String, subtitle: String, tint: Color, systemImage: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: systemImage)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(tint.opacity(0.12)))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .appFont(.subheadline)
+                Text(subtitle)
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(tint.opacity(0.08))
+        )
+    }
+
+    private var allMedicationsDestination: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 12) {
+                Text(NSLocalizedString("All Medications", comment: ""))
+                    .appFont(.title)
+                Text(medicationSectionSubtitle)
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+
                 ForEach(store.medications) { med in
                     medicationCard(for: med)
                         .id(med.id)
                 }
             }
+            .padding(16)
         }
+        .navigationTitle(NSLocalizedString("Medication Library", comment: ""))
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func overviewMetric(
@@ -508,7 +621,7 @@ private extension HealthView {
                         if med.isAsNeeded != true && med.timesOfDay.isEmpty {
                             libraryBadge(NSLocalizedString("Needs Setup", comment: ""), tint: .orange)
                         }
-                        if !med.remindersEnabled {
+                        if med.isAsNeeded != true && !med.remindersEnabled {
                             libraryBadge(NSLocalizedString("Paused", comment: ""), tint: .orange)
                         }
                         if med.isAsNeeded == true {
@@ -522,9 +635,16 @@ private extension HealthView {
                             timesText(for: med)
                         }
                     }
+
+                    if let (status, _) = latestTodayAction(for: med) {
+                        inlineStatusLabel(status: status)
+                            .padding(.top, 2)
+                    }
                 }
                 Spacer(minLength: 4)
-                reminderToggle(for: med)
+                if med.isAsNeeded != true {
+                    reminderToggle(for: med)
+                }
             }
 
             HStack(spacing: 8) {
@@ -532,11 +652,8 @@ private extension HealthView {
                     compactSupplyLabel(remaining: remaining, med: med)
                 }
                 compactCourseLabel(for: med)
-                if let (status, date) = latestTodayAction(for: med) {
-                    inlineStatusLabel(status: status, date: date)
-                }
                 Spacer(minLength: 0)
-                if med.remindersEnabled {
+                if med.isAsNeeded != true && med.remindersEnabled {
                     compactQuickTakeButton(for: med)
                 }
             }
@@ -660,7 +777,7 @@ private extension HealthView {
         }
     }
 
-    func inlineStatusLabel(status: IntakeStatus, date: Date) -> some View {
+    func inlineStatusLabel(status: IntakeStatus) -> some View {
         HStack(spacing: 5) {
             Image(systemName: latestStatusIcon(status)).font(.system(size: 14, weight: .semibold)).foregroundStyle(statusTint(for: status))
             Text(statusPrefix(for: status)).appFont(.caption).foregroundStyle(statusTint(for: status))
@@ -1647,5 +1764,12 @@ private extension HealthView {
             .appFont(.subheadline)
             .fontWeight(.medium)
         }
+    }
+}
+
+private extension Array where Element == Medication {
+    func uniquedByID() -> [Medication] {
+        var seen = Set<UUID>()
+        return filter { seen.insert($0.id).inserted }
     }
 }

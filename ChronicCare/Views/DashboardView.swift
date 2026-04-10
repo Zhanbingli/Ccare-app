@@ -1,8 +1,11 @@
 import SwiftUI
+import UserNotifications
 
 struct DashboardView: View {
     @EnvironmentObject var store: DataStore
     @State private var showAddMedication = false
+    @State private var reminderFixTarget: Medication? = nil
+    @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var showTakenConfirmation = false
     @State private var takenMedName: String = ""
     @State private var pendingNoteItem: MedSchedule?
@@ -62,7 +65,6 @@ struct DashboardView: View {
             })
             let takenCount = statusCache.values.filter { if case .taken = $0 { return true } else { return false } }.count
             let totalCount = schedules.count
-            let adherence = totalCount > 0 ? Double(takenCount) / Double(totalCount) : 0
             let actionableSchedules = schedules.filter { canLogDose(for: $0, status: statusCache[$0.id] ?? .none) }
             let currentActionID = actionableSchedules.first?.id
             let followUpActionable = actionableSchedules.filter { $0.id != currentActionID }
@@ -82,6 +84,8 @@ struct DashboardView: View {
                 !isFinalStatus(statusCache[$0.id] ?? .none) &&
                 !canLogDose(for: $0, status: statusCache[$0.id] ?? .none)
             }
+            let visibleLaterSchedules = Array(laterSchedules.prefix(2))
+            let hiddenLaterCount = max(laterSchedules.count - visibleLaterSchedules.count, 0)
             let prnMeds = store.medications.filter { $0.isAsNeeded == true }
 
             ScrollView {
@@ -101,27 +105,11 @@ struct DashboardView: View {
                             schedules: schedules,
                             statusCache: statusCache,
                             takenCount: takenCount,
-                            totalCount: totalCount,
-                            prnCount: prnMeds.count
+                            totalCount: totalCount
                         )
 
-                        sevenDayRhythmCard(
-                            scheduledMedicationCount: store.medications.filter { $0.isAsNeeded != true }.count,
-                            setupIssueCount: firstWeekSetupIssueCount,
-                            checkInDays: sevenDayCheckInCount
-                        )
-
-                        if totalCount > 0 {
-                            progressOverviewCard(
-                                adherence: adherence,
-                                taken: takenCount,
-                                total: totalCount,
-                                actionableCount: actionableSchedules.count,
-                                overdueCount: overdueQueue.count + (actionableSchedules.contains {
-                                    if case .overdue = statusCache[$0.id] ?? .none { return true }
-                                    return false
-                                } ? 1 : 0)
-                            )
+                        if hasReminderSetupIssues {
+                            reminderRepairCard()
                         }
 
                         if !overdueQueue.isEmpty {
@@ -142,17 +130,27 @@ struct DashboardView: View {
                             )
                         }
 
-                        if !laterSchedules.isEmpty {
+                        if !visibleLaterSchedules.isEmpty {
                             groupedScheduleCard(
                                 title: NSLocalizedString("Later Today", comment: ""),
-                                subtitle: NSLocalizedString("Upcoming doses that are already on your schedule.", comment: ""),
-                                items: laterSchedules,
+                                subtitle: hiddenLaterCount > 0
+                                    ? String(format: NSLocalizedString("%lld more later today.", comment: ""), hiddenLaterCount)
+                                    : NSLocalizedString("Upcoming doses that are already on your schedule.", comment: ""),
+                                items: visibleLaterSchedules,
                                 statusCache: statusCache
                             )
                         }
 
                         if !prnMeds.isEmpty {
                             prnCard(medications: prnMeds)
+                        }
+
+                        if !hasReminderSetupIssues && store.medications.contains(where: { $0.isAsNeeded != true }) {
+                            sevenDayRhythmCard(
+                                scheduledMedicationCount: store.medications.filter { $0.isAsNeeded != true }.count,
+                                setupIssueCount: 0,
+                                checkInDays: sevenDayCheckInCount
+                            )
                         }
                     }
                 }
@@ -167,10 +165,19 @@ struct DashboardView: View {
                     NotificationManager.shared.updateBadge(store: store)
                 }
             }
+            .sheet(item: $reminderFixTarget) { med in
+                EditMedicationView(medication: med, onSave: { updated in
+                    store.updateMedication(updated)
+                    NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
+                    NotificationManager.shared.updateBadge(store: store)
+                    refreshNotificationStatus()
+                })
+            }
             .refreshable {
                 let now = Date()
                 NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs, now: now)
                 NotificationManager.shared.updateBadge(store: store)
+                refreshNotificationStatus()
                 store.objectWillChange.send()
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -194,6 +201,7 @@ struct DashboardView: View {
                 }
             }
             .onAppear {
+                refreshNotificationStatus()
                 runDailySafetyCheck()
             }
             // Safety alerts from rule engine
@@ -235,10 +243,16 @@ private struct TakenConfirmationOverlay: View {
 }
 
 private extension DashboardView {
-    private var firstWeekSetupIssueCount: Int {
-        store.medications.filter {
-            $0.isAsNeeded != true && (!$0.remindersEnabled || $0.timesOfDay.isEmpty)
-        }.count
+    private var untimedScheduledMeds: [Medication] {
+        store.medications.filter { $0.isAsNeeded != true && $0.timesOfDay.isEmpty }
+    }
+
+    private var disabledReminderMeds: [Medication] {
+        store.medications.filter { $0.isAsNeeded != true && !$0.timesOfDay.isEmpty && !$0.remindersEnabled }
+    }
+
+    private var hasReminderSetupIssues: Bool {
+        notificationStatus == .denied || !untimedScheduledMeds.isEmpty || !disabledReminderMeds.isEmpty
     }
 
     private var sevenDayCheckInCount: Int {
@@ -273,8 +287,7 @@ private extension DashboardView {
         schedules: [MedSchedule],
         statusCache: [String: TodayMedStatus],
         takenCount: Int,
-        totalCount: Int,
-        prnCount: Int
+        totalCount: Int
     ) -> some View {
         let nextActionableItem = schedules.first { item in
             canLogDose(for: item, status: statusCache[item.id] ?? .none)
@@ -298,28 +311,24 @@ private extension DashboardView {
                             Text(heroSupportText(for: item, status: status))
                                 .appFont(.caption)
                                 .foregroundStyle(.secondary)
+                            Text(todayProgressText(taken: takenCount, total: totalCount))
+                                .appFont(.caption)
+                                .foregroundStyle(.secondary)
                         }
                         Spacer()
                         statusBadge(for: item, status: status)
                     }
 
-                    HStack(spacing: 12) {
-                        Button {
-                            beginTakeFlow(for: item)
-                        } label: {
-                            Label(NSLocalizedString("Take Now", comment: ""), systemImage: "checkmark.circle.fill")
-                                .frame(maxWidth: .infinity)
-                                .appFont(.headline)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.green)
-                        .controlSize(.large)
-
-                        summaryPill(
-                            value: "\(takenCount)/\(max(totalCount, 1))",
-                            label: NSLocalizedString("Done", comment: "")
-                        )
+                    Button {
+                        beginTakeFlow(for: item)
+                    } label: {
+                        Label(NSLocalizedString("Take Now", comment: ""), systemImage: "checkmark.circle.fill")
+                            .frame(maxWidth: .infinity)
+                            .appFont(.headline)
                     }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+                    .controlSize(.large)
                 }
             }
         } else if let upcoming = schedules.first(where: { !isFinalStatus(statusCache[$0.id] ?? .none) }) {
@@ -337,18 +346,7 @@ private extension DashboardView {
                     Text(NSLocalizedString("Nothing needs action yet. Your next scheduled dose is lined up.", comment: ""))
                         .appFont(.caption)
                         .foregroundStyle(.secondary)
-                }
-            }
-        } else if prnCount > 0 {
-            Card {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(NSLocalizedString("No Scheduled Doses", comment: ""))
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(NSLocalizedString("Today is PRN only", comment: ""))
-                        .appFont(.title)
-                        .fontWeight(.bold)
-                    Text(NSLocalizedString("You do not have fixed doses waiting right now. Log as-needed medications below only when you actually take them.", comment: ""))
+                    Text(todayProgressText(taken: takenCount, total: totalCount))
                         .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -372,34 +370,58 @@ private extension DashboardView {
         }
     }
 
-    private func progressOverviewCard(
-        adherence: Double,
-        taken: Int,
-        total: Int,
-        actionableCount: Int,
-        overdueCount: Int
-    ) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(NSLocalizedString("Today's Snapshot", comment: ""))
-                    .appFont(.headline)
-                HStack(spacing: 8) {
-                    overviewMetric(
-                        value: "\(Int(adherence * 100))%",
-                        label: NSLocalizedString("Progress", comment: ""),
-                        tint: .green
+    private func reminderRepairCard() -> some View {
+        let issueText: String = {
+            if notificationStatus == .denied {
+                return NSLocalizedString("System notifications are blocked. Scheduled medication reminders cannot fire.", comment: "")
+            }
+            if let first = untimedScheduledMeds.first {
+                return String(format: NSLocalizedString("%@ needs a reminder time before it can notify you.", comment: ""), first.name)
+            }
+            if disabledReminderMeds.count == 1, let first = disabledReminderMeds.first {
+                return String(format: NSLocalizedString("%@ has reminder times, but reminders are turned off.", comment: ""), first.name)
+            }
+            return String(format: NSLocalizedString("%lld medications have reminders turned off.", comment: ""), disabledReminderMeds.count)
+        }()
+
+        let actionTitle: String = {
+            if notificationStatus == .denied {
+                return NSLocalizedString("Open Settings", comment: "")
+            }
+            if !untimedScheduledMeds.isEmpty {
+                return NSLocalizedString("Set Time", comment: "")
+            }
+            return NSLocalizedString("Turn On", comment: "")
+        }()
+
+        return TintedCard(tint: .orange) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: "bell.badge.fill")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(.orange)
+                    .frame(width: 42, height: 42)
+                    .background(
+                        Circle()
+                            .fill(Color.orange.opacity(0.12))
                     )
-                    overviewMetric(
-                        value: "\(max(total - taken, 0))",
-                        label: NSLocalizedString("Remaining", comment: ""),
-                        tint: actionableCount > 0 ? .orange : .secondary
-                    )
-                    overviewMetric(
-                        value: "\(actionableCount)",
-                        label: overdueCount > 0 ? NSLocalizedString("Overdue", comment: "") : NSLocalizedString("Actionable", comment: ""),
-                        tint: overdueCount > 0 ? .red : actionableCount > 0 ? .orange : .secondary
-                    )
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(NSLocalizedString("Reminder Setup Needs Attention", comment: ""))
+                        .appFont(.headline)
+                    Text(issueText)
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+
+                Spacer(minLength: 8)
+
+                Button(actionTitle) {
+                    handleReminderRepair()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.orange)
+                .controlSize(.small)
             }
         }
     }
@@ -511,6 +533,11 @@ private extension DashboardView {
                 )
             }
 
+            Text(subtitle)
+                .appFont(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 medRow(item: item, status: statusCache[item.id] ?? .none, emphasizeUrgency: emphasized)
                 if index < items.count - 1 {
@@ -521,16 +548,31 @@ private extension DashboardView {
     }
 
     private func prnCard(medications: [Medication]) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(NSLocalizedString("As Needed", comment: ""))
-                    .appFont(.headline)
+        let visibleMeds = Array(medications.prefix(2))
+        let hiddenCount = max(medications.count - visibleMeds.count, 0)
+        return Card {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(NSLocalizedString("As Needed", comment: ""))
+                        .appFont(.headline)
+                    Spacer()
+                    AppBadge(text: NSLocalizedString("Optional", comment: ""), tint: .secondary)
+                }
+                Text(NSLocalizedString("Log PRN medication only when you actually take it.", comment: ""))
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
 
-                ForEach(Array(medications.enumerated()), id: \.element.id) { index, med in
+                ForEach(Array(visibleMeds.enumerated()), id: \.element.id) { index, med in
                     prnMedRow(med: med)
-                    if index < medications.count - 1 {
+                    if index < visibleMeds.count - 1 {
                         Divider()
                     }
+                }
+
+                if hiddenCount > 0 {
+                    Text(String(format: NSLocalizedString("%lld more as-needed medications saved.", comment: ""), hiddenCount))
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -695,39 +737,11 @@ private extension DashboardView {
         }
     }
 
-    private func overviewMetric(value: String, label: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(value)
-                .font(.system(size: 24, weight: .bold, design: .rounded))
-                .foregroundStyle(tint)
-                .monospacedDigit()
-            Text(label)
-                .appFont(.caption)
-                .foregroundStyle(.secondary)
+    private func todayProgressText(taken: Int, total: Int) -> String {
+        guard total > 0 else {
+            return NSLocalizedString("No fixed doses scheduled today.", comment: "")
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(tint.opacity(0.08))
-        )
-    }
-
-    private func summaryPill(value: String, label: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value)
-                .appFont(.headline)
-                .fontWeight(.semibold)
-            Text(label)
-                .appFont(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.ultraThinMaterial)
-        )
+        return String(format: NSLocalizedString("%lld of %lld fixed doses handled today.", comment: ""), taken, total)
     }
 
     private func beginTakeFlow(for item: MedSchedule) {
@@ -923,6 +937,52 @@ private extension DashboardView {
             withAnimation(.easeInOut(duration: 0.3)) { showTakenConfirmation = false }
         }
         pendingNoteItem = nil
+    }
+
+    private func handleReminderRepair() {
+        if notificationStatus == .denied {
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+            return
+        }
+
+        if let med = untimedScheduledMeds.first {
+            reminderFixTarget = med
+            return
+        }
+
+        if !disabledReminderMeds.isEmpty {
+            Task {
+                let granted = await NotificationManager.shared.ensureAuthorization()
+                await MainActor.run {
+                    guard granted else {
+                        refreshNotificationStatus()
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                        return
+                    }
+                    for med in disabledReminderMeds {
+                        var updated = med
+                        updated.remindersEnabled = true
+                        store.updateMedication(updated)
+                    }
+                    NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
+                    NotificationManager.shared.updateBadge(store: store)
+                    refreshNotificationStatus()
+                    Haptics.success()
+                }
+            }
+        }
+    }
+
+    private func refreshNotificationStatus() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                notificationStatus = settings.authorizationStatus
+            }
+        }
     }
 
     @ViewBuilder
