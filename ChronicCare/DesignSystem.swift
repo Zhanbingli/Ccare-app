@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct Card<Content: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
     let content: Content
     init(@ViewBuilder content: () -> Content) { self.content = content() }
     var body: some View {
@@ -8,18 +9,37 @@ struct Card<Content: View>: View {
             .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .fill(cardFill)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .stroke(cardStroke, lineWidth: 1)
             )
-            .shadow(color: Color.black.opacity(0.04), radius: 16, x: 0, y: 8)
+            .shadow(color: cardShadow, radius: 18, x: 0, y: 10)
+    }
+
+    private var cardFill: Color {
+        colorScheme == .dark
+            ? Color.white.opacity(0.07)
+            : Color.white.opacity(0.82)
+    }
+
+    private var cardStroke: Color {
+        colorScheme == .dark
+            ? Color.white.opacity(0.07)
+            : Color.black.opacity(0.05)
+    }
+
+    private var cardShadow: Color {
+        colorScheme == .dark
+            ? Color.black.opacity(0.24)
+            : Color(red: 0.15, green: 0.22, blue: 0.28).opacity(0.10)
     }
 }
 
 struct TintedCard<Content: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
     let tint: Color
     let content: Content
     init(tint: Color, @ViewBuilder content: () -> Content) {
@@ -28,17 +48,31 @@ struct TintedCard<Content: View>: View {
     }
     var body: some View {
         content
-            .padding(20)
+            .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(LinearGradient(colors: [tint.opacity(0.22), tint.opacity(0.12)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                tint.opacity(colorScheme == .dark ? 0.26 : 0.20),
+                                tint.opacity(colorScheme == .dark ? 0.12 : 0.09),
+                                cardBase.opacity(colorScheme == .dark ? 0.88 : 0.72)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .stroke(tint.opacity(0.3), lineWidth: 1.5)
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .stroke(tint.opacity(colorScheme == .dark ? 0.26 : 0.20), lineWidth: 1.2)
             )
-            .shadow(color: tint.opacity(0.2), radius: 16, x: 0, y: 8)
+            .shadow(color: tint.opacity(colorScheme == .dark ? 0.18 : 0.16), radius: 18, x: 0, y: 10)
+    }
+
+    private var cardBase: Color {
+        colorScheme == .dark ? Color.black : Color.white
     }
 }
 
@@ -48,26 +82,69 @@ struct AppBadge: View {
     var icon: String? = nil
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 4) {
             if let icon {
                 Image(systemName: icon)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 9, weight: .bold))
             }
             Text(text)
                 .appFont(.caption)
                 .fontWeight(.semibold)
         }
         .foregroundStyle(tint)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
         .background(
             Capsule(style: .continuous)
-                .fill(tint.opacity(0.12))
+                .fill(tint.opacity(0.11))
         )
         .overlay(
             Capsule(style: .continuous)
-                .stroke(tint.opacity(0.16), lineWidth: 0.8)
+                .stroke(tint.opacity(0.16), lineWidth: 0.9)
         )
+    }
+}
+
+struct InsetPanel<Content: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let tint: Color?
+    let content: Content
+
+    init(tint: Color? = nil, @ViewBuilder content: () -> Content) {
+        self.tint = tint
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(fillColor)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(strokeColor, lineWidth: 1)
+            )
+    }
+
+    private var fillColor: Color {
+        if let tint {
+            return tint.opacity(colorScheme == .dark ? 0.16 : 0.08)
+        }
+        return colorScheme == .dark
+            ? Color.white.opacity(0.05)
+            : Color.white.opacity(0.58)
+    }
+
+    private var strokeColor: Color {
+        if let tint {
+            return tint.opacity(colorScheme == .dark ? 0.20 : 0.10)
+        }
+        return colorScheme == .dark
+            ? Color.white.opacity(0.06)
+            : Color.black.opacity(0.04)
     }
 }
 

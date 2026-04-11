@@ -33,9 +33,12 @@ struct ContentView: View {
                 DashboardView()
                     .tag(0)
                     .tabItem { Label(NSLocalizedString("Today", comment: ""), systemImage: "checklist") }
-                HealthView(deepLinkMedicationID: $deepLinkMedicationID)
+                MedicationsView(deepLinkMedicationID: $deepLinkMedicationID)
                     .tag(1)
-                    .tabItem { Label(NSLocalizedString("Health", comment: ""), systemImage: "heart.text.square") }
+                    .tabItem { Label(NSLocalizedString("Medications", comment: ""), systemImage: "pills") }
+                InsightsView()
+                    .tag(2)
+                    .tabItem { Label(NSLocalizedString("Insights", comment: ""), systemImage: "chart.line.uptrend.xyaxis") }
             }
         }
         .environment(\.font, AppFontStyle.body.font)

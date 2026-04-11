@@ -104,6 +104,7 @@ struct Medication: Identifiable, Codable {
     var name: String
     var dose: String
     var notes: String?
+    var startDate: Date
     var timesOfDay: [DateComponents]
     var remindersEnabled: Bool
     var category: MedicationCategory?
@@ -116,13 +117,14 @@ struct Medication: Identifiable, Codable {
     var courseEndDate: Date?
     var specialInstructions: String?
 
-    enum CodingKeys: String, CodingKey { case id, name, dose, notes, timesOfDay, timeOfDay, remindersEnabled, category, customCategoryName, imagePath, pillsRemaining, pillsPerDose, foodInstruction, isAsNeeded, courseEndDate, specialInstructions }
+    enum CodingKeys: String, CodingKey { case id, name, dose, notes, startDate, timesOfDay, timeOfDay, remindersEnabled, category, customCategoryName, imagePath, pillsRemaining, pillsPerDose, foodInstruction, isAsNeeded, courseEndDate, specialInstructions }
 
-    init(id: UUID = UUID(), name: String, dose: String, notes: String? = nil, timesOfDay: [DateComponents], remindersEnabled: Bool, category: MedicationCategory? = nil, customCategoryName: String? = nil, imagePath: String? = nil, pillsRemaining: Int? = nil, pillsPerDose: Int? = nil, foodInstruction: FoodInstruction? = nil, isAsNeeded: Bool? = nil, courseEndDate: Date? = nil, specialInstructions: String? = nil) {
+    init(id: UUID = UUID(), name: String, dose: String, notes: String? = nil, startDate: Date = Date(), timesOfDay: [DateComponents], remindersEnabled: Bool, category: MedicationCategory? = nil, customCategoryName: String? = nil, imagePath: String? = nil, pillsRemaining: Int? = nil, pillsPerDose: Int? = nil, foodInstruction: FoodInstruction? = nil, isAsNeeded: Bool? = nil, courseEndDate: Date? = nil, specialInstructions: String? = nil) {
         self.id = id
         self.name = name
         self.dose = dose
         self.notes = notes
+        self.startDate = startDate
         self.timesOfDay = timesOfDay
         self.remindersEnabled = remindersEnabled
         self.category = category
@@ -142,6 +144,7 @@ struct Medication: Identifiable, Codable {
         self.name = try c.decode(String.self, forKey: .name)
         self.dose = try c.decode(String.self, forKey: .dose)
         self.notes = try c.decodeIfPresent(String.self, forKey: .notes)
+        self.startDate = try c.decodeIfPresent(Date.self, forKey: .startDate) ?? .distantPast
         self.remindersEnabled = try c.decodeIfPresent(Bool.self, forKey: .remindersEnabled) ?? true
         self.category = try c.decodeIfPresent(MedicationCategory.self, forKey: .category)
         self.customCategoryName = try c.decodeIfPresent(String.self, forKey: .customCategoryName)
@@ -167,6 +170,7 @@ struct Medication: Identifiable, Codable {
         try c.encode(name, forKey: .name)
         try c.encode(dose, forKey: .dose)
         try c.encodeIfPresent(notes, forKey: .notes)
+        try c.encode(startDate, forKey: .startDate)
         try c.encode(timesOfDay, forKey: .timesOfDay)
         try c.encode(remindersEnabled, forKey: .remindersEnabled)
         try c.encodeIfPresent(category, forKey: .category)
@@ -189,6 +193,10 @@ enum MedicationCourseState: Equatable {
 }
 
 extension Medication {
+    func isDoseActive(on scheduledDate: Date) -> Bool {
+        scheduledDate >= startDate
+    }
+
     /// How many days of supply remain (nil if not tracking)
     var daysOfSupplyRemaining: Int? {
         guard let remaining = pillsRemaining, remaining > 0 else { return pillsRemaining == 0 ? 0 : nil }

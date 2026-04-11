@@ -126,86 +126,124 @@ struct AddMeasurementView: View {
         case value
     }
 
+    private var contextSummary: String {
+        note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? NSLocalizedString("Optional", comment: "")
+            : NSLocalizedString("Added", comment: "")
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     Card {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text(NSLocalizedString("Measurement", comment: ""))
-                                .appFont(.headline)
+                        VStack(alignment: .leading, spacing: 16) {
+                            measurementSectionHeader(
+                                step: "1",
+                                title: NSLocalizedString("Measurement", comment: ""),
+                                detail: NSLocalizedString("Pick what you measured, then enter the reading below.", comment: "")
+                            )
 
-                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                                ForEach(MeasurementType.allCases) { measurementType in
-                                    measurementTypeButton(for: measurementType)
+                            InsetPanel {
+                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                                    ForEach(MeasurementType.allCases) { measurementType in
+                                        measurementTypeButton(for: measurementType)
+                                    }
                                 }
                             }
 
                             if type == .bloodPressure {
-                                bloodPressureEntryLayout
+                                InsetPanel {
+                                    bloodPressureEntryLayout
+                                }
                             } else {
-                                measurementInputCard(
-                                    title: NSLocalizedString("Value", comment: ""),
-                                    text: $valueInput,
-                                    placeholder: suggestedPlaceholder,
-                                    unit: displayedUnitLabel,
-                                    field: .value,
-                                    keyboard: type == .bloodGlucose ? .decimalPad : .decimalPad
-                                )
+                                InsetPanel {
+                                    measurementInputCard(
+                                        title: NSLocalizedString("Value", comment: ""),
+                                        text: $valueInput,
+                                        placeholder: suggestedPlaceholder,
+                                        unit: displayedUnitLabel,
+                                        field: .value,
+                                        keyboard: type == .bloodGlucose ? .decimalPad : .decimalPad
+                                    )
+                                }
 
                                 if type == .bloodGlucose {
-                                    Picker(NSLocalizedString("Unit", comment: ""), selection: $glucoseUnit) {
-                                        ForEach(GlucoseUnit.allCases) { unit in
-                                            Text(unit.rawValue).tag(unit)
+                                    InsetPanel {
+                                        VStack(alignment: .leading, spacing: 10) {
+                                            Text(NSLocalizedString("Unit", comment: ""))
+                                                .appFont(.caption)
+                                                .foregroundStyle(.secondary)
+                                            Picker(NSLocalizedString("Unit", comment: ""), selection: $glucoseUnit) {
+                                                ForEach(GlucoseUnit.allCases) { unit in
+                                                    Text(unit.rawValue).tag(unit)
+                                                }
+                                            }
+                                            .pickerStyle(.segmented)
                                         }
                                     }
-                                    .pickerStyle(.segmented)
                                 }
                             }
                         }
                     }
 
                     Card {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text(NSLocalizedString("Time", comment: ""))
-                                .appFont(.headline)
+                        VStack(alignment: .leading, spacing: 16) {
+                            measurementSectionHeader(
+                                step: "2",
+                                title: NSLocalizedString("Time", comment: ""),
+                                detail: NSLocalizedString("Capture when the reading was taken so trends stay meaningful.", comment: "")
+                            )
 
-                            HStack(spacing: 8) {
-                                quickDateButton(title: NSLocalizedString("Now", comment: "")) {
-                                    date = Date()
-                                }
-                                quickDateButton(title: NSLocalizedString("1h Ago", comment: "")) {
-                                    date = Date().addingTimeInterval(-3600)
-                                }
-                                quickDateButton(title: NSLocalizedString("Today 8 PM", comment: "")) {
-                                    let cal = Calendar.current
-                                    let candidate = cal.date(bySettingHour: 20, minute: 0, second: 0, of: Date()) ?? Date()
-                                    date = min(candidate, Date())
+                            InsetPanel {
+                                HStack(spacing: 8) {
+                                    quickDateButton(title: NSLocalizedString("Now", comment: "")) {
+                                        date = Date()
+                                    }
+                                    quickDateButton(title: NSLocalizedString("1h Ago", comment: "")) {
+                                        date = Date().addingTimeInterval(-3600)
+                                    }
+                                    quickDateButton(title: NSLocalizedString("Today 8 PM", comment: "")) {
+                                        let cal = Calendar.current
+                                        let candidate = cal.date(bySettingHour: 20, minute: 0, second: 0, of: Date()) ?? Date()
+                                        date = min(candidate, Date())
+                                    }
                                 }
                             }
 
-                            DatePicker(NSLocalizedString("Date", comment: ""), selection: $date, in: ...Date())
-                                .datePickerStyle(.compact)
+                            InsetPanel {
+                                DatePicker(NSLocalizedString("Date", comment: ""), selection: $date, in: ...Date())
+                                    .datePickerStyle(.compact)
+                            }
                         }
                     }
 
                     Card {
                         DisclosureGroup(isExpanded: $showContextNotes) {
-                            TextField(NSLocalizedString("Optional context, symptoms, or meal timing", comment: ""), text: $note, axis: .vertical)
-                                .lineLimit(2...4)
-                                .textFieldStyle(.plain)
-                                .padding(12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .fill(Color(.secondarySystemBackground))
-                                )
-                                .padding(.top, 10)
+                            InsetPanel {
+                                TextField(NSLocalizedString("Optional context, symptoms, or meal timing", comment: ""), text: $note, axis: .vertical)
+                                    .lineLimit(2...4)
+                                    .textFieldStyle(.plain)
+                                    .padding(12)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                            .fill(Color(.secondarySystemBackground))
+                                    )
+                            }
+                            .padding(.top, 10)
                         } label: {
-                            HStack {
-                                Text(NSLocalizedString("Add Context", comment: ""))
-                                    .appFont(.headline)
+                            HStack(alignment: .top, spacing: 10) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(NSLocalizedString("Add Context", comment: ""))
+                                        .appFont(.headline)
+                                    Text(note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                         ? NSLocalizedString("Optional context such as symptoms, meals, or activity.", comment: "")
+                                         : NSLocalizedString("Context notes will be saved with this reading.", comment: ""))
+                                        .appFont(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                                 Spacer()
-                                Text(note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? NSLocalizedString("Optional", comment: "") : NSLocalizedString("Added", comment: ""))
+                                Text(contextSummary)
                                     .appFont(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -365,6 +403,29 @@ struct AddMeasurementView: View {
 }
 
 private extension AddMeasurementView {
+    private func measurementSectionHeader(step: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(step)
+                .appFont(.caption)
+                .fontWeight(.bold)
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 24, height: 24)
+                .background(
+                    Circle()
+                        .fill(Color.accentColor.opacity(0.12))
+                )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .appFont(.headline)
+                Text(detail)
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
     var bloodPressureEntryLayout: some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 10) {

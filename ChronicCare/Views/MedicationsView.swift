@@ -6,61 +6,142 @@ import Charts
 
 struct MedicationsView: View {
     @EnvironmentObject var store: DataStore
+    @Binding var deepLinkMedicationID: UUID?
     @State private var scrollProxy: ScrollViewProxy?
     @State private var showAdd = false
     @State private var editTarget: Medication? = nil
+    @State private var showMedicalSummary = false
+    @State private var showCaregivers = false
+    @State private var showSettings = false
     @State private var showNotificationDeniedAlert = false
     @State private var deniedMedName: String? = nil
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var searchText: String = ""
-    @State private var filter: MedFilter = .all
     @State private var scrollToMedicationID: UUID? = nil
+
+    init(deepLinkMedicationID: Binding<UUID?> = .constant(nil)) {
+        self._deepLinkMedicationID = deepLinkMedicationID
+    }
 
     var body: some View {
         NavigationStack {
             ScrollViewReader { proxy in
                 List {
-                    Section {
-                        VStack(alignment: .leading, spacing: 12) {
-                            summaryCard
-                            filterChips
-                        }
-                    }
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-
                     if notificationStatus == .denied {
                         Section {
-                            HStack(alignment: .top, spacing: 12) {
-                                Image(systemName: "bell.slash.fill").foregroundStyle(.orange)
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text(NSLocalizedString("Notifications Disabled", comment: "")).appFont(.subheadline)
-                                    Text(NSLocalizedString("Turn notifications on in Settings to receive medication reminders.", comment: "")).appFont(.caption).foregroundStyle(.secondary)
+                            warningRow
+                        }
+                    }
+
+                    if store.medications.isEmpty {
+                        Section {
+                            EmptyStateView(
+                                systemImage: "pills.circle.fill",
+                                title: NSLocalizedString("No medications added", comment: ""),
+                                subtitle: NSLocalizedString("Add your first medication to build your daily schedule.", comment: ""),
+                                actionTitle: NSLocalizedString("Add Medication", comment: ""),
+                                action: { showAdd = true }
+                            )
+                        }
+                    } else if filteredMedications.isEmpty {
+                        Section {
+                            Text(NSLocalizedString("No medications match your search.", comment: ""))
+                                .appFont(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        if !setupMedications.isEmpty {
+                            Section(NSLocalizedString("Needs Setup", comment: "")) {
+                                ForEach(setupMedications) { med in
+                                    medicationManagementRow(for: med)
+                                        .id(med.id)
                                 }
                             }
                         }
-                        .listRowSeparator(.hidden)
-                    }
-                    if filteredMedications.isEmpty {
-                        Text(NSLocalizedString("No medications added", comment: ""))
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(filteredMedications) { med in
-                            medicationCard(for: med)
-                                .listRowSeparator(.hidden)
-                                .listRowBackground(Color.clear)
-                                .id(med.id)
+
+                        if !activeScheduledMedications.isEmpty {
+                            Section(NSLocalizedString("Active Medications", comment: "")) {
+                                ForEach(activeScheduledMedications) { med in
+                                    medicationManagementRow(for: med)
+                                        .id(med.id)
+                                }
+                            }
+                        }
+
+                        if !asNeededMedications.isEmpty {
+                            Section(NSLocalizedString("As Needed", comment: "")) {
+                                ForEach(asNeededMedications) { med in
+                                    medicationManagementRow(for: med)
+                                        .id(med.id)
+                                }
+                            }
+                        }
+
+                        if !pausedMedications.isEmpty {
+                            Section(NSLocalizedString("Paused", comment: "")) {
+                                ForEach(pausedMedications) { med in
+                                    medicationManagementRow(for: med)
+                                        .id(med.id)
+                                }
+                            }
+                        }
+
+                        Section(NSLocalizedString("Safety & Support", comment: "")) {
+                            Button {
+                                showMedicalSummary = true
+                            } label: {
+                                managementLinkRow(
+                                    title: NSLocalizedString("Medical Summary", comment: ""),
+                                    subtitle: NSLocalizedString("Keep doctor visit details and emergency information ready.", comment: ""),
+                                    systemImage: "person.text.rectangle",
+                                    tint: .red
+                                )
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                showCaregivers = true
+                            } label: {
+                                managementLinkRow(
+                                    title: NSLocalizedString("Caregivers", comment: ""),
+                                    subtitle: NSLocalizedString("Manage trusted contacts for missed-dose support.", comment: ""),
+                                    systemImage: "person.2.fill",
+                                    tint: .blue
+                                )
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
-                .listStyle(.plain)
-                .listRowSeparator(.hidden)
-                .listSectionSeparator(.hidden)
+                .listStyle(.insetGrouped)
                 .onAppear { scrollProxy = proxy }
                 .onChange(of: store.medications.count) { _ in scrollProxy = proxy }
             }
-            .navigationTitle("Medications")
+            .navigationTitle(NSLocalizedString("Medications", comment: ""))
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        Button {
+                            showMedicalSummary = true
+                        } label: {
+                            Label(NSLocalizedString("Medical Summary", comment: ""), systemImage: "person.text.rectangle")
+                        }
+
+                        Button {
+                            showCaregivers = true
+                        } label: {
+                            Label(NSLocalizedString("Caregivers", comment: ""), systemImage: "person.2.fill")
+                        }
+
+                        Button {
+                            showSettings = true
+                        } label: {
+                            Label(NSLocalizedString("Settings", comment: ""), systemImage: "gearshape")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showAdd = true } label: { Image(systemName: "plus") }
                 }
@@ -91,6 +172,18 @@ struct MedicationsView: View {
                     }
                 })
             }
+            .sheet(isPresented: $showMedicalSummary) {
+                EmergencyCardView()
+                    .environmentObject(store)
+            }
+            .sheet(isPresented: $showCaregivers) {
+                CaregiversView()
+                    .environmentObject(store)
+            }
+            .sheet(isPresented: $showSettings) {
+                ProfileView()
+                    .environmentObject(store)
+            }
             .onAppear(perform: refreshNotificationStatus)
             .onChange(of: store.medications.count) { _ in refreshNotificationStatus() }
             .onChange(of: scrollToMedicationID) { target in
@@ -99,6 +192,15 @@ struct MedicationsView: View {
                         scrollProxy?.scrollTo(id, anchor: .top)
                     }
                     scrollToMedicationID = nil
+                }
+            }
+            .onChange(of: deepLinkMedicationID) { target in
+                if let id = target {
+                    scrollToMedicationID = id
+                    if let med = store.medications.first(where: { $0.id == id }) {
+                        editTarget = med
+                    }
+                    deepLinkMedicationID = nil
                 }
             }
             .alert(isPresented: $showNotificationDeniedAlert) {
@@ -150,6 +252,9 @@ struct AddMedicationView: View {
     @State private var showPRNConfirmation = false
     @State private var showAdditionalContext = false
     @State private var showOptionalDetails = false
+    @State private var showInstructionsDetails = false
+    @State private var showInventoryDetails = false
+    @State private var showCategoryDetails = false
     @FocusState private var focusedField: EntryField?
 
     private enum EntryField: Hashable {
@@ -160,10 +265,17 @@ struct AddMedicationView: View {
         case customCategory
     }
 
+    private enum IntakeMode: String, CaseIterable, Identifiable {
+        case scheduled
+        case asNeeded
+
+        var id: String { rawValue }
+    }
+
     private enum SchedulePreset: String, CaseIterable, Identifiable {
         case onceDaily
         case twiceDaily
-        case morningEvening
+        case threeTimesDaily
         case custom
 
         var id: String { rawValue }
@@ -172,7 +284,7 @@ struct AddMedicationView: View {
             switch self {
             case .onceDaily: return "Once Daily"
             case .twiceDaily: return "Twice Daily"
-            case .morningEvening: return "Morning + Evening"
+            case .threeTimesDaily: return "Three Times Daily"
             case .custom: return "Custom"
             }
         }
@@ -181,7 +293,7 @@ struct AddMedicationView: View {
             switch self {
             case .onceDaily: return "1 reminder"
             case .twiceDaily: return "2 reminders"
-            case .morningEvening: return "AM + PM"
+            case .threeTimesDaily: return "3 reminders"
             case .custom: return "Edit times manually"
             }
         }
@@ -245,18 +357,94 @@ struct AddMedicationView: View {
         }
     }
 
+    private var intakeModeSelection: Binding<IntakeMode> {
+        Binding(
+            get: { isAsNeeded ? .asNeeded : .scheduled },
+            set: { newValue in
+                switch newValue {
+                case .scheduled:
+                    switchToScheduled()
+                case .asNeeded:
+                    requestSwitchToPRN()
+                }
+            }
+        )
+    }
+
+    private var scheduleHelperText: String {
+        if times.isEmpty {
+            return NSLocalizedString("Choose how often this medication is taken, then confirm the reminder times.", comment: "")
+        }
+
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        let timeSummary = times.sorted(by: { $0 < $1 }).map { formatter.string(from: $0) }.joined(separator: " • ")
+
+        if remindersEnabled {
+            return String(format: NSLocalizedString("Scheduled for %@", comment: ""), timeSummary)
+        }
+
+        return String(format: NSLocalizedString("Times saved without reminders: %@", comment: ""), timeSummary)
+    }
+
+    private var instructionsSummary: String {
+        if let foodInstruction {
+            return foodInstruction.displayName
+        }
+
+        if !specialInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return NSLocalizedString("Custom instructions added", comment: "")
+        }
+
+        if !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return NSLocalizedString("Notes added", comment: "")
+        }
+
+        return NSLocalizedString("None", comment: "")
+    }
+
+    private var inventorySummary: String {
+        if trackSupply, let estimatedSupplyDays {
+            return String(format: NSLocalizedString("%lld-day supply", comment: ""), estimatedSupplyDays)
+        }
+
+        if hasCourseEnd, let courseDaysRemaining {
+            return String(format: NSLocalizedString("Ends in %lld days", comment: ""), max(courseDaysRemaining, 0))
+        }
+
+        return NSLocalizedString("Not tracking", comment: "")
+    }
+
+    private var categorySummary: String {
+        if category == .custom {
+            let trimmed = customCategoryName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                return trimmed
+            }
+        } else if category != .unspecified {
+            return category.displayName
+        }
+
+        if pickedImage != nil {
+            return NSLocalizedString("Photo added", comment: "")
+        }
+
+        return NSLocalizedString("Optional", comment: "")
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView(.vertical) {
-                VStack(alignment: .leading, spacing: 16) {
-                    Card {
-                        VStack(alignment: .leading, spacing: 14) {
-                            HStack(alignment: .center, spacing: 10) {
-                                Text(NSLocalizedString("Medication", comment: ""))
-                                    .appFont(.headline)
-                                Spacer()
-                                scanLabelButton
-                            }
+                VStack(alignment: .leading, spacing: 24) {
+                    addSection {
+                        VStack(alignment: .leading, spacing: 16) {
+                            sectionHeader(
+                                step: "1",
+                                title: NSLocalizedString("Medication", comment: ""),
+                                detail: NSLocalizedString("Start with the essentials. You can scan a label or type manually.", comment: "")
+                            )
+
+                            scanAssistPanel
 
                             textInputCard(
                                 title: NSLocalizedString("Medication Name", comment: ""),
@@ -277,202 +465,227 @@ struct AddMedicationView: View {
                                     .appFont(.caption)
                                     .foregroundStyle(.secondary)
                             }
-
-                            Divider()
-
-                            Text(NSLocalizedString("How do you take it?", comment: ""))
-                                .appFont(.headline)
-
-                            HStack(spacing: 10) {
-                                intakeModeButton(
-                                    title: NSLocalizedString("Scheduled", comment: ""),
-                                    subtitle: NSLocalizedString("Daily reminders", comment: ""),
-                                    isSelected: !isAsNeeded
-                                ) {
-                                    isAsNeeded = false
-                                    if times.isEmpty {
-                                        schedulePreset = .onceDaily
-                                        applySchedulePreset(.onceDaily)
-                                    }
-                                    remindersEnabled = true
-                                }
-
-                                intakeModeButton(
-                                    title: NSLocalizedString("As Needed", comment: ""),
-                                    subtitle: NSLocalizedString("Log only when taken", comment: ""),
-                                    isSelected: isAsNeeded
-                                ) {
-                                    requestSwitchToPRN()
-                                }
-                            }
                         }
                     }
 
-                    if isAsNeeded {
-                        Card {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text(NSLocalizedString("PRN Medication", comment: ""))
-                                    .appFont(.headline)
-                                Text(NSLocalizedString("As-needed medications skip fixed reminder times. You can log each dose from the Today screen whenever you take it.", comment: ""))
-                                    .appFont(.caption)
-                                    .foregroundStyle(.secondary)
+                    addSection {
+                        VStack(alignment: .leading, spacing: 14) {
+                            sectionHeader(
+                                step: "2",
+                                title: NSLocalizedString("How is it taken?", comment: ""),
+                                detail: NSLocalizedString("Choose whether this medication follows a fixed schedule or is logged only when needed.", comment: "")
+                            )
+
+                            Picker("", selection: intakeModeSelection) {
+                                Text(NSLocalizedString("Scheduled", comment: "")).tag(IntakeMode.scheduled)
+                                Text(NSLocalizedString("As Needed", comment: "")).tag(IntakeMode.asNeeded)
                             }
-                        }
-                    } else {
-                        Card {
-                            VStack(alignment: .leading, spacing: 14) {
-                                Text(NSLocalizedString("Schedule", comment: ""))
-                                    .appFont(.headline)
+                            .pickerStyle(.segmented)
 
-                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                                    ForEach(SchedulePreset.allCases) { preset in
-                                        schedulePresetButton(preset)
-                                    }
-                                }
-
-                                if times.isEmpty {
-                                    Text(NSLocalizedString("Choose a preset or add a custom time.", comment: ""))
+                            if isAsNeeded {
+                                InsetPanel(tint: .blue) {
+                                    Text(NSLocalizedString("As-needed medications skip fixed reminder times. Log each dose from Today only when you actually take it.", comment: ""))
                                         .appFont(.caption)
                                         .foregroundStyle(.secondary)
-                                } else {
-                                    ForEach(Array(times.indices), id: \.self) { idx in
-                                        timeRow(for: idx)
-                                    }
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
-
-                                Button {
-                                    schedulePreset = .custom
-                                    times.append(defaultCustomTime(after: times.last))
-                                } label: {
-                                    secondaryActionLabel(NSLocalizedString("Add Time", comment: ""), systemImage: "plus.circle.fill")
-                                }
-                                .buttonStyle(.plain)
-
-                                HStack(spacing: 10) {
-                                    Text(NSLocalizedString("Remind Me", comment: ""))
-                                        .appFont(.subheadline)
-                                    Spacer()
-                                    Toggle(NSLocalizedString("Remind Me", comment: ""), isOn: $remindersEnabled)
-                                        .labelsHidden()
-                                }
-
-                                if remindersEnabled && times.isEmpty {
-                                    Label(NSLocalizedString("Add at least one time for reminders", comment: ""), systemImage: "exclamationmark.triangle.fill")
+                            } else {
+                                InsetPanel {
+                                    Text(NSLocalizedString("Choose a frequency first, then confirm the times below.", comment: ""))
                                         .appFont(.caption)
-                                        .foregroundStyle(.orange)
+                                        .foregroundStyle(.secondary)
                                 }
                             }
                         }
                     }
 
-                    Card {
+                    if !isAsNeeded {
+                        addSection {
+                            VStack(alignment: .leading, spacing: 16) {
+                                sectionHeader(
+                                    step: "3",
+                                    title: NSLocalizedString("Schedule", comment: ""),
+                                    detail: NSLocalizedString("Pick a frequency, then confirm the reminder times below.", comment: "")
+                                )
+
+                                InsetPanel {
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        Text(NSLocalizedString("Frequency", comment: ""))
+                                            .appFont(.caption)
+                                            .foregroundStyle(.secondary)
+
+                                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                                            ForEach(SchedulePreset.allCases) { preset in
+                                                schedulePresetButton(preset)
+                                            }
+                                        }
+                                    }
+                                }
+
+                                InsetPanel {
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        Text(NSLocalizedString("Reminder Times", comment: ""))
+                                            .appFont(.caption)
+                                            .foregroundStyle(.secondary)
+
+                                        ForEach(Array(times.indices), id: \.self) { idx in
+                                            timeRow(for: idx)
+                                        }
+
+                                        Button {
+                                            schedulePreset = .custom
+                                            times.append(defaultCustomTime(after: times.last))
+                                        } label: {
+                                            secondaryActionLabel(NSLocalizedString("Add Time", comment: ""), systemImage: "plus.circle.fill")
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+
+                                InsetPanel(tint: remindersEnabled ? .blue : .gray) {
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        HStack(spacing: 10) {
+                                            VStack(alignment: .leading, spacing: 3) {
+                                                Text(NSLocalizedString("Reminders", comment: ""))
+                                                    .appFont(.subheadline)
+                                                Text(remindersEnabled ? NSLocalizedString("The app will notify you at these times.", comment: "") : NSLocalizedString("Times are saved, but notifications are off.", comment: ""))
+                                                    .appFont(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            Spacer()
+                                            Toggle(NSLocalizedString("Reminders", comment: ""), isOn: $remindersEnabled)
+                                                .labelsHidden()
+                                        }
+
+                                        Text(scheduleHelperText)
+                                            .appFont(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    addSection(showDivider: false) {
                         DisclosureGroup(isExpanded: $showOptionalDetails) {
                             VStack(alignment: .leading, spacing: 16) {
-                                Divider()
+                                DisclosureGroup(isExpanded: $showInstructionsDetails) {
+                                    InsetPanel {
+                                        VStack(alignment: .leading, spacing: 14) {
+                                            Picker(NSLocalizedString("Food Instruction", comment: ""), selection: $foodInstruction) {
+                                                Text(NSLocalizedString("None", comment: "")).tag(FoodInstruction?.none)
+                                                ForEach(FoodInstruction.allCases) { f in
+                                                    Text(f.displayName).tag(Optional(f))
+                                                }
+                                            }
 
-                                VStack(alignment: .leading, spacing: 14) {
-                                    Text(NSLocalizedString("Instructions", comment: ""))
-                                        .appFont(.headline)
+                                            textInputCard(
+                                                title: NSLocalizedString("Special Instructions", comment: ""),
+                                                placeholder: NSLocalizedString("Take after dinner", comment: ""),
+                                                text: $specialInstructions,
+                                                field: .specialInstructions
+                                            )
 
-                                    Picker(NSLocalizedString("Food Instruction", comment: ""), selection: $foodInstruction) {
-                                        Text(NSLocalizedString("None", comment: "")).tag(FoodInstruction?.none)
-                                        ForEach(FoodInstruction.allCases) { f in
-                                            Text(f.displayName).tag(Optional(f))
+                                            DisclosureGroup(isExpanded: $showAdditionalContext) {
+                                                textInputCard(
+                                                    title: NSLocalizedString("Notes", comment: ""),
+                                                    placeholder: NSLocalizedString("Optional context", comment: ""),
+                                                    text: $notes,
+                                                    field: .notes,
+                                                    axis: .vertical,
+                                                    lineLimit: 2...4
+                                                )
+                                                .padding(.top, 6)
+                                            } label: {
+                                                HStack {
+                                                    Text(NSLocalizedString("Additional Context", comment: ""))
+                                                        .appFont(.subheadline)
+                                                        .fontWeight(.semibold)
+                                                    Spacer()
+                                                    Text(notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? NSLocalizedString("Optional", comment: "") : NSLocalizedString("Added", comment: ""))
+                                                        .appFont(.caption)
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                            }
                                         }
                                     }
-
-                                    textInputCard(
-                                        title: NSLocalizedString("Special Instructions", comment: ""),
-                                        placeholder: NSLocalizedString("Take after dinner", comment: ""),
-                                        text: $specialInstructions,
-                                        field: .specialInstructions
+                                } label: {
+                                    optionalRowLabel(
+                                        title: NSLocalizedString("Instructions", comment: ""),
+                                        summary: instructionsSummary
                                     )
-
-                                    DisclosureGroup(isExpanded: $showAdditionalContext) {
-                                        textInputCard(
-                                            title: NSLocalizedString("Notes", comment: ""),
-                                            placeholder: NSLocalizedString("Optional context", comment: ""),
-                                            text: $notes,
-                                            field: .notes,
-                                            axis: .vertical,
-                                            lineLimit: 2...4
-                                        )
-                                        .padding(.top, 6)
-                                    } label: {
-                                        HStack {
-                                            Text(NSLocalizedString("Additional Context", comment: ""))
-                                                .appFont(.subheadline)
-                                                .fontWeight(.semibold)
-                                            Spacer()
-                                            Text(notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? NSLocalizedString("Optional", comment: "") : NSLocalizedString("Added", comment: ""))
-                                                .appFont(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                    }
                                 }
 
-                                Divider()
+                                DisclosureGroup(isExpanded: $showInventoryDetails) {
+                                    InsetPanel {
+                                        VStack(alignment: .leading, spacing: 14) {
+                                            Toggle(NSLocalizedString("Track Supply", comment: ""), isOn: $trackSupply)
+                                            if trackSupply {
+                                                Stepper(value: $pillsRemaining, in: 0...999) {
+                                                    Text(String(format: NSLocalizedString("Pills remaining: %lld", comment: ""), pillsRemaining))
+                                                }
+                                                Stepper(value: $pillsPerDose, in: 1...10) {
+                                                    Text(String(format: NSLocalizedString("Pills per dose: %lld", comment: ""), pillsPerDose))
+                                                }
+                                                quickPillButtons
+                                                if let estimatedSupplyDays {
+                                                    Text(String(format: NSLocalizedString("About %lld days of supply at your current schedule.", comment: ""), estimatedSupplyDays))
+                                                        .appFont(.caption)
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                                Text(String(format: NSLocalizedString("Refill reminders start when about %lld days remain.", comment: ""), refillThresholdDays))
+                                                    .appFont(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
 
-                                VStack(alignment: .leading, spacing: 14) {
-                                    Text(NSLocalizedString("Supply & Course", comment: ""))
-                                        .appFont(.headline)
-
-                                    Toggle(NSLocalizedString("Track Supply", comment: ""), isOn: $trackSupply)
-                                    if trackSupply {
-                                        Stepper(value: $pillsRemaining, in: 0...999) {
-                                            Text(String(format: NSLocalizedString("Pills remaining: %lld", comment: ""), pillsRemaining))
+                                            Toggle(NSLocalizedString("Has Course End Date", comment: ""), isOn: $hasCourseEnd)
+                                            if hasCourseEnd {
+                                                DatePicker(NSLocalizedString("End Date", comment: ""), selection: $courseEndDate, displayedComponents: .date)
+                                                quickCourseButtons
+                                                if let courseDaysRemaining {
+                                                    Text(String(format: NSLocalizedString("Course ends in %lld days.", comment: ""), max(courseDaysRemaining, 0)))
+                                                        .appFont(.caption)
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                                Text(String(format: NSLocalizedString("Course reminders start %lld days before the end date.", comment: ""), courseReminderThresholdDays))
+                                                    .appFont(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
                                         }
-                                        Stepper(value: $pillsPerDose, in: 1...10) {
-                                            Text(String(format: NSLocalizedString("Pills per dose: %lld", comment: ""), pillsPerDose))
-                                        }
-                                        quickPillButtons
-                                        if let estimatedSupplyDays {
-                                            Text(String(format: NSLocalizedString("About %lld days of supply at your current schedule.", comment: ""), estimatedSupplyDays))
-                                                .appFont(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        Text(String(format: NSLocalizedString("Refill reminders start when about %lld days remain.", comment: ""), refillThresholdDays))
-                                            .appFont(.caption)
-                                            .foregroundStyle(.secondary)
                                     }
-
-                                    Toggle(NSLocalizedString("Has Course End Date", comment: ""), isOn: $hasCourseEnd)
-                                    if hasCourseEnd {
-                                        DatePicker(NSLocalizedString("End Date", comment: ""), selection: $courseEndDate, displayedComponents: .date)
-                                        quickCourseButtons
-                                        if let courseDaysRemaining {
-                                            Text(String(format: NSLocalizedString("Course ends in %lld days.", comment: ""), max(courseDaysRemaining, 0)))
-                                                .appFont(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        Text(String(format: NSLocalizedString("Course reminders start %lld days before the end date.", comment: ""), courseReminderThresholdDays))
-                                            .appFont(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
+                                } label: {
+                                    optionalRowLabel(
+                                        title: NSLocalizedString("Inventory & Course", comment: ""),
+                                        summary: inventorySummary
+                                    )
                                 }
 
-                                Divider()
+                                DisclosureGroup(isExpanded: $showCategoryDetails) {
+                                    InsetPanel {
+                                        VStack(alignment: .leading, spacing: 14) {
+                                            Picker(NSLocalizedString("Category", comment: ""), selection: $category) {
+                                                ForEach(MedicationCategory.allCases) { c in
+                                                    Text(c.displayName).tag(c)
+                                                }
+                                            }
 
-                                VStack(alignment: .leading, spacing: 14) {
-                                    Text(NSLocalizedString("Category & Photo", comment: ""))
-                                        .appFont(.headline)
+                                            if category == .custom {
+                                                textInputCard(
+                                                    title: NSLocalizedString("Custom Category", comment: ""),
+                                                    placeholder: NSLocalizedString("Cardiology", comment: ""),
+                                                    text: $customCategoryName,
+                                                    field: .customCategory
+                                                )
+                                            }
 
-                                    Picker(NSLocalizedString("Category", comment: ""), selection: $category) {
-                                        ForEach(MedicationCategory.allCases) { c in
-                                            Text(c.displayName).tag(c)
+                                            photoAttachmentRow
                                         }
                                     }
-
-                                    if category == .custom {
-                                        textInputCard(
-                                            title: NSLocalizedString("Custom Category", comment: ""),
-                                            placeholder: NSLocalizedString("Cardiology", comment: ""),
-                                            text: $customCategoryName,
-                                            field: .customCategory
-                                        )
-                                    }
-
-                                    photoAttachmentRow
+                                } label: {
+                                    optionalRowLabel(
+                                        title: NSLocalizedString("Category & Photo", comment: ""),
+                                        summary: categorySummary
+                                    )
                                 }
                             }
                             .padding(.top, 10)
@@ -486,22 +699,10 @@ struct AddMedicationView: View {
                             }
                         }
                     }
-
-                    Card {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(NSLocalizedString("Summary", comment: ""))
-                                .appFont(.headline)
-                            Text(summaryLine)
-                                .appFont(.subheadline)
-                            if !secondarySummaryLine.isEmpty {
-                                Text(secondarySummaryLine)
-                                    .appFont(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
                 }
-                .padding(16)
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 28)
             }
             .navigationTitle(NSLocalizedString("Add Medication", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
@@ -528,7 +729,17 @@ struct AddMedicationView: View {
             }
             .onAppear {
                 focusedField = .name
+                showOptionalDetails = foodInstruction != nil
+                    || !specialInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    || !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    || trackSupply
+                    || hasCourseEnd
+                    || category != .unspecified
+                    || pickedImage != nil
                 showAdditionalContext = !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                showInstructionsDetails = foodInstruction != nil || !specialInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                showInventoryDetails = trackSupply || hasCourseEnd
+                showCategoryDetails = category != .unspecified || pickedImage != nil
             }
             .alert(NSLocalizedString("No Schedule Set", comment: ""), isPresented: $showScheduleAlert) {
                 Button(NSLocalizedString("Add Time", comment: "")) {
@@ -674,6 +885,79 @@ struct AddMedicationView: View {
 }
 
 private extension AddMedicationView {
+    private func addSection<Content: View>(
+        showDivider: Bool = true,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            content()
+                .padding(.vertical, 2)
+
+            if showDivider {
+                Divider()
+                    .padding(.top, 20)
+            }
+        }
+    }
+
+    private func sectionHeader(step: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(step)
+                .appFont(.caption)
+                .fontWeight(.bold)
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 22, height: 22)
+                .background(
+                    Circle()
+                        .fill(Color.accentColor.opacity(0.12))
+                )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .appFont(.headline)
+                Text(detail)
+                    .appFont(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func optionalRowLabel(title: String, summary: String) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .appFont(.subheadline)
+                    .fontWeight(.semibold)
+                Text(summary)
+                    .appFont(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, 2)
+    }
+
+    private var scanAssistPanel: some View {
+        InsetPanel(tint: .blue) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(NSLocalizedString("Scan Label", comment: ""))
+                        .appFont(.subheadline)
+                        .fontWeight(.semibold)
+                    Text(NSLocalizedString("Use the camera if typing from a box or bottle is slower.", comment: ""))
+                        .appFont(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 8)
+                scanLabelButton
+            }
+        }
+    }
+
     private var scanLabelButton: some View {
         Button {
             if UIImagePickerController.isSourceTypeAvailable(.camera) {
@@ -695,7 +979,7 @@ private extension AddMedicationView {
             }
             .foregroundStyle(Color.accentColor)
             .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.vertical, 6)
             .background(
                 Capsule(style: .continuous)
                     .fill(Color.accentColor.opacity(0.10))
@@ -779,36 +1063,6 @@ private extension AddMedicationView {
         )
     }
 
-    var summaryLine: String {
-        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let displayName = trimmedName.isEmpty ? NSLocalizedString("Medication name", comment: "") : trimmedName
-        let trimmedDose = dose.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedDose.isEmpty {
-            return displayName
-        }
-        return "\(displayName) · \(trimmedDose)"
-    }
-
-    var secondarySummaryLine: String {
-        if isAsNeeded {
-            return NSLocalizedString("As needed medication with no fixed reminder schedule.", comment: "")
-        }
-
-        if times.isEmpty {
-            return remindersEnabled
-                ? NSLocalizedString("No reminder times yet.", comment: "")
-                : NSLocalizedString("Scheduled medication without reminders.", comment: "")
-        }
-
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        let timeSummary = times.sorted(by: { $0 < $1 }).map { formatter.string(from: $0) }.joined(separator: " · ")
-        if remindersEnabled {
-            return String(format: NSLocalizedString("Scheduled at %@", comment: ""), timeSummary)
-        }
-        return String(format: NSLocalizedString("Times saved without reminders: %@", comment: ""), timeSummary)
-    }
-
     @ViewBuilder
     private func textInputCard(
         title: String,
@@ -828,9 +1082,9 @@ private extension AddMedicationView {
                 .lineLimit(lineLimit)
                 .textFieldStyle(.plain)
                 .appFont(field == .name || field == .dose ? .subheadline : .body)
-                .padding(12)
+                .padding(13)
                 .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(Color(.secondarySystemBackground))
                 )
         }
@@ -852,36 +1106,6 @@ private extension AddMedicationView {
     }
 
     @ViewBuilder
-    private func intakeModeButton(
-        title: String,
-        subtitle: String,
-        isSelected: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .appFont(.label)
-                    .fontWeight(.semibold)
-                Text(subtitle)
-                    .appFont(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(isSelected ? Color.accentColor.opacity(0.12) : Color(.secondarySystemBackground))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(isSelected ? Color.accentColor.opacity(0.45) : Color.primary.opacity(0.06), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    @ViewBuilder
     private func schedulePresetButton(_ preset: SchedulePreset) -> some View {
         let isSelected = schedulePreset == preset
         Button {
@@ -894,27 +1118,33 @@ private extension AddMedicationView {
                 applySchedulePreset(preset)
             }
         } label: {
-            HStack(spacing: 8) {
-                Text(preset.title)
-                    .appFont(.label)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
-                Spacer(minLength: 0)
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text(preset.title)
+                        .appFont(.label)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
+                    Spacer(minLength: 0)
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color.accentColor)
+                    }
                 }
+
+                Text(preset.subtitle)
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.vertical, 11)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(isSelected ? Color.accentColor.opacity(0.12) : Color(.secondarySystemBackground))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(isSelected ? Color.accentColor.opacity(0.45) : Color.primary.opacity(0.06), lineWidth: 1)
             )
         }
@@ -931,13 +1161,13 @@ private extension AddMedicationView {
         }
         .foregroundStyle(Color.accentColor)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
+        .padding(.vertical, 9)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Color.accentColor.opacity(0.08))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(Color.accentColor.opacity(0.14), lineWidth: 0.8)
         )
     }
@@ -945,28 +1175,44 @@ private extension AddMedicationView {
     @ViewBuilder
     private func timeRow(for idx: Int) -> some View {
         HStack(spacing: 10) {
-            DatePicker(
-                String(format: NSLocalizedString("Time %lld", comment: ""), idx + 1),
-                selection: Binding(
-                    get: { times[idx] },
-                    set: { newValue in
-                        schedulePreset = .custom
-                        times[idx] = newValue
-                    }
-                ),
-                displayedComponents: .hourAndMinute
-            )
+            VStack(alignment: .leading, spacing: 6) {
+                Text(String(format: NSLocalizedString("Time %lld", comment: ""), idx + 1))
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
 
-            Button(role: .destructive) {
-                schedulePreset = .custom
-                times.remove(at: idx)
-            } label: {
-                Image(systemName: "minus.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(.red)
+                DatePicker(
+                    "",
+                    selection: Binding(
+                        get: { times[idx] },
+                        set: { newValue in
+                            schedulePreset = .custom
+                            times[idx] = newValue
+                        }
+                    ),
+                    displayedComponents: .hourAndMinute
+                )
+                .labelsHidden()
             }
-            .buttonStyle(.plain)
+
+            Spacer()
+
+            if times.count > 1 {
+                Button(role: .destructive) {
+                    schedulePreset = .custom
+                    times.remove(at: idx)
+                } label: {
+                    Image(systemName: "minus.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.red)
+                }
+                .buttonStyle(.plain)
+            }
         }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
     }
 
     private func applySchedulePreset(_ preset: SchedulePreset) {
@@ -983,11 +1229,22 @@ private extension AddMedicationView {
             times = [makeTime(hour: 8, minute: 0)]
         case .twiceDaily:
             times = [makeTime(hour: 8, minute: 0), makeTime(hour: 20, minute: 0)]
-        case .morningEvening:
-            times = [makeTime(hour: 9, minute: 0), makeTime(hour: 18, minute: 0)]
+        case .threeTimesDaily:
+            times = [makeTime(hour: 8, minute: 0), makeTime(hour: 14, minute: 0), makeTime(hour: 20, minute: 0)]
         case .custom:
-            break
+            if times.isEmpty {
+                times = [makeTime(hour: 8, minute: 0)]
+            }
         }
+    }
+
+    private func switchToScheduled() {
+        isAsNeeded = false
+        if times.isEmpty {
+            schedulePreset = .onceDaily
+            applySchedulePreset(.onceDaily)
+        }
+        remindersEnabled = true
     }
 
     func defaultCustomTime(after previous: Date?) -> Date {
@@ -1110,6 +1367,10 @@ struct EditMedicationView: View {
     @State private var schedulePreset: EditSchedulePreset = .custom
     @State private var showPRNConfirmation = false
     @State private var showAdditionalContext = false
+    @State private var showOptionalDetails = false
+    @State private var showInstructionsDetails = false
+    @State private var showInventoryDetails = false
+    @State private var showCategoryDetails = false
     @FocusState private var focusedField: EditEntryField?
 
     private enum EditEntryField: Hashable {
@@ -1118,6 +1379,13 @@ struct EditMedicationView: View {
         case notes
         case specialInstructions
         case customCategory
+    }
+
+    private enum EditIntakeMode: String, CaseIterable, Identifiable {
+        case scheduled
+        case asNeeded
+
+        var id: String { rawValue }
     }
 
     private enum EditSchedulePreset: String, CaseIterable, Identifiable {
@@ -1168,6 +1436,86 @@ struct EditMedicationView: View {
         return draft.daysUntilCourseEnd()
     }
 
+    private var editIntakeModeSelection: Binding<EditIntakeMode> {
+        Binding(
+            get: { isAsNeeded ? .asNeeded : .scheduled },
+            set: { newValue in
+                switch newValue {
+                case .scheduled:
+                    isAsNeeded = false
+                    if times.isEmpty {
+                        schedulePreset = .onceDaily
+                        applyEditSchedulePreset(.onceDaily)
+                    }
+                    remindersEnabled = true
+                case .asNeeded:
+                    requestEditSwitchToPRN()
+                }
+            }
+        )
+    }
+
+    private var editScheduleHelperText: String {
+        if times.isEmpty {
+            return NSLocalizedString("Choose a preset or add a custom time.", comment: "")
+        }
+
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        let timeSummary = times.sorted(by: { $0 < $1 }).map { formatter.string(from: $0) }.joined(separator: " • ")
+
+        if remindersEnabled {
+            return String(format: NSLocalizedString("Scheduled for %@", comment: ""), timeSummary)
+        }
+
+        return String(format: NSLocalizedString("Times saved without reminders: %@", comment: ""), timeSummary)
+    }
+
+    private var editInstructionsSummary: String {
+        if let foodInstruction {
+            return foodInstruction.displayName
+        }
+
+        if !specialInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return NSLocalizedString("Custom instructions added", comment: "")
+        }
+
+        if !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return NSLocalizedString("Notes added", comment: "")
+        }
+
+        return NSLocalizedString("None", comment: "")
+    }
+
+    private var editInventorySummary: String {
+        if trackSupply, let estimatedSupplyDays {
+            return String(format: NSLocalizedString("%lld-day supply", comment: ""), estimatedSupplyDays)
+        }
+
+        if hasCourseEnd, let courseDaysRemaining {
+            return String(format: NSLocalizedString("Ends in %lld days", comment: ""), max(courseDaysRemaining, 0))
+        }
+
+        return NSLocalizedString("Not tracking", comment: "")
+    }
+
+    private var editCategorySummary: String {
+        if category == .custom {
+            let trimmed = customCategoryName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                return trimmed
+            }
+        } else if category != .unspecified {
+            return category.displayName
+        }
+
+        if pickedImage != nil || (medication.imagePath != nil && !removePhoto) {
+            return NSLocalizedString("Photo added", comment: "")
+        }
+
+        return NSLocalizedString("Optional", comment: "")
+    }
+
     private var editQuickPillButtons: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(NSLocalizedString("Quick fill", comment: ""))
@@ -1214,9 +1562,12 @@ struct EditMedicationView: View {
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 16) {
                     Card {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text(NSLocalizedString("Medication", comment: ""))
-                                .appFont(.headline)
+                        VStack(alignment: .leading, spacing: 16) {
+                            editSectionHeader(
+                                step: "1",
+                                title: NSLocalizedString("Medication", comment: ""),
+                                detail: NSLocalizedString("Update the core details first. The rest of the settings stay below.", comment: "")
+                            )
 
                             editTextInputCard(
                                 title: NSLocalizedString("Medication Name", comment: ""),
@@ -1231,229 +1582,250 @@ struct EditMedicationView: View {
                                 text: $dose,
                                 field: .dose
                             )
+                        }
+                    }
 
-                            Divider()
+                    Card {
+                        VStack(alignment: .leading, spacing: 14) {
+                            editSectionHeader(
+                                step: "2",
+                                title: NSLocalizedString("How is it taken?", comment: ""),
+                                detail: NSLocalizedString("Keep this medication on a fixed schedule or switch it to as-needed logging.", comment: "")
+                            )
 
-                            Text(NSLocalizedString("How do you take it?", comment: ""))
-                                .appFont(.headline)
+                            Picker("", selection: editIntakeModeSelection) {
+                                Text(NSLocalizedString("Scheduled", comment: "")).tag(EditIntakeMode.scheduled)
+                                Text(NSLocalizedString("As Needed", comment: "")).tag(EditIntakeMode.asNeeded)
+                            }
+                            .pickerStyle(.segmented)
 
-                            HStack(spacing: 10) {
-                                editIntakeModeButton(
-                                    title: NSLocalizedString("Scheduled", comment: ""),
-                                    subtitle: NSLocalizedString("Daily reminders", comment: ""),
-                                    isSelected: !isAsNeeded
-                                ) {
-                                    isAsNeeded = false
-                                    if times.isEmpty {
-                                        schedulePreset = .onceDaily
-                                        applyEditSchedulePreset(.onceDaily)
-                                    }
-                                    remindersEnabled = true
+                            if isAsNeeded {
+                                InsetPanel(tint: .blue) {
+                                    Text(NSLocalizedString("As-needed medications skip fixed reminder times. You can still log each dose from the Today screen whenever you take it.", comment: ""))
+                                        .appFont(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
-
-                                editIntakeModeButton(
-                                    title: NSLocalizedString("As Needed", comment: ""),
-                                    subtitle: NSLocalizedString("Log only when taken", comment: ""),
-                                    isSelected: isAsNeeded
-                                ) {
-                                    requestEditSwitchToPRN()
+                            } else {
+                                InsetPanel {
+                                    Text(NSLocalizedString("Choose a preset or add custom times to keep reminders aligned.", comment: ""))
+                                        .appFont(.caption)
+                                        .foregroundStyle(.secondary)
                                 }
                             }
                         }
                     }
 
-                    if isAsNeeded {
+                    if !isAsNeeded {
                         Card {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text(NSLocalizedString("PRN Medication", comment: ""))
-                                    .appFont(.headline)
-                                Text(NSLocalizedString("As-needed medications skip fixed reminder times. You can still log each dose from the Today screen whenever you take it.", comment: ""))
-                                    .appFont(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    } else {
-                        Card {
-                            VStack(alignment: .leading, spacing: 14) {
-                                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                                    Text(NSLocalizedString("Schedule", comment: ""))
-                                        .appFont(.headline)
-                                    Spacer()
-                                    Text(times.isEmpty ? NSLocalizedString("Needs time", comment: "") : scheduleTimeCountText)
-                                        .appFont(.caption)
-                                        .fontWeight(.semibold)
-                                        .foregroundStyle(times.isEmpty ? .orange : Color.accentColor)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 6)
-                                        .background(
-                                            Capsule(style: .continuous)
-                                                .fill((times.isEmpty ? Color.orange : Color.accentColor).opacity(0.10))
-                                        )
-                                }
+                            VStack(alignment: .leading, spacing: 16) {
+                                editSectionHeader(
+                                    step: "3",
+                                    title: NSLocalizedString("Schedule", comment: ""),
+                                    detail: NSLocalizedString("Update the frequency, reminder times, and notification state here.", comment: "")
+                                )
 
-                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                                    ForEach(EditSchedulePreset.allCases) { preset in
-                                        editSchedulePresetButton(preset)
-                                    }
-                                }
-
-                                VStack(alignment: .leading, spacing: 10) {
-                                    if times.isEmpty {
-                                        Text(NSLocalizedString("Choose a preset or add a custom time.", comment: ""))
+                                InsetPanel {
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        Text(NSLocalizedString("Frequency", comment: ""))
                                             .appFont(.caption)
                                             .foregroundStyle(.secondary)
-                                    } else {
-                                        ForEach(Array(times.indices), id: \.self) { idx in
-                                            editTimeRow(for: idx)
+
+                                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                                            ForEach(EditSchedulePreset.allCases) { preset in
+                                                editSchedulePresetButton(preset)
+                                            }
                                         }
                                     }
                                 }
-                                .padding(12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .fill(Color(.secondarySystemBackground))
-                                )
 
-                                Button {
-                                    schedulePreset = .custom
-                                    times.append(defaultEditCustomTime(after: times.last))
+                                InsetPanel {
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        Text(NSLocalizedString("Reminder Times", comment: ""))
+                                            .appFont(.caption)
+                                            .foregroundStyle(.secondary)
+
+                                        ForEach(Array(times.indices), id: \.self) { idx in
+                                            editTimeRow(for: idx)
+                                        }
+
+                                        Button {
+                                            schedulePreset = .custom
+                                            times.append(defaultEditCustomTime(after: times.last))
+                                        } label: {
+                                            editSecondaryActionLabel(NSLocalizedString("Add Time", comment: ""), systemImage: "plus.circle.fill")
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+
+                                InsetPanel(tint: remindersEnabled ? .blue : .gray) {
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        editToggleRow(
+                                            title: NSLocalizedString("Remind Me", comment: ""),
+                                            subtitle: remindersEnabled
+                                                ? NSLocalizedString("Notifications will be scheduled for these times.", comment: "")
+                                                : NSLocalizedString("Times are saved, but notifications are off.", comment: ""),
+                                            systemImage: remindersEnabled ? "bell.fill" : "bell.slash.fill",
+                                            isOn: $remindersEnabled
+                                        )
+
+                                        Text(editScheduleHelperText)
+                                            .appFont(.caption)
+                                            .foregroundStyle(.secondary)
+
+                                        if remindersEnabled && times.isEmpty {
+                                            Label(NSLocalizedString("Add at least one time for reminders", comment: ""), systemImage: "exclamationmark.triangle.fill")
+                                                .appFont(.caption)
+                                                .foregroundStyle(.orange)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Card {
+                        DisclosureGroup(isExpanded: $showOptionalDetails) {
+                            VStack(alignment: .leading, spacing: 16) {
+                                DisclosureGroup(isExpanded: $showInstructionsDetails) {
+                                    InsetPanel {
+                                        VStack(alignment: .leading, spacing: 14) {
+                                            editPickerRow(
+                                                title: NSLocalizedString("Food Instruction", comment: ""),
+                                                systemImage: "fork.knife",
+                                                selection: $foodInstruction
+                                            ) {
+                                                Text(NSLocalizedString("None", comment: "")).tag(FoodInstruction?.none)
+                                                ForEach(FoodInstruction.allCases) { fi in
+                                                    Text(fi.displayName).tag(FoodInstruction?.some(fi))
+                                                }
+                                            }
+
+                                            editTextInputCard(
+                                                title: NSLocalizedString("Special Instructions", comment: ""),
+                                                placeholder: NSLocalizedString("Take after dinner", comment: ""),
+                                                text: $specialInstructions,
+                                                field: .specialInstructions,
+                                                axis: .vertical,
+                                                lineLimit: 2...4
+                                            )
+
+                                            DisclosureGroup(isExpanded: $showAdditionalContext) {
+                                                editTextInputCard(
+                                                    title: NSLocalizedString("Notes", comment: ""),
+                                                    placeholder: NSLocalizedString("Optional context", comment: ""),
+                                                    text: $notes,
+                                                    field: .notes,
+                                                    axis: .vertical,
+                                                    lineLimit: 2...4
+                                                )
+                                                .padding(.top, 6)
+                                            } label: {
+                                                HStack {
+                                                    Text(NSLocalizedString("Additional Context", comment: ""))
+                                                        .appFont(.subheadline)
+                                                        .fontWeight(.semibold)
+                                                    Spacer()
+                                                    Text(notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? NSLocalizedString("Optional", comment: "") : NSLocalizedString("Added", comment: ""))
+                                                        .appFont(.caption)
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                            }
+                                        }
+                                    }
                                 } label: {
-                                    editSecondaryActionLabel(NSLocalizedString("Add Time", comment: ""), systemImage: "plus.circle.fill")
+                                    editOptionalRowLabel(
+                                        title: NSLocalizedString("Instructions", comment: ""),
+                                        summary: editInstructionsSummary
+                                    )
                                 }
-                                .buttonStyle(.plain)
 
-                                editToggleRow(
-                                    title: NSLocalizedString("Remind Me", comment: ""),
-                                    subtitle: remindersEnabled
-                                        ? NSLocalizedString("Notifications will be scheduled for these times.", comment: "")
-                                        : NSLocalizedString("Times are saved, but notifications are off.", comment: ""),
-                                    systemImage: remindersEnabled ? "bell.fill" : "bell.slash.fill",
-                                    isOn: $remindersEnabled
-                                )
+                                DisclosureGroup(isExpanded: $showInventoryDetails) {
+                                    InsetPanel {
+                                        VStack(alignment: .leading, spacing: 14) {
+                                            Toggle(NSLocalizedString("Track Supply", comment: ""), isOn: $trackSupply)
+                                            if trackSupply {
+                                                Stepper(value: $pillsRemaining, in: 0...999) {
+                                                    Text(String(format: NSLocalizedString("Pills remaining: %lld", comment: ""), pillsRemaining))
+                                                }
+                                                Stepper(value: $pillsPerDose, in: 1...10) {
+                                                    Text(String(format: NSLocalizedString("Pills per dose: %lld", comment: ""), pillsPerDose))
+                                                }
+                                                editQuickPillButtons
+                                                if let estimatedSupplyDays {
+                                                    Text(String(format: NSLocalizedString("About %lld days of supply at your current schedule.", comment: ""), estimatedSupplyDays))
+                                                        .appFont(.caption)
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                                Text(String(format: NSLocalizedString("Refill reminders start when about %lld days remain.", comment: ""), refillThresholdDays))
+                                                    .appFont(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
 
-                                if remindersEnabled && times.isEmpty {
-                                    Label(NSLocalizedString("Add at least one time for reminders", comment: ""), systemImage: "exclamationmark.triangle.fill")
-                                        .appFont(.caption)
-                                        .foregroundStyle(.orange)
+                                            Toggle(NSLocalizedString("Has Course End Date", comment: ""), isOn: $hasCourseEnd)
+                                            if hasCourseEnd {
+                                                DatePicker(NSLocalizedString("End Date", comment: ""), selection: $courseEndDate, displayedComponents: .date)
+                                                editQuickCourseButtons
+                                                if let courseDaysRemaining {
+                                                    Text(String(format: NSLocalizedString("Course ends in %lld days.", comment: ""), max(courseDaysRemaining, 0)))
+                                                        .appFont(.caption)
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                                Text(String(format: NSLocalizedString("Course reminders start %lld days before the end date.", comment: ""), courseReminderThresholdDays))
+                                                    .appFont(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                        }
+                                    }
+                                } label: {
+                                    editOptionalRowLabel(
+                                        title: NSLocalizedString("Inventory & Course", comment: ""),
+                                        summary: editInventorySummary
+                                    )
+                                }
+
+                                DisclosureGroup(isExpanded: $showCategoryDetails) {
+                                    InsetPanel {
+                                        VStack(alignment: .leading, spacing: 14) {
+                                            editPickerRow(
+                                                title: NSLocalizedString("Category", comment: ""),
+                                                systemImage: "tag.fill",
+                                                selection: $category
+                                            ) {
+                                                ForEach(MedicationCategory.allCases) { c in
+                                                    Text(c.displayName).tag(c)
+                                                }
+                                            }
+
+                                            if category == .custom {
+                                                editTextInputCard(
+                                                    title: NSLocalizedString("Custom Category", comment: ""),
+                                                    placeholder: NSLocalizedString("Cardiology", comment: ""),
+                                                    text: $customCategoryName,
+                                                    field: .customCategory
+                                                )
+                                            }
+
+                                            editPhotoAttachmentRow
+                                        }
+                                    }
+                                } label: {
+                                    editOptionalRowLabel(
+                                        title: NSLocalizedString("Category & Photo", comment: ""),
+                                        summary: editCategorySummary
+                                    )
                                 }
                             }
-                        }
-                    }
-
-                    Card {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text(NSLocalizedString("Instructions", comment: ""))
-                                .appFont(.headline)
-
-                            editPickerRow(
-                                title: NSLocalizedString("Food Instruction", comment: ""),
-                                systemImage: "fork.knife",
-                                selection: $foodInstruction
-                            ) {
-                                Text(NSLocalizedString("None", comment: "")).tag(FoodInstruction?.none)
-                                ForEach(FoodInstruction.allCases) { fi in
-                                    Text(fi.displayName).tag(FoodInstruction?.some(fi))
-                                }
-                            }
-
-                            editTextInputCard(
-                                title: NSLocalizedString("Special Instructions", comment: ""),
-                                placeholder: NSLocalizedString("Take after dinner", comment: ""),
-                                text: $specialInstructions,
-                                field: .specialInstructions,
-                                axis: .vertical,
-                                lineLimit: 2...4
-                            )
-
-                            DisclosureGroup(isExpanded: $showAdditionalContext) {
-                                editTextInputCard(
-                                    title: NSLocalizedString("Notes", comment: ""),
-                                    placeholder: NSLocalizedString("Optional context", comment: ""),
-                                    text: $notes,
-                                    field: .notes,
-                                    axis: .vertical,
-                                    lineLimit: 2...4
-                                )
-                                .padding(.top, 6)
-                            } label: {
-                                HStack {
-                                    Text(NSLocalizedString("Additional Context", comment: ""))
-                                        .appFont(.subheadline)
-                                        .fontWeight(.semibold)
-                                    Spacer()
-                                    Text(notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? NSLocalizedString("Optional", comment: "") : NSLocalizedString("Added", comment: ""))
-                                        .appFont(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-
-                    Card {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text(NSLocalizedString("Supply & Course", comment: ""))
-                                .appFont(.headline)
-
-                            Toggle(NSLocalizedString("Track Supply", comment: ""), isOn: $trackSupply)
-                            if trackSupply {
-                                Stepper(value: $pillsRemaining, in: 0...999) {
-                                    Text(String(format: NSLocalizedString("Pills remaining: %lld", comment: ""), pillsRemaining))
-                                }
-                                Stepper(value: $pillsPerDose, in: 1...10) {
-                                    Text(String(format: NSLocalizedString("Pills per dose: %lld", comment: ""), pillsPerDose))
-                                }
-                                editQuickPillButtons
-                                if let estimatedSupplyDays {
-                                    Text(String(format: NSLocalizedString("About %lld days of supply at your current schedule.", comment: ""), estimatedSupplyDays))
-                                        .appFont(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Text(String(format: NSLocalizedString("Refill reminders start when about %lld days remain.", comment: ""), refillThresholdDays))
+                            .padding(.top, 10)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(NSLocalizedString("Optional Details", comment: ""))
+                                    .appFont(.headline)
+                                Text(NSLocalizedString("Instructions, inventory, category, and photo.", comment: ""))
                                     .appFont(.caption)
                                     .foregroundStyle(.secondary)
                             }
-
-                            Toggle(NSLocalizedString("Has Course End Date", comment: ""), isOn: $hasCourseEnd)
-                            if hasCourseEnd {
-                                DatePicker(NSLocalizedString("End Date", comment: ""), selection: $courseEndDate, displayedComponents: .date)
-                                editQuickCourseButtons
-                                if let courseDaysRemaining {
-                                    Text(String(format: NSLocalizedString("Course ends in %lld days.", comment: ""), max(courseDaysRemaining, 0)))
-                                        .appFont(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Text(String(format: NSLocalizedString("Course reminders start %lld days before the end date.", comment: ""), courseReminderThresholdDays))
-                                    .appFont(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-
-                    Card {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text(NSLocalizedString("Category & Photo", comment: ""))
-                                .appFont(.headline)
-
-                            editPickerRow(
-                                title: NSLocalizedString("Category", comment: ""),
-                                systemImage: "tag.fill",
-                                selection: $category
-                            ) {
-                                ForEach(MedicationCategory.allCases) { c in
-                                    Text(c.displayName).tag(c)
-                                }
-                            }
-
-                            if category == .custom {
-                                editTextInputCard(
-                                    title: NSLocalizedString("Custom Category", comment: ""),
-                                    placeholder: NSLocalizedString("Cardiology", comment: ""),
-                                    text: $customCategoryName,
-                                    field: .customCategory
-                                )
-                            }
-
-                            editPhotoAttachmentRow
                         }
                     }
 
@@ -1498,6 +1870,17 @@ struct EditMedicationView: View {
                 specialInstructions = medication.specialInstructions ?? ""
                 schedulePreset = .custom
                 showAdditionalContext = !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                showOptionalDetails = foodInstruction != nil
+                    || !specialInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    || !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    || trackSupply
+                    || hasCourseEnd
+                    || category != .unspecified
+                    || pickedImage != nil
+                    || (medication.imagePath != nil && !removePhoto)
+                showInstructionsDetails = foodInstruction != nil || !specialInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                showInventoryDetails = trackSupply || hasCourseEnd
+                showCategoryDetails = category != .unspecified || pickedImage != nil || (medication.imagePath != nil && !removePhoto)
                 focusedField = .name
             }
             .toolbar {
@@ -1600,6 +1983,45 @@ struct EditMedicationView: View {
 }
 
 private extension EditMedicationView {
+    private func editSectionHeader(step: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(step)
+                .appFont(.caption)
+                .fontWeight(.bold)
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 24, height: 24)
+                .background(
+                    Circle()
+                        .fill(Color.accentColor.opacity(0.12))
+                )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .appFont(.headline)
+                Text(detail)
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func editOptionalRowLabel(title: String, summary: String) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .appFont(.subheadline)
+                    .fontWeight(.semibold)
+                Text(summary)
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, 2)
+    }
+
     var medicationStatusCard: some View {
         let strategy = AdaptiveReminderEngine.strategy(for: previewMedication(), intakeLogs: store.intakeLogs)
         let profile = AdaptiveReminderEngine.profile(for: previewMedication(), intakeLogs: store.intakeLogs)
@@ -2215,18 +2637,28 @@ private extension EditMedicationView {
     @ViewBuilder
     private func editTimeRow(for idx: Int) -> some View {
         HStack(spacing: 10) {
-            DatePicker(
-                String(format: NSLocalizedString("Time %lld", comment: ""), idx + 1),
-                selection: Binding(
-                    get: { times[idx] },
-                    set: { newValue in
-                        schedulePreset = .custom
-                        times[idx] = newValue
-                    }
-                ),
-                displayedComponents: .hourAndMinute
-            )
+            VStack(alignment: .leading, spacing: 6) {
+                Text(String(format: NSLocalizedString("Time %lld", comment: ""), idx + 1))
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
 
+                DatePicker(
+                    "",
+                    selection: Binding(
+                        get: { times[idx] },
+                        set: { newValue in
+                            schedulePreset = .custom
+                            times[idx] = newValue
+                        }
+                    ),
+                    displayedComponents: .hourAndMinute
+                )
+                .labelsHidden()
+            }
+
+            Spacer()
+
+            if times.count > 1 {
             Button(role: .destructive) {
                 schedulePreset = .custom
                 times.remove(at: idx)
@@ -2236,7 +2668,13 @@ private extension EditMedicationView {
                     .foregroundStyle(.red)
             }
             .buttonStyle(.plain)
+            }
         }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
     }
 
     private func applyEditSchedulePreset(_ preset: EditSchedulePreset) {
@@ -2274,30 +2712,8 @@ private extension EditMedicationView {
 
 // MARK: - Image helpers
 private extension MedicationsView {
-    enum MedFilter: String, CaseIterable, Identifiable {
-        case all
-        case remindersOn
-        case remindersOff
-
-        var id: String { rawValue }
-        var displayName: LocalizedStringKey {
-            switch self {
-            case .all: return LocalizedStringKey("All")
-            case .remindersOn: return LocalizedStringKey("Active")
-            case .remindersOff: return LocalizedStringKey("Paused")
-            }
-        }
-    }
-
     var filteredMedications: [Medication] {
         store.medications.filter { med in
-            let matchesFilter: Bool = {
-                switch filter {
-                case .all: return true
-                case .remindersOn: return med.isAsNeeded != true && med.remindersEnabled
-                case .remindersOff: return med.isAsNeeded != true && !med.remindersEnabled
-                }
-            }()
             let matchesSearch: Bool
             if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 matchesSearch = true
@@ -2305,94 +2721,177 @@ private extension MedicationsView {
                 let query = searchText.lowercased()
                 matchesSearch = med.name.lowercased().contains(query) || med.dose.lowercased().contains(query)
             }
-            return matchesFilter && matchesSearch
+            return matchesSearch
         }
     }
 
-    var summaryCard: some View {
-        let total = store.medications.count
-        let active = store.medications.filter { $0.isAsNeeded != true && $0.remindersEnabled }.count
-        let paused = store.medications.filter { $0.isAsNeeded != true && !$0.remindersEnabled }.count
-        return HStack(spacing: 0) {
-            summaryStat(value: "\(total)", label: NSLocalizedString("Medications", comment: ""))
-            summaryDivider
-            summaryStat(value: "\(active)", label: NSLocalizedString("Active", comment: ""), color: .green)
-            summaryDivider
-            summaryStat(value: "\(paused)", label: NSLocalizedString("Paused", comment: ""), color: paused > 0 ? .orange : .secondary)
+    var setupMedications: [Medication] {
+        filteredMedications.filter { $0.isAsNeeded != true && $0.timesOfDay.isEmpty }
+    }
+
+    var activeScheduledMedications: [Medication] {
+        filteredMedications.filter {
+            $0.isAsNeeded != true && !$0.timesOfDay.isEmpty && $0.remindersEnabled
         }
-        .padding(.vertical, 14)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
     }
 
-    private func summaryStat(value: String, label: String, color: Color = .primary) -> some View {
-        VStack(spacing: 4) {
-            Text(value)
-                .appFont(.headline)
-                .foregroundStyle(color)
-            Text(label)
-                .appFont(.caption)
-                .foregroundStyle(.secondary)
+    var asNeededMedications: [Medication] {
+        filteredMedications.filter { $0.isAsNeeded == true }
+    }
+
+    var pausedMedications: [Medication] {
+        filteredMedications.filter {
+            $0.isAsNeeded != true && !$0.timesOfDay.isEmpty && !$0.remindersEnabled
         }
-        .frame(maxWidth: .infinity)
     }
 
-    private var summaryDivider: some View {
-        Rectangle()
-            .fill(Color.primary.opacity(0.08))
-            .frame(width: 1, height: 32)
-    }
-
-    var filterChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: 10) {
-                ForEach(MedFilter.allCases) { chipButton(for: $0) }
+    var warningRow: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "bell.slash.fill")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(NSLocalizedString("Notifications Disabled", comment: ""))
+                    .appFont(.subheadline)
+                Text(NSLocalizedString("Turn notifications on in Settings to receive medication reminders.", comment: ""))
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 4)
         }
-        .accessibilityElement(children: .combine)
     }
 
-    private func chipButton(for option: MedFilter) -> some View {
+    @ViewBuilder
+    private func medicationManagementRow(for med: Medication) -> some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.18)) { filter = option }
+            editTarget = med
         } label: {
-            HStack(spacing: 6) {
-                Text(option.displayName)
-                countChip(for: option)
+            HStack(alignment: .center, spacing: 12) {
+                medicationThumbnail(for: med)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(med.name)
+                        .appFont(.subheadline)
+                        .foregroundStyle(.primary)
+                    Text(medicationScheduleSummary(for: med))
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(nextDoseSummary(for: med))
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 6) {
+                    AppBadge(text: medicationStateLabel(for: med), tint: medicationStateTint(for: med))
+                    if med.isLowSupply {
+                        AppBadge(text: NSLocalizedString("Low supply", comment: ""), tint: .orange)
+                    }
+                }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(
-                Capsule().fill(filter == option ? Color.accentColor.opacity(0.2) : Color(.systemBackground))
-            )
-            .overlay(
-                Capsule().stroke(filter == option ? Color.accentColor : Color.primary.opacity(0.1), lineWidth: 1)
-            )
         }
         .buttonStyle(.plain)
     }
 
-    private func countText(for filter: MedFilter) -> Int {
-        switch filter {
-        case .all:
-            return store.medications.count
-        case .remindersOn:
-            return store.medications.filter { $0.remindersEnabled }.count
-        case .remindersOff:
-            return store.medications.filter { !$0.remindersEnabled }.count
+    private func managementLinkRow(title: String, subtitle: String, systemImage: String, tint: Color) -> some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(tint.opacity(0.14))
+                .frame(width: 38, height: 38)
+                .overlay(
+                    Image(systemName: systemImage)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(tint)
+                )
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .appFont(.subheadline)
+                    .foregroundStyle(.primary)
+                Text(subtitle)
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.tertiary)
         }
     }
 
-    private func countChip(for filter: MedFilter) -> some View {
-        Text("\(countText(for: filter))")
-            .appFont(.caption)
-            .foregroundStyle(.primary.opacity(0.6))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(Capsule().fill(Color.primary.opacity(0.08)))
+    private func medicationScheduleSummary(for med: Medication) -> String {
+        if med.isAsNeeded == true {
+            return "\(med.dose) • \(NSLocalizedString("Take only when needed", comment: ""))"
+        }
+        if med.timesOfDay.isEmpty {
+            return "\(med.dose) • \(NSLocalizedString("No schedule set", comment: ""))"
+        }
+        return "\(med.dose) • \(timesJoined(for: med))"
+    }
+
+    private func nextDoseSummary(for med: Medication) -> String {
+        if med.isAsNeeded == true {
+            return NSLocalizedString("Logged manually from Today", comment: "")
+        }
+        if !med.remindersEnabled {
+            return NSLocalizedString("Reminders are paused", comment: "")
+        }
+        if med.timesOfDay.isEmpty {
+            return NSLocalizedString("Add times to start reminders", comment: "")
+        }
+        return String(format: NSLocalizedString("Next: %@", comment: ""), nextDoseText(for: med))
+    }
+
+    private func medicationStateLabel(for med: Medication) -> String {
+        if med.isAsNeeded == true {
+            return NSLocalizedString("As needed", comment: "")
+        }
+        if med.timesOfDay.isEmpty {
+            return NSLocalizedString("Needs setup", comment: "")
+        }
+        if !med.remindersEnabled {
+            return NSLocalizedString("Paused", comment: "")
+        }
+        return NSLocalizedString("Active", comment: "")
+    }
+
+    private func medicationStateTint(for med: Medication) -> Color {
+        if med.isAsNeeded == true {
+            return .blue
+        }
+        if med.timesOfDay.isEmpty || !med.remindersEnabled {
+            return .orange
+        }
+        return .green
+    }
+
+    private func timesJoined(for med: Medication) -> String {
+        let formatter: DateFormatter = {
+            let f = DateFormatter()
+            f.timeStyle = .short
+            return f
+        }()
+        let cal = Calendar.current
+        let times = med.timesOfDay.compactMap { comps -> String? in
+            guard let h = comps.hour, let m = comps.minute,
+                  let date = cal.date(bySettingHour: h, minute: m, second: 0, of: Date()) else { return nil }
+            return formatter.string(from: date)
+        }
+        return times.joined(separator: ", ")
+    }
+
+    private func nextDoseText(for med: Medication) -> String {
+        let calendar = Calendar.current
+        let now = Date()
+        let sorted = med.timesOfDay.sorted { ($0.hour ?? 0, $0.minute ?? 0) < ($1.hour ?? 0, $1.minute ?? 0) }
+        for offset in 0..<2 {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: calendar.startOfDay(for: now)) else { continue }
+            for comps in sorted {
+                guard let hour = comps.hour,
+                      let minute = comps.minute,
+                      let scheduled = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day),
+                      med.isDoseActive(on: scheduled),
+                      scheduled >= now else { continue }
+                return scheduled.formatted(offset == 0 ? .dateTime.hour().minute() : .dateTime.weekday(.abbreviated).hour().minute())
+            }
+        }
+        return NSLocalizedString("Not scheduled", comment: "")
     }
 
     @ViewBuilder
@@ -2590,6 +3089,7 @@ private extension MedicationsView {
             let resolved = todayLogs.contains { $0.scheduleKey == key && ($0.status == .taken || $0.status == .skipped) }
             guard !resolved,
                   let scheduledDate = cal.date(bySettingHour: comps.hour ?? 0, minute: comps.minute ?? 0, second: 0, of: now),
+                  med.isDoseActive(on: scheduledDate),
                   scheduledDate <= now else { continue }
             if !resolved {
                 let formatter = DateFormatter()

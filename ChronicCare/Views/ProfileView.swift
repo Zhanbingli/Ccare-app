@@ -18,6 +18,10 @@ struct ProfileView: View {
     @State private var showExportSheet = false
     @State private var showAISection = false
     @State private var showDataSection = false
+    @State private var showReminderRules = false
+    @State private var showHealthSection = false
+    @State private var showGoalsSection = false
+    @State private var showSafetySection = false
     @AppStorage("hapticsEnabled") private var hapticsEnabled: Bool = true
     @AppStorage("units.glucose") private var glucoseUnitRaw: String = GlucoseUnit.mgdL.rawValue
     @AppStorage("prefs.graceMinutes") private var graceMinutes: Int = 30
@@ -37,32 +41,6 @@ struct ProfileView: View {
     var body: some View {
         NavigationStack {
             List {
-                // MARK: - Apple Health
-                Section {
-                    Button {
-                        HealthKitManager.shared.requestAuthorization { granted, error in
-                            if let error = error {
-                                errorMessage = String(format: NSLocalizedString("Could not connect to Health: %@", comment: ""), error.localizedDescription)
-                                showErrorAlert = true
-                            } else if granted {
-                                Haptics.success()
-                                successMessage = NSLocalizedString("Connected to Apple Health.", comment: "")
-                                showSuccessAlert = true
-                            }
-                        }
-                    } label: {
-                        Label(NSLocalizedString("Connect Apple Health", comment: ""), systemImage: "heart.fill")
-                    }
-                    Button {
-                        importFromHealth()
-                    } label: {
-                        Label(NSLocalizedString("Import Last 30 Days", comment: ""), systemImage: "arrow.down.doc.fill")
-                    }
-                } header: {
-                    Text(NSLocalizedString("Apple Health", comment: ""))
-                }
-
-                // MARK: - Notifications
                 Section {
                     HStack {
                         Label(NSLocalizedString("Status", comment: ""), systemImage: "bell.badge.fill")
@@ -78,7 +56,7 @@ struct ProfileView: View {
                         .appFont(.caption)
                         .foregroundStyle(.secondary)
 
-                    DisclosureGroup(NSLocalizedString("Reminder Rules", comment: "")) {
+                    DisclosureGroup(NSLocalizedString("Reminder Rules", comment: ""), isExpanded: $showReminderRules) {
                         LabeledContent(NSLocalizedString("Overdue Grace Period", comment: "")) {
                             Menu(graceMinutesLabel) {
                                 Button("15 min") { graceMinutes = 15 }
@@ -102,72 +80,105 @@ struct ProfileView: View {
                         }
                     }
                 } header: {
-                    Text(NSLocalizedString("Notifications", comment: ""))
+                    Text(NSLocalizedString("Reminder Setup", comment: ""))
                 } footer: {
                     Text(NSLocalizedString("Scheduled medications need both permission and reminder times before alerts can fire.", comment: ""))
                         .appFont(.caption)
                 }
 
-                // MARK: - Goals
                 Section {
-                    DisclosureGroup(NSLocalizedString("Blood Glucose", comment: "")) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(String(format: NSLocalizedString("Unit: %@", comment: ""), glucoseUnitLabel))
-                                .appFont(.caption)
-                                .foregroundStyle(.secondary)
-                            Stepper(value: glucoseLowDisplayBinding, in: glucoseLowDisplayRange, step: glucoseDisplayStep) {
-                                Text(glucoseLowLabel).appFont(.subheadline)
-                            }
-                            Stepper(value: glucoseHighDisplayBinding, in: glucoseHighDisplayRange, step: glucoseDisplayStep) {
-                                Text(glucoseHighLabel).appFont(.subheadline)
-                            }
+                    DisclosureGroup(isExpanded: $showSafetySection) {
+                        NavigationLink {
+                            EmergencyInfoEditView().environmentObject(store)
+                        } label: {
+                            Label(NSLocalizedString("Edit Emergency Info", comment: ""), systemImage: "cross.case")
                         }
+                        NavigationLink {
+                            EmergencyCardView().environmentObject(store)
+                        } label: {
+                            Label(NSLocalizedString("View Medical Summary", comment: ""), systemImage: "person.text.rectangle")
+                        }
+                        NavigationLink {
+                            CaregiversView().environmentObject(store)
+                        } label: {
+                            Label(NSLocalizedString("Manage Caregivers", comment: ""), systemImage: "person.2")
+                        }
+                    } label: {
+                        settingsSummaryRow(
+                            title: NSLocalizedString("Medical & Support", comment: ""),
+                            summary: careSummary,
+                            systemImage: "cross.case"
+                        )
                     }
-                    DisclosureGroup(NSLocalizedString("Heart Rate", comment: "")) {
-                        Stepper(value: $hrLow, in: 30...100, step: 1) {
-                            Text(String(format: NSLocalizedString("Low: %d bpm", comment: ""), Int(hrLow))).appFont(.subheadline)
-                        }
-                        Stepper(value: $hrHigh, in: 80...180, step: 1) {
-                            Text(String(format: NSLocalizedString("High: %d bpm", comment: ""), Int(hrHigh))).appFont(.subheadline)
-                        }
-                    }
-                    DisclosureGroup(NSLocalizedString("Blood Pressure", comment: "")) {
-                        Stepper(value: $bpSysHigh, in: 90...200, step: 1) {
-                            Text(String(format: NSLocalizedString("Systolic High: %d", comment: ""), Int(bpSysHigh))).appFont(.subheadline)
-                        }
-                        Stepper(value: $bpDiaHigh, in: 50...130, step: 1) {
-                            Text(String(format: NSLocalizedString("Diastolic High: %d", comment: ""), Int(bpDiaHigh))).appFont(.subheadline)
-                        }
-                    }
-                } header: {
-                    Text(NSLocalizedString("Goals", comment: ""))
-                }
 
-                // MARK: - Care & Emergency
-                Section {
-                    NavigationLink {
-                        EmergencyInfoEditView().environmentObject(store)
-                    } label: {
-                        Label(NSLocalizedString("Edit Emergency Info", comment: ""), systemImage: "cross.case")
+                    DisclosureGroup(NSLocalizedString("Apple Health", comment: ""), isExpanded: $showHealthSection) {
+                        Button {
+                            HealthKitManager.shared.requestAuthorization { granted, error in
+                                if let error = error {
+                                    errorMessage = String(format: NSLocalizedString("Could not connect to Health: %@", comment: ""), error.localizedDescription)
+                                    showErrorAlert = true
+                                } else if granted {
+                                    Haptics.success()
+                                    successMessage = NSLocalizedString("Connected to Apple Health.", comment: "")
+                                    showSuccessAlert = true
+                                }
+                            }
+                        } label: {
+                            Label(NSLocalizedString("Connect Apple Health", comment: ""), systemImage: "heart.fill")
+                        }
+                        Button {
+                            importFromHealth()
+                        } label: {
+                            Label(NSLocalizedString("Import Last 30 Days", comment: ""), systemImage: "arrow.down.doc.fill")
+                        }
                     }
-                    NavigationLink {
-                        EmergencyCardView().environmentObject(store)
-                    } label: {
-                        Label(NSLocalizedString("View Emergency Card", comment: ""), systemImage: "person.text.rectangle")
-                    }
-                    NavigationLink {
-                        CaregiversView().environmentObject(store)
-                    } label: {
-                        Label(NSLocalizedString("Manage Caregivers", comment: ""), systemImage: "person.2")
-                    }
-                } header: {
-                    Text(NSLocalizedString("Care & Emergency", comment: ""))
                 } footer: {
                     Text(NSLocalizedString("Keep emergency details and caregiver access up to date for missed-dose support.", comment: ""))
                         .appFont(.caption)
                 }
 
-                // MARK: - General
+                Section {
+                    DisclosureGroup(isExpanded: $showGoalsSection) {
+                        DisclosureGroup(NSLocalizedString("Blood Glucose", comment: "")) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(String(format: NSLocalizedString("Unit: %@", comment: ""), glucoseUnitLabel))
+                                    .appFont(.caption)
+                                    .foregroundStyle(.secondary)
+                                Stepper(value: glucoseLowDisplayBinding, in: glucoseLowDisplayRange, step: glucoseDisplayStep) {
+                                    Text(glucoseLowLabel).appFont(.subheadline)
+                                }
+                                Stepper(value: glucoseHighDisplayBinding, in: glucoseHighDisplayRange, step: glucoseDisplayStep) {
+                                    Text(glucoseHighLabel).appFont(.subheadline)
+                                }
+                            }
+                        }
+                        DisclosureGroup(NSLocalizedString("Heart Rate", comment: "")) {
+                            Stepper(value: $hrLow, in: 30...100, step: 1) {
+                                Text(String(format: NSLocalizedString("Low: %d bpm", comment: ""), Int(hrLow))).appFont(.subheadline)
+                            }
+                            Stepper(value: $hrHigh, in: 80...180, step: 1) {
+                                Text(String(format: NSLocalizedString("High: %d bpm", comment: ""), Int(hrHigh))).appFont(.subheadline)
+                            }
+                        }
+                        DisclosureGroup(NSLocalizedString("Blood Pressure", comment: "")) {
+                            Stepper(value: $bpSysHigh, in: 90...200, step: 1) {
+                                Text(String(format: NSLocalizedString("Systolic High: %d", comment: ""), Int(bpSysHigh))).appFont(.subheadline)
+                            }
+                            Stepper(value: $bpDiaHigh, in: 50...130, step: 1) {
+                                Text(String(format: NSLocalizedString("Diastolic High: %d", comment: ""), Int(bpDiaHigh))).appFont(.subheadline)
+                            }
+                        }
+                    } label: {
+                        settingsSummaryRow(
+                            title: NSLocalizedString("Measurement Goals", comment: ""),
+                            summary: goalsSummary,
+                            systemImage: "target"
+                        )
+                    }
+                } header: {
+                    Text(NSLocalizedString("Measurement Review", comment: ""))
+                }
+
                 Section {
                     Toggle(NSLocalizedString("Haptic Feedback", comment: ""), isOn: $hapticsEnabled)
                         .onChange(of: hapticsEnabled) { newValue in Haptics.setEnabled(newValue) }
@@ -175,55 +186,61 @@ struct ProfileView: View {
                     Text(NSLocalizedString("General", comment: ""))
                 }
 
-                // MARK: - AI Analysis
                 Section {
-                    Toggle(NSLocalizedString("Allow AI Analysis", comment: ""), isOn: $aiOptIn)
+                    DisclosureGroup(isExpanded: $showAISection) {
+                        Toggle(NSLocalizedString("Allow AI Analysis", comment: ""), isOn: $aiOptIn)
 
-                    if aiOptIn {
-                        DisclosureGroup(NSLocalizedString("Provider & API Access", comment: ""), isExpanded: $showAISection) {
-                            Picker(NSLocalizedString("Provider", comment: ""), selection: $aiProvider) {
-                                ForEach(AIProvider.allCases, id: \.self) { p in
-                                    Text(p.rawValue).tag(p)
+                        if aiOptIn {
+                            DisclosureGroup(NSLocalizedString("Provider & API Access", comment: "")) {
+                                Picker(NSLocalizedString("Provider", comment: ""), selection: $aiProvider) {
+                                    ForEach(AIProvider.allCases, id: \.self) { p in
+                                        Text(p.rawValue).tag(p)
+                                    }
+                                }
+                                SecureField(NSLocalizedString("API Key", comment: ""), text: $aiApiKey)
+                                    .textContentType(.password)
+                                    .autocorrectionDisabled()
+                                Button {
+                                    let urlStr: String
+                                    switch aiProvider {
+                                    case .openai: urlStr = "https://platform.openai.com/api-keys"
+                                    case .anthropic: urlStr = "https://console.anthropic.com/settings/keys"
+                                    }
+                                    if let url = URL(string: urlStr) {
+                                        UIApplication.shared.open(url)
+                                    }
+                                } label: {
+                                    Label(String(format: NSLocalizedString("Get %@ API Key", comment: ""), aiProvider.rawValue), systemImage: "key.fill")
+                                        .appFont(.subheadline)
                                 }
                             }
-                            SecureField(NSLocalizedString("API Key", comment: ""), text: $aiApiKey)
-                                .textContentType(.password)
-                                .autocorrectionDisabled()
-                            Button {
-                                let urlStr: String
-                                switch aiProvider {
-                                case .openai: urlStr = "https://platform.openai.com/api-keys"
-                                case .anthropic: urlStr = "https://console.anthropic.com/settings/keys"
+
+                            if !aiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                HStack {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.green)
+                                    Text(NSLocalizedString("AI insights enabled", comment: ""))
+                                        .appFont(.caption)
+                                        .foregroundStyle(.green)
                                 }
-                                if let url = URL(string: urlStr) {
-                                    UIApplication.shared.open(url)
-                                }
-                            } label: {
-                                Label(String(format: NSLocalizedString("Get %@ API Key", comment: ""), aiProvider.rawValue), systemImage: "key.fill")
-                                    .appFont(.subheadline)
                             }
                         }
-
-                        if !aiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            HStack {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.green)
-                                Text(NSLocalizedString("AI insights enabled", comment: ""))
-                                    .appFont(.caption)
-                                    .foregroundStyle(.green)
-                            }
-                        }
+                        Text(NSLocalizedString("Used for drug interaction analysis and trend insights. Your API key is stored securely in Keychain.", comment: ""))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                    } label: {
+                        settingsSummaryRow(
+                            title: NSLocalizedString("AI Analysis", comment: ""),
+                            summary: aiSummary,
+                            systemImage: "sparkles"
+                        )
                     }
-                    Text(NSLocalizedString("Used for drug interaction analysis and trend insights. Your API key is stored securely in Keychain.", comment: ""))
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
                 } header: {
-                    Text(NSLocalizedString("AI Analysis", comment: ""))
+                    Text(NSLocalizedString("Advanced", comment: ""))
                 }
 
-                // MARK: - Data
                 Section {
-                    DisclosureGroup(NSLocalizedString("Backup & Export", comment: ""), isExpanded: $showDataSection) {
+                    DisclosureGroup(isExpanded: $showDataSection) {
                         Button { showExportSheet = true } label: {
                             Label(NSLocalizedString("Export Reports", comment: ""), systemImage: "doc.richtext")
                         }
@@ -238,6 +255,12 @@ struct ProfileView: View {
                             Label("Export 10 to Health", systemImage: "arrow.up.doc.fill")
                         }
                         #endif
+                    } label: {
+                        settingsSummaryRow(
+                            title: NSLocalizedString("Backup & Export", comment: ""),
+                            summary: dataSummary,
+                            systemImage: "externaldrive.fill"
+                        )
                     }
                 } header: {
                     Text(NSLocalizedString("Data", comment: ""))
@@ -518,6 +541,60 @@ struct ProfileView: View {
             return String(format: NSLocalizedString("%lld scheduled medications currently have reminders turned off.", comment: ""), scheduledWithoutRemindersCount)
         }
         return NSLocalizedString("Reminder coverage looks healthy for your scheduled medications.", comment: "")
+    }
+
+    private var careSummary: String {
+        let caregivers = store.caregivers.count
+        let hasEmergencyInfo = store.emergencyInfo != nil
+
+        if hasEmergencyInfo && caregivers > 0 {
+            return String(format: NSLocalizedString("Emergency info ready. %lld caregivers saved.", comment: ""), caregivers)
+        }
+        if hasEmergencyInfo {
+            return NSLocalizedString("Emergency info is ready.", comment: "")
+        }
+        if caregivers > 0 {
+            return String(format: NSLocalizedString("%lld caregivers saved. Add emergency info next.", comment: ""), caregivers)
+        }
+        return NSLocalizedString("Add emergency info and caregivers for missed-dose support.", comment: "")
+    }
+
+    private var goalsSummary: String {
+        NSLocalizedString("Glucose, heart rate, and blood pressure ranges are configured for review.", comment: "")
+    }
+
+    private var aiSummary: String {
+        if !aiOptIn {
+            return NSLocalizedString("Off. Drug interaction and trend analysis stay on device only.", comment: "")
+        }
+        if aiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return NSLocalizedString("Enabled, but an API key is still needed.", comment: "")
+        }
+        return String(format: NSLocalizedString("%@ analysis is enabled.", comment: ""), aiProvider.rawValue)
+    }
+
+    private var dataSummary: String {
+        NSLocalizedString("Export reports, create backups, or restore this device from a backup.", comment: "")
+    }
+
+    @ViewBuilder
+    private func settingsSummaryRow(title: String, summary: String, systemImage: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: systemImage)
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 24, height: 24)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .appFont(.subheadline)
+                    .fontWeight(.semibold)
+                Text(summary)
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, 2)
     }
 
     // MARK: - Glucose goals helpers

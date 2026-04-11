@@ -334,6 +334,8 @@ final class DataStore: ObservableObject {
                     if isToday, let scheduled = cal.date(bySettingHour: h, minute: m, second: 0, of: now), scheduled > now {
                         continue
                     }
+                    guard let scheduled = cal.date(bySettingHour: h, minute: m, second: 0, of: dayKey),
+                          med.isDoseActive(on: scheduled) else { continue }
                     total += 1
                     let key = String(format: "%02d:%02d", h, m)
                     if latestStatus(on: dayKey, medID: med.id, scheduleKey: key, medTimesCount: times.count) == .taken {
@@ -387,6 +389,8 @@ final class DataStore: ObservableObject {
                 }
                 for (h, m) in times {
                     if isToday, let sched = cal.date(bySettingHour: h, minute: m, second: 0, of: now), sched > now { continue }
+                    guard let scheduled = cal.date(bySettingHour: h, minute: m, second: 0, of: dayKey),
+                          med.isDoseActive(on: scheduled) else { continue }
                     total += 1
                     let key = String(format: "%02d:%02d", h, m)
                     let dayEnd = cal.date(byAdding: .day, value: 1, to: dayKey)!
@@ -439,6 +443,8 @@ final class DataStore: ObservableObject {
                 }
                 for (h, m) in times {
                     if isToday, let sched = cal.date(bySettingHour: h, minute: m, second: 0, of: now), sched > now { continue }
+                    guard let scheduled = cal.date(bySettingHour: h, minute: m, second: 0, of: dayKey),
+                          med.isDoseActive(on: scheduled) else { continue }
                     total += 1
                     let key = String(format: "%02d:%02d", h, m)
                     let match = intakeLogs.filter { log in
@@ -468,12 +474,15 @@ final class DataStore: ObservableObject {
                 return (h, m)
             }
             if times.isEmpty { break }
+            if dayKey < cal.startOfDay(for: med.startDate) { break }
             let now = Date()
             let isToday = cal.isDateInToday(dayKey)
             var allTaken = true
             var hasDue = false
             for (h, m) in times {
                 if isToday, let sched = cal.date(bySettingHour: h, minute: m, second: 0, of: now), sched > now { continue }
+                guard let scheduled = cal.date(bySettingHour: h, minute: m, second: 0, of: dayKey),
+                      med.isDoseActive(on: scheduled) else { continue }
                 hasDue = true
                 let key = String(format: "%02d:%02d", h, m)
                 let match = intakeLogs.filter { log in

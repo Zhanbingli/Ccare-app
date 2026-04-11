@@ -64,28 +64,19 @@ struct DashboardView: View {
                 return (item.id, resolved)
             })
             let takenCount = statusCache.values.filter { if case .taken = $0 { return true } else { return false } }.count
+            let skippedCount = statusCache.values.filter { if case .skipped = $0 { return true } else { return false } }.count
             let totalCount = schedules.count
             let actionableSchedules = schedules.filter { canLogDose(for: $0, status: statusCache[$0.id] ?? .none) }
-            let currentActionID = actionableSchedules.first?.id
-            let followUpActionable = actionableSchedules.filter { $0.id != currentActionID }
-            let overdueQueue = followUpActionable.filter {
+            let currentAction = actionableSchedules.first
+            let nextUpcoming = schedules.first {
+                let status = statusCache[$0.id] ?? .none
+                return !canLogDose(for: $0, status: status) && !isFinalStatus(status)
+            }
+            let overdueCount = schedules.filter {
                 if case .overdue = statusCache[$0.id] ?? .none { return true }
                 return false
-            }
-            let readyQueue = followUpActionable.filter {
-                switch statusCache[$0.id] ?? .none {
-                case .dueSoon, .snoozed:
-                    return true
-                default:
-                    return false
-                }
-            }
-            let laterSchedules = schedules.filter {
-                !isFinalStatus(statusCache[$0.id] ?? .none) &&
-                !canLogDose(for: $0, status: statusCache[$0.id] ?? .none)
-            }
-            let visibleLaterSchedules = Array(laterSchedules.prefix(2))
-            let hiddenLaterCount = max(laterSchedules.count - visibleLaterSchedules.count, 0)
+            }.count
+            let remainingCount = max(totalCount - takenCount - skippedCount, 0)
             let prnMeds = store.medications.filter { $0.isAsNeeded == true }
 
             ScrollView {
@@ -101,56 +92,39 @@ struct DashboardView: View {
                             )
                         }
                     } else {
-                        focusHeroCard(
-                            schedules: schedules,
-                            statusCache: statusCache,
+                        todayHeader(
+                            actionableCount: actionableSchedules.count,
                             takenCount: takenCount,
                             totalCount: totalCount
                         )
 
-                        if hasReminderSetupIssues {
-                            reminderRepairCard()
-                        }
+                        currentStateCard(
+                            currentAction: currentAction,
+                            nextUpcoming: nextUpcoming,
+                            takenCount: takenCount,
+                            totalCount: totalCount,
+                            statusCache: statusCache
+                        )
 
-                        if !overdueQueue.isEmpty {
-                            groupedScheduleCard(
-                                title: NSLocalizedString("Still Overdue", comment: ""),
-                                subtitle: NSLocalizedString("Clear these right after the current dose.", comment: ""),
-                                items: overdueQueue,
+                        if !schedules.isEmpty {
+                            todayTimelineCard(
+                                schedules: schedules,
                                 statusCache: statusCache
                             )
                         }
 
-                        if !readyQueue.isEmpty {
-                            groupedScheduleCard(
-                                title: NSLocalizedString("Up Next", comment: ""),
-                                subtitle: NSLocalizedString("More doses are ready once you clear the current task.", comment: ""),
-                                items: readyQueue,
-                                statusCache: statusCache
-                            )
-                        }
-
-                        if !visibleLaterSchedules.isEmpty {
-                            groupedScheduleCard(
-                                title: NSLocalizedString("Later Today", comment: ""),
-                                subtitle: hiddenLaterCount > 0
-                                    ? String(format: NSLocalizedString("%lld more later today.", comment: ""), hiddenLaterCount)
-                                    : NSLocalizedString("Upcoming doses that are already on your schedule.", comment: ""),
-                                items: visibleLaterSchedules,
-                                statusCache: statusCache
-                            )
-                        }
+                        summaryStrip(
+                            completedCount: takenCount,
+                            overdueCount: overdueCount,
+                            remainingCount: remainingCount
+                        )
 
                         if !prnMeds.isEmpty {
-                            prnCard(medications: prnMeds)
+                            asNeededCompactSection(medications: prnMeds)
                         }
 
-                        if !hasReminderSetupIssues && store.medications.contains(where: { $0.isAsNeeded != true }) {
-                            sevenDayRhythmCard(
-                                scheduledMedicationCount: store.medications.filter { $0.isAsNeeded != true }.count,
-                                setupIssueCount: 0,
-                                checkInDays: sevenDayCheckInCount
-                            )
+                        if hasReminderSetupIssues {
+                            reminderRepairCard()
                         }
                     }
                 }
@@ -274,12 +248,365 @@ private extension DashboardView {
             for t in med.timesOfDay {
                 guard let h = t.hour, let m = t.minute else { continue }
                 if let date = cal.date(bySettingHour: h, minute: m, second: 0, of: now) {
+                    guard med.isDoseActive(on: date) else { continue }
                     let id = String(format: "%@_%02d:%02d", med.id.uuidString, h, m)
                     items.append(MedSchedule(id: id, med: med, time: date))
                 }
             }
         }
         return items.sorted { $0.time < $1.time }
+    }
+
+    @ViewBuilder
+    private func todayHeader(
+        actionableCount: Int,
+        takenCount: Int,
+        totalCount: Int
+    ) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(NSLocalizedString("Today", comment: ""))
+                    .appFont(.largeTitle)
+                    .fontWeight(.bold)
+                Text(Date(), format: .dateTime.weekday(.wide).month(.abbreviated).day())
+                    .appFont(.subheadline)
+                    .foregroundStyle(.secondary)
+                Text(todayProgressText(taken: takenCount, total: totalCount))
+                    .appFont(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 12)
+
+            if actionableCount > 0 {
+                AppBadge(
+                    text: "\(actionableCount)",
+                    tint: actionableCount > 1 ? .orange : .green,
+                    icon: "checklist"
+                )
+            }
+        }
+        .padding(.top, 8)
+    }
+
+    @ViewBuilder
+    private func currentStateCard(
+        currentAction: MedSchedule?,
+        nextUpcoming: MedSchedule?,
+        takenCount: Int,
+        totalCount: Int,
+        statusCache: [String: TodayMedStatus]
+    ) -> some View {
+        if let item = currentAction {
+            let status = statusCache[item.id] ?? .none
+            TintedCard(tint: heroTint(for: status)) {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(actionStatusHeadline(for: status))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(item.med.name)
+                            .appFont(.largeTitle)
+                            .fontWeight(.bold)
+                        Text("\(item.med.dose) • \(item.time.formatted(date: .omitted, time: .shortened))")
+                            .appFont(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Text(todayProgressText(taken: takenCount, total: totalCount))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack(spacing: 10) {
+                        Button {
+                            beginTakeFlow(for: item)
+                        } label: {
+                            Text(NSLocalizedString("Take", comment: ""))
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .tint(.green)
+
+                        Button {
+                            snoozeDose(for: item)
+                        } label: {
+                            Text(NSLocalizedString("Snooze", comment: ""))
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+                        .tint(snoozeButtonTint(for: item))
+
+                        Button {
+                            skipDose(for: item)
+                        } label: {
+                            Text(NSLocalizedString("Skip", comment: ""))
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+                        .tint(.orange)
+                    }
+                }
+            }
+        } else if let nextUpcoming {
+            TintedCard(tint: .blue) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(NSLocalizedString("No dose due right now", comment: ""))
+                        .appFont(.headline)
+                    Text(nextUpcoming.med.name)
+                        .appFont(.title)
+                        .fontWeight(.bold)
+                    Text("\(nextUpcoming.med.dose) • \(nextUpcoming.time.formatted(date: .omitted, time: .shortened))")
+                        .appFont(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Text(todayProgressText(taken: takenCount, total: totalCount))
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } else {
+            TintedCard(tint: .green) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(NSLocalizedString("Today complete", comment: ""))
+                        .appFont(.headline)
+                    Text(NSLocalizedString("All scheduled doses are handled.", comment: ""))
+                        .appFont(.subheadline)
+                        .foregroundStyle(.secondary)
+                    if let tomorrowText = tomorrowsFirstDoseText() {
+                        Text(String(format: NSLocalizedString("Next dose: %@", comment: ""), tomorrowText))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    private func todayTimelineCard(
+        schedules: [MedSchedule],
+        statusCache: [String: TodayMedStatus]
+    ) -> some View {
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(NSLocalizedString("Today's Schedule", comment: ""))
+                    .appFont(.headline)
+
+                VStack(spacing: 10) {
+                    ForEach(schedules) { item in
+                        timelineRow(item: item, status: statusCache[item.id] ?? .none)
+                    }
+                }
+            }
+        }
+    }
+
+    private func timelineRow(item: MedSchedule, status: TodayMedStatus) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: timelineStatusIcon(for: status))
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(timelineStatusTint(for: status))
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.med.name)
+                    .appFont(.subheadline)
+                    .foregroundStyle(.primary)
+                Text("\(item.med.dose) • \(item.time.formatted(date: .omitted, time: .shortened))")
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Text(timelineStatusText(for: status))
+                .appFont(.caption)
+                .foregroundStyle(timelineStatusTint(for: status))
+        }
+    }
+
+    private func summaryStrip(
+        completedCount: Int,
+        overdueCount: Int,
+        remainingCount: Int
+    ) -> some View {
+        Card {
+            HStack(spacing: 0) {
+                summaryMetric(value: "\(completedCount)", label: NSLocalizedString("Completed", comment: ""), tint: .green)
+                summaryDivider
+                summaryMetric(value: "\(overdueCount)", label: NSLocalizedString("Overdue", comment: ""), tint: overdueCount > 0 ? .red : .secondary)
+                summaryDivider
+                summaryMetric(value: "\(remainingCount)", label: NSLocalizedString("Remaining", comment: ""), tint: .secondary)
+            }
+        }
+    }
+
+    private var summaryDivider: some View {
+        Rectangle()
+            .fill(Color.primary.opacity(0.08))
+            .frame(width: 1, height: 36)
+    }
+
+    private func summaryMetric(value: String, label: String, tint: Color) -> some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .appFont(.headline)
+                .foregroundStyle(tint)
+                .monospacedDigit()
+            Text(label)
+                .appFont(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func asNeededCompactSection(medications: [Medication]) -> some View {
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text(NSLocalizedString("As Needed", comment: ""))
+                        .appFont(.headline)
+                    Spacer()
+                    AppBadge(text: NSLocalizedString("Optional", comment: ""), tint: .secondary)
+                }
+
+                ForEach(Array(medications.prefix(3).enumerated()), id: \.element.id) { _, med in
+                    InsetPanel {
+                        prnMedRow(med: med)
+                    }
+                }
+            }
+        }
+    }
+
+    private func actionStatusHeadline(for status: TodayMedStatus) -> String {
+        switch status {
+        case .overdue:
+            return NSLocalizedString("Dose overdue", comment: "")
+        case .dueSoon:
+            return NSLocalizedString("Dose due now", comment: "")
+        case .snoozed:
+            return NSLocalizedString("Snoozed dose", comment: "")
+        default:
+            return NSLocalizedString("Current dose", comment: "")
+        }
+    }
+
+    private func timelineStatusText(for status: TodayMedStatus) -> String {
+        switch status {
+        case .taken:
+            return NSLocalizedString("Taken", comment: "")
+        case .skipped:
+            return NSLocalizedString("Skipped", comment: "")
+        case .snoozed:
+            return NSLocalizedString("Snoozed", comment: "")
+        case .overdue:
+            return NSLocalizedString("Overdue", comment: "")
+        case .dueSoon:
+            return NSLocalizedString("Due now", comment: "")
+        case .none:
+            return NSLocalizedString("Later", comment: "")
+        }
+    }
+
+    private func timelineStatusTint(for status: TodayMedStatus) -> Color {
+        switch status {
+        case .taken:
+            return .green
+        case .skipped:
+            return .orange
+        case .snoozed:
+            return .blue
+        case .overdue:
+            return .red
+        case .dueSoon:
+            return .orange
+        case .none:
+            return .secondary
+        }
+    }
+
+    private func timelineStatusIcon(for status: TodayMedStatus) -> String {
+        switch status {
+        case .taken:
+            return "checkmark.circle.fill"
+        case .skipped:
+            return "xmark.circle.fill"
+        case .snoozed:
+            return "zzz"
+        case .overdue:
+            return "exclamationmark.circle.fill"
+        case .dueSoon:
+            return "clock.fill"
+        case .none:
+            return "clock"
+        }
+    }
+
+    private func tomorrowsFirstDoseText() -> String? {
+        let cal = Calendar.current
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: Date()))
+        guard let tomorrow else { return nil }
+        let upcoming = store.medications
+            .filter { $0.isAsNeeded != true && $0.remindersEnabled }
+            .flatMap { med in
+                med.timesOfDay.compactMap { comps -> (Medication, Date)? in
+                    guard let hour = comps.hour,
+                          let minute = comps.minute,
+                          let date = cal.date(bySettingHour: hour, minute: minute, second: 0, of: tomorrow),
+                          med.isDoseActive(on: date) else { return nil }
+                    return (med, date)
+                }
+            }
+            .sorted { $0.1 < $1.1 }
+            .first
+
+        guard let upcoming else { return nil }
+        return "\(upcoming.0.name) • \(upcoming.1.formatted(date: .omitted, time: .shortened))"
+    }
+
+    private func skipDose(for item: MedSchedule) {
+        let comps = Calendar.current.dateComponents([.hour, .minute], from: item.time)
+        if Calendar.current.isDateInToday(item.time) {
+            NotificationManager.shared.suppressToday(for: item.med.id, timeComponents: comps)
+        }
+        store.upsertIntake(
+            medicationID: item.med.id,
+            status: .skipped,
+            scheduleTime: comps,
+            at: item.time,
+            scheduledDate: item.time
+        )
+        NotificationManager.shared.cancelDoseNotifications(for: item.med.id, timeComponents: comps, now: item.time)
+        NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
+        NotificationManager.shared.updateBadge(store: store)
+        Haptics.impact(.light)
+    }
+
+    private func snoozeDose(for item: MedSchedule) {
+        let comps = Calendar.current.dateComponents([.hour, .minute], from: item.time)
+        let count = NotificationManager.shared.snoozeCount(for: item.med.id, scheduleTime: comps)
+        let result = MedicationRules.nextSnooze(for: item.med.id, currentSnoozeCount: count)
+
+        switch result {
+        case .snooze(let minutes):
+            NotificationManager.shared.incrementSnoozeCount(for: item.med.id, scheduleTime: comps)
+            NotificationManager.shared.scheduleSnooze(for: item.med, minutes: minutes, scheduleTime: comps)
+            if Calendar.current.isDateInToday(item.time) {
+                NotificationManager.shared.suppressToday(for: item.med.id, timeComponents: comps)
+            }
+            store.upsertIntake(
+                medicationID: item.med.id,
+                status: .snoozed,
+                scheduleTime: comps,
+                at: item.time,
+                scheduledDate: item.time
+            )
+            NotificationManager.shared.updateBadge(store: store)
+            Haptics.impact(.light)
+        case .exhausted:
+            skipDose(for: item)
+        }
     }
 
     @ViewBuilder
@@ -296,8 +623,17 @@ private extension DashboardView {
         if let item = nextActionableItem {
             let status = statusCache[item.id] ?? .none
             TintedCard(tint: heroTint(for: status)) {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .top, spacing: 10) {
+                        ZStack {
+                            Circle()
+                                .fill(heroTint(for: status).opacity(0.14))
+                                .frame(width: 44, height: 44)
+                            Image(systemName: heroSymbol(for: status))
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(heroTint(for: status))
+                        }
+
                         VStack(alignment: .leading, spacing: 6) {
                             Text(heroEyebrow(for: status))
                                 .appFont(.caption)
@@ -311,12 +647,15 @@ private extension DashboardView {
                             Text(heroSupportText(for: item, status: status))
                                 .appFont(.caption)
                                 .foregroundStyle(.secondary)
-                            Text(todayProgressText(taken: takenCount, total: totalCount))
-                                .appFont(.caption)
-                                .foregroundStyle(.secondary)
                         }
                         Spacer()
                         statusBadge(for: item, status: status)
+                    }
+
+                    InsetPanel(tint: heroTint(for: status)) {
+                        Text(todayProgressText(taken: takenCount, total: totalCount))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
                     }
 
                     Button {
@@ -333,7 +672,7 @@ private extension DashboardView {
             }
         } else if let upcoming = schedules.first(where: { !isFinalStatus(statusCache[$0.id] ?? .none) }) {
             Card {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 14) {
                     Text(NSLocalizedString("Up Next", comment: ""))
                         .appFont(.caption)
                         .foregroundStyle(.secondary)
@@ -346,27 +685,49 @@ private extension DashboardView {
                     Text(NSLocalizedString("Nothing needs action yet. Your next scheduled dose is lined up.", comment: ""))
                         .appFont(.caption)
                         .foregroundStyle(.secondary)
-                    Text(todayProgressText(taken: takenCount, total: totalCount))
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        } else {
-            TintedCard(tint: .green) {
-                HStack(alignment: .center, spacing: 14) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 34, weight: .semibold))
-                        .foregroundStyle(.green)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(NSLocalizedString("All caught up", comment: ""))
-                            .appFont(.title)
-                            .fontWeight(.bold)
-                        Text(NSLocalizedString("There are no scheduled doses waiting for you right now.", comment: ""))
+                    InsetPanel {
+                        Text(todayProgressText(taken: takenCount, total: totalCount))
                             .appFont(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
             }
+        } else {
+            TintedCard(tint: .green) {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .center, spacing: 14) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 34, weight: .semibold))
+                            .foregroundStyle(.green)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(NSLocalizedString("All caught up", comment: ""))
+                                .appFont(.title)
+                                .fontWeight(.bold)
+                            Text(NSLocalizedString("There are no scheduled doses waiting for you right now.", comment: ""))
+                                .appFont(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    InsetPanel(tint: .green) {
+                        Text(NSLocalizedString("Today is clear for now. PRN medications stay below as optional logs only.", comment: ""))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    private func heroSymbol(for status: TodayMedStatus) -> String {
+        switch status {
+        case .overdue:
+            return "exclamationmark.circle.fill"
+        case .dueSoon:
+            return "clock.badge.checkmark.fill"
+        case .snoozed:
+            return "zzz"
+        default:
+            return "checkmark.circle.fill"
         }
     }
 
@@ -399,7 +760,7 @@ private extension DashboardView {
                 Image(systemName: "bell.badge.fill")
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(.orange)
-                    .frame(width: 42, height: 42)
+                    .frame(width: 44, height: 44)
                     .background(
                         Circle()
                             .fill(Color.orange.opacity(0.12))
@@ -475,17 +836,7 @@ private extension DashboardView {
                 Spacer(minLength: 8)
 
                 if !hasSetupIssues, scheduledMedicationCount > 0 {
-                    Text("\(min(checkInDays, 7))/7")
-                        .appFont(.label)
-                        .fontWeight(.semibold)
-                        .monospacedDigit()
-                        .foregroundStyle(tint)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .background(
-                            Capsule(style: .continuous)
-                                .fill(tint.opacity(0.10))
-                        )
+                    AppBadge(text: "\(min(checkInDays, 7))/7", tint: tint)
                 }
             }
         }
@@ -498,15 +849,31 @@ private extension DashboardView {
         statusCache: [String: TodayMedStatus]
     ) -> some View {
         let tint = attentionTint(for: items, statusCache: statusCache)
-        return Card {
-            groupedScheduleCardContent(
-                title: title,
-                subtitle: subtitle,
-                items: items,
-                statusCache: statusCache,
-                emphasized: tint != nil,
-                accentTint: tint
-            )
+
+        return Group {
+            if let tint {
+                TintedCard(tint: tint) {
+                    groupedScheduleCardContent(
+                        title: title,
+                        subtitle: subtitle,
+                        items: items,
+                        statusCache: statusCache,
+                        emphasized: true,
+                        accentTint: tint
+                    )
+                }
+            } else {
+                Card {
+                    groupedScheduleCardContent(
+                        title: title,
+                        subtitle: subtitle,
+                        items: items,
+                        statusCache: statusCache,
+                        emphasized: false,
+                        accentTint: nil
+                    )
+                }
+            }
         }
     }
 
@@ -518,7 +885,7 @@ private extension DashboardView {
         emphasized: Bool,
         accentTint: Color?
     ) -> some View {
-        VStack(alignment: .leading, spacing: emphasized ? 12 : 14) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 10) {
                 Text(title)
                     .appFont(.headline)
@@ -538,10 +905,9 @@ private extension DashboardView {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                medRow(item: item, status: statusCache[item.id] ?? .none, emphasizeUrgency: emphasized)
-                if index < items.count - 1 {
-                    Divider().opacity(emphasized ? 0.55 : 1)
+            VStack(spacing: 10) {
+                ForEach(Array(items.enumerated()), id: \.element.id) { _, item in
+                    medRow(item: item, status: statusCache[item.id] ?? .none, emphasizeUrgency: emphasized)
                 }
             }
         }
@@ -551,7 +917,7 @@ private extension DashboardView {
         let visibleMeds = Array(medications.prefix(2))
         let hiddenCount = max(medications.count - visibleMeds.count, 0)
         return Card {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(NSLocalizedString("As Needed", comment: ""))
                         .appFont(.headline)
@@ -562,10 +928,11 @@ private extension DashboardView {
                     .appFont(.caption)
                     .foregroundStyle(.secondary)
 
-                ForEach(Array(visibleMeds.enumerated()), id: \.element.id) { index, med in
-                    prnMedRow(med: med)
-                    if index < visibleMeds.count - 1 {
-                        Divider()
+                VStack(spacing: 10) {
+                    ForEach(Array(visibleMeds.enumerated()), id: \.element.id) { _, med in
+                        InsetPanel {
+                            prnMedRow(med: med)
+                        }
                     }
                 }
 

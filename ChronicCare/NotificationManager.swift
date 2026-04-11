@@ -282,7 +282,7 @@ final class NotificationManager {
             horizonDays: horizonDays,
             from: now,
             catchUpWindow: dueCatchUpWindow
-        )
+        ).filter { medication.isDoseActive(on: $0) }
         guard !doseDates.isEmpty else { return }
         let calendar = Calendar.current
         let center = UNUserNotificationCenter.current()
@@ -602,6 +602,7 @@ final class NotificationManager {
             }
             for (h, m) in times {
                 guard let sched = cal.date(bySettingHour: h, minute: m, second: 0, of: now) else { continue }
+                guard med.isDoseActive(on: sched) else { continue }
                 // Only count when overdue after grace
                 if now < sched.addingTimeInterval(TimeInterval(graceMinutes * 60)) { continue }
                 let key = String(format: "%02d:%02d", h, m)
