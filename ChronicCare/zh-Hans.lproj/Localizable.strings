@@ -943,6 +943,12 @@
 "If you have questions about this privacy policy, please contact us through the App Store listing." = "如果您对本隐私政策有疑问，请通过 App Store 页面与我们联系。";
 "Last updated: April 2026" = "最后更新：2026 年 4 月";
 
+// MARK: - About Section
+"Privacy Policy" = "隐私政策";
+"Version %@" = "版本 %@";
+"About" = "关于";
+"This app is not a substitute for professional medical advice, diagnosis, or treatment." = "本应用不能替代专业医疗建议、诊断或治疗。";
+
 // MARK: - Accessibility
 "Take %@ %@ now" = "立即服用 %@ %@";
 "%@ photo" = "%@ 照片";
