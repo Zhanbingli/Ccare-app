@@ -87,13 +87,13 @@ final class NotificationManager {
         UNUserNotificationCenter.current().add(req, withCompletionHandler: nil)
     }
 
-    func sendCaregiverReminder(caregiverName: String, medicationName: String, missedDays: Int) {
+    func sendCaregiverReminder(caregiverID: UUID, caregiverName: String, medicationName: String, missedDays: Int) {
         let content = UNMutableNotificationContent()
         content.title = NSLocalizedString("Share with Caregiver?", comment: "")
         content.body = String(format: NSLocalizedString("You haven't taken %@ for %lld days. Would you like to share your status with %@?", comment: ""), medicationName, missedDays, caregiverName)
         content.sound = .default
         if #available(iOS 15.0, *) { content.interruptionLevel = .active }
-        let id = "caregiver_\(caregiverName.hashValue)_\(todayKey())"
+        let id = "caregiver_\(caregiverID.uuidString)_\(todayKey())"
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 2, repeats: false)
         let req = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
         UNUserNotificationCenter.current().add(req, withCompletionHandler: nil)
@@ -196,7 +196,19 @@ final class NotificationManager {
         return String(format: "%02d:%02d", h, m)
     }
 
-    private let scheduleHorizonDays = 14
+    private let primarySchedulingHorizonDays = 120
+    private let followUpSchedulingHorizonDays = 3
+    private let maxPendingNotificationBudget = 64
+    private let maxScheduledFollowUpRequests = 6
+    private let manualActionReserveSlots = 2
+
+    private struct ScheduledDoseCandidate {
+        let medication: Medication
+        let timeComponents: DateComponents
+        let doseDate: Date
+        let fireDate: Date
+        let strategy: AdaptiveReminderStrategy
+    }
 
     func isReminderEligible(_ medication: Medication) -> Bool {
         medication.remindersEnabled && medication.isAsNeeded != true && !medication.timesOfDay.isEmpty
@@ -209,42 +221,53 @@ final class NotificationManager {
         let activeReminderIDs = Set(medications.filter(isReminderEligible).map { $0.id })
         let inactiveMedications = medications.filter { !activeReminderIDs.contains($0.id) }
         inactiveMedications.forEach { cancelAll(for: $0) }
-
-        medications.filter(isReminderEligible).forEach {
-            schedule(for: $0, intakeLogs: intakeLogs, now: now)
-        }
+        rescheduleDoseReminders(for: medications.filter(isReminderEligible), intakeLogs: intakeLogs, now: now)
 
         checkLifecycleReminders(medications: medications, now: now)
     }
 
     func schedule(for medication: Medication, intakeLogs: [IntakeLog], now: Date = Date()) {
+        if isReminderEligible(medication) {
+            rescheduleDoseReminders(for: [medication], intakeLogs: intakeLogs, now: now)
+        } else {
+            cancelAll(for: medication)
+        }
+    }
+
+    private func rescheduleDoseReminders(for medications: [Medication], intakeLogs: [IntakeLog], now: Date) {
         let center = UNUserNotificationCenter.current()
-        let strategy = AdaptiveReminderEngine.strategy(for: medication, intakeLogs: intakeLogs, now: now)
         center.getPendingNotificationRequests { list in
-            // Only reschedule dose-level reminders here. Lifecycle reminders such
-            // as refill/course alerts are maintained by checkLifecycleReminders.
+            let validMedicationIDs = Set(medications.map { $0.id.uuidString })
             let ids = list.map { $0.identifier }.filter {
-                Self.isDoseReminder(identifier: $0, medicationID: medication.id)
+                Self.isManagedDoseReminder(identifier: $0, validMedicationIDs: validMedicationIDs)
             }
             if !ids.isEmpty { center.removePendingNotificationRequests(withIdentifiers: ids) }
 
-            // Clean delivered notifications to avoid stale banners/badges
             center.getDeliveredNotifications { notes in
                 let delivered = notes.map { $0.request.identifier }.filter {
-                    Self.isDoseReminder(identifier: $0, medicationID: medication.id)
+                    Self.isManagedDoseReminder(identifier: $0, validMedicationIDs: validMedicationIDs)
                 }
                 if !delivered.isEmpty { center.removeDeliveredNotifications(withIdentifiers: delivered) }
             }
 
-            guard self.isReminderEligible(medication) else { return }
-            for t in medication.timesOfDay {
-                self.scheduleUpcomingInstances(
-                    for: medication,
-                    timeComponents: t,
-                    horizonDays: self.scheduleHorizonDays,
-                    strategy: strategy,
-                    now: now
-                )
+            guard !medications.isEmpty else { return }
+
+            let primaryCandidates = self.buildPrimaryCandidates(for: medications, intakeLogs: intakeLogs, now: now)
+                .sorted {
+                    if $0.fireDate == $1.fireDate {
+                        return $0.medication.name.localizedCaseInsensitiveCompare($1.medication.name) == .orderedAscending
+                    }
+                    return $0.fireDate < $1.fireDate
+                }
+            let followUpBudget = self.followUpBudget(for: medications)
+            let primaryBudget = self.primaryBudget(for: medications, followUpBudget: followUpBudget)
+            let selectedPrimary = Array(primaryCandidates.prefix(primaryBudget))
+            selectedPrimary.forEach { self.schedulePrimaryReminder(for: $0, center: center) }
+
+            let followUpCandidates = self.buildFollowUpCandidates(from: selectedPrimary, now: now)
+                .sorted { $0.fireDate < $1.fireDate }
+            followUpCandidates.prefix(followUpBudget).forEach {
+                self.scheduleFollowUpReminder(for: $0.candidate, attempt: $0.attempt, minutes: $0.minutes, fireDate: $0.fireDate, center: center)
             }
         }
     }
@@ -270,63 +293,126 @@ final class NotificationManager {
         return result
     }
 
-    private func scheduleUpcomingInstances(
-        for medication: Medication,
-        timeComponents: DateComponents,
-        horizonDays: Int,
-        strategy: AdaptiveReminderStrategy,
-        now: Date = Date()
-    ) {
-        let doseDates = upcomingFireDates(
-            for: timeComponents,
-            horizonDays: horizonDays,
-            from: now,
-            catchUpWindow: dueCatchUpWindow
-        ).filter { medication.isDoseActive(on: $0) }
-        guard !doseDates.isEmpty else { return }
-        let calendar = Calendar.current
-        let center = UNUserNotificationCenter.current()
-        doseDates.forEach { doseDate in
-            guard let primaryFireDate = resolvedPrimaryFireDate(
-                for: doseDate,
-                leadMinutes: strategy.leadMinutes,
-                now: now,
-                catchUpWindow: dueCatchUpWindow
-            ) else { return }
-            let comps = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: primaryFireDate)
-            let id = instanceId(for: medication.id, date: doseDate, comps: timeComponents)
-            let content = makeContent(
-                for: medication,
-                scheduleTime: timeComponents,
-                scheduledDate: doseDate,
-                riskLevel: strategy.riskLevel
-            )
-            let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
-            let req = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
-            center.add(req) { error in
-                #if DEBUG
-                if let error = error { print("Notification schedule error: \(error)") }
-                #endif
-            }
+    private func buildPrimaryCandidates(for medications: [Medication], intakeLogs: [IntakeLog], now: Date) -> [ScheduledDoseCandidate] {
+        var uniqueCandidates: [String: ScheduledDoseCandidate] = [:]
 
-            // Schedule follow-up reminders after the original dose time.
-            for (index, minutes) in strategy.followUpIntervals.enumerated() {
-                let followUpDate = doseDate.addingTimeInterval(TimeInterval(minutes * 60))
-                guard followUpDate > now else { continue }
-                let fuId = followUpId(index: index + 1, for: medication.id, date: doseDate, comps: timeComponents)
-                let fuContent = makeFollowUpContent(
-                    for: medication,
-                    scheduleTime: timeComponents,
-                    scheduledDate: doseDate,
-                    attempt: index + 1,
-                    riskLevel: strategy.riskLevel
+        medications.forEach { medication in
+            let strategy = AdaptiveReminderEngine.strategy(for: medication, intakeLogs: intakeLogs, now: now)
+            medication.timesOfDay.forEach { timeComponents in
+                upcomingFireDates(
+                    for: timeComponents,
+                    horizonDays: primarySchedulingHorizonDays,
+                    from: now,
+                    catchUpWindow: dueCatchUpWindow
                 )
-                let fuComps = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: followUpDate)
-                let fuTrigger = UNCalendarNotificationTrigger(dateMatching: fuComps, repeats: false)
-                let fuReq = UNNotificationRequest(identifier: fuId, content: fuContent, trigger: fuTrigger)
-                center.add(fuReq, withCompletionHandler: nil)
+                .filter { medication.isDoseActive(on: $0) }
+                .forEach { doseDate in
+                    guard let primaryFireDate = resolvedPrimaryFireDate(
+                        for: doseDate,
+                        leadMinutes: strategy.leadMinutes,
+                        now: now,
+                        catchUpWindow: dueCatchUpWindow
+                    ) else { return }
+
+                    let candidate = ScheduledDoseCandidate(
+                        medication: medication,
+                        timeComponents: timeComponents,
+                        doseDate: doseDate,
+                        fireDate: primaryFireDate,
+                        strategy: strategy
+                    )
+                    let identifier = instanceId(for: medication.id, date: doseDate, comps: timeComponents)
+                    if let existing = uniqueCandidates[identifier], existing.fireDate <= candidate.fireDate {
+                        return
+                    }
+                    uniqueCandidates[identifier] = candidate
+                }
             }
         }
+
+        return Array(uniqueCandidates.values)
+    }
+
+    private func schedulePrimaryReminder(for candidate: ScheduledDoseCandidate, center: UNUserNotificationCenter) {
+        let calendar = Calendar.current
+        let comps = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: candidate.fireDate)
+        let id = instanceId(for: candidate.medication.id, date: candidate.doseDate, comps: candidate.timeComponents)
+        let content = makeContent(
+            for: candidate.medication,
+            scheduleTime: candidate.timeComponents,
+            scheduledDate: candidate.doseDate,
+            riskLevel: candidate.strategy.riskLevel
+        )
+        let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
+        let req = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+        center.add(req) { error in
+            #if DEBUG
+            if let error = error { print("Notification schedule error: \(error)") }
+            #endif
+        }
+    }
+
+    private func buildFollowUpCandidates(
+        from primaryCandidates: [ScheduledDoseCandidate],
+        now: Date
+    ) -> [(candidate: ScheduledDoseCandidate, attempt: Int, minutes: Int, fireDate: Date)] {
+        let calendar = Calendar.current
+        let horizonEnd = calendar.date(byAdding: .day, value: followUpSchedulingHorizonDays, to: now) ?? now
+        return primaryCandidates.flatMap { candidate -> [(ScheduledDoseCandidate, Int, Int, Date)] in
+            guard candidate.doseDate <= horizonEnd else { return [] }
+            return candidate.strategy.followUpIntervals.enumerated().compactMap { index, minutes in
+                let followUpDate = candidate.doseDate.addingTimeInterval(TimeInterval(minutes * 60))
+                guard followUpDate > now else { return nil }
+                return (candidate, index + 1, minutes, followUpDate)
+            }
+        }
+    }
+
+    private func scheduleFollowUpReminder(
+        for candidate: ScheduledDoseCandidate,
+        attempt: Int,
+        minutes: Int,
+        fireDate: Date,
+        center: UNUserNotificationCenter
+    ) {
+        let calendar = Calendar.current
+        let fuId = followUpId(index: attempt, for: candidate.medication.id, date: candidate.doseDate, comps: candidate.timeComponents)
+        let fuContent = makeFollowUpContent(
+            for: candidate.medication,
+            scheduleTime: candidate.timeComponents,
+            scheduledDate: candidate.doseDate,
+            attempt: attempt,
+            riskLevel: candidate.strategy.riskLevel
+        )
+        let fuComps = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
+        let fuTrigger = UNCalendarNotificationTrigger(dateMatching: fuComps, repeats: false)
+        let fuReq = UNNotificationRequest(identifier: fuId, content: fuContent, trigger: fuTrigger)
+        center.add(fuReq, withCompletionHandler: nil)
+    }
+
+    private func lifecycleReservationSlots(for medications: [Medication]) -> Int {
+        let refillSlots = medications.reduce(into: 0) { partialResult, medication in
+            if medication.daysOfSupplyRemaining != nil {
+                partialResult += 1
+            }
+        }
+        let courseSlots = medications.reduce(into: 0) { partialResult, medication in
+            if medication.courseEndDate != nil {
+                partialResult += 1
+            }
+        }
+        return min(10, refillSlots + courseSlots)
+    }
+
+    private func followUpBudget(for medications: [Medication]) -> Int {
+        let reserved = lifecycleReservationSlots(for: medications) + manualActionReserveSlots
+        let remaining = max(0, maxPendingNotificationBudget - reserved)
+        return min(maxScheduledFollowUpRequests, max(0, remaining / 6))
+    }
+
+    private func primaryBudget(for medications: [Medication], followUpBudget: Int) -> Int {
+        let reserved = lifecycleReservationSlots(for: medications) + manualActionReserveSlots + followUpBudget
+        return max(0, maxPendingNotificationBudget - reserved)
     }
 
     private func adaptivePrimaryFireDate(for doseDate: Date, leadMinutes: Int, now: Date) -> Date {
@@ -362,10 +448,16 @@ final class NotificationManager {
     }
 
     /// Cancel all follow-up reminders for a specific dose instance
-    func cancelFollowUps(for medicationID: UUID, timeComponents: DateComponents, now: Date = Date()) {
+    func cancelFollowUps(
+        for medicationID: UUID,
+        timeComponents: DateComponents,
+        scheduledDate: Date? = nil,
+        now: Date = Date()
+    ) {
         let cal = Calendar.current
-        let today = cal.startOfDay(for: now)
-        let baseId = instanceId(for: medicationID, date: today, comps: timeComponents)
+        let referenceDate = scheduledDate ?? now
+        let day = cal.startOfDay(for: referenceDate)
+        let baseId = instanceId(for: medicationID, date: day, comps: timeComponents)
         let ids = (1...maxAdaptiveFollowUpCount).map { "followup_\($0)_\(baseId)" }
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
         // Also remove any already-delivered follow-ups
@@ -381,9 +473,15 @@ final class NotificationManager {
         center.removeDeliveredNotifications(withIdentifiers: ids)
     }
 
-    func cancelDoseNotifications(for medicationID: UUID, timeComponents: DateComponents, now: Date = Date()) {
-        cancelTodayInstance(for: medicationID, timeComponents: timeComponents, now: now)
-        cancelFollowUps(for: medicationID, timeComponents: timeComponents, now: now)
+    func cancelDoseNotifications(
+        for medicationID: UUID,
+        timeComponents: DateComponents,
+        scheduledDate: Date? = nil,
+        now: Date = Date()
+    ) {
+        let referenceDate = scheduledDate ?? now
+        cancelTodayInstance(for: medicationID, timeComponents: timeComponents, now: referenceDate)
+        cancelFollowUps(for: medicationID, timeComponents: timeComponents, scheduledDate: referenceDate, now: referenceDate)
         cancelSnooze(for: medicationID, scheduleTime: timeComponents)
     }
 
@@ -518,7 +616,12 @@ final class NotificationManager {
         return "\(base)_\(String(format: "%02d", h))_\(String(format: "%02d", m))"
     }
 
-    func scheduleSnooze(for medicationID: UUID, minutes: Int = 10, scheduleTime: DateComponents? = nil) {
+    func scheduleSnooze(
+        for medicationID: UUID,
+        minutes: Int = 10,
+        scheduleTime: DateComponents? = nil,
+        scheduledDate: Date? = nil
+    ) {
         let snoozeId = Self.snoozeIdentifier(for: medicationID, scheduleTime: scheduleTime)
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [snoozeId])
         // remove legacy identifier if it exists to avoid duplicates
@@ -535,7 +638,7 @@ final class NotificationManager {
             info["scheduleMinute"] = m
         }
         let fireDate = Date().addingTimeInterval(TimeInterval(minutes * 60))
-        let originalScheduledDate = inferredScheduledDate(for: scheduleTime, relativeTo: Date()) ?? fireDate
+        let originalScheduledDate = scheduledDate ?? inferredScheduledDate(for: scheduleTime, relativeTo: Date()) ?? fireDate
         info["scheduledDate"] = isoFormatter.string(from: originalScheduledDate)
         content.userInfo = info
         content.threadIdentifier = medicationID.uuidString
@@ -547,13 +650,18 @@ final class NotificationManager {
         UNUserNotificationCenter.current().add(req, withCompletionHandler: nil)
     }
 
-    func scheduleSnooze(for medication: Medication, minutes: Int = 10, scheduleTime: DateComponents? = nil) {
+    func scheduleSnooze(
+        for medication: Medication,
+        minutes: Int = 10,
+        scheduleTime: DateComponents? = nil,
+        scheduledDate: Date? = nil
+    ) {
         let snoozeId = Self.snoozeIdentifier(for: medication.id, scheduleTime: scheduleTime)
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [snoozeId])
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["snooze_\(medication.id.uuidString)"])
 
         let fireDate = Date().addingTimeInterval(TimeInterval(minutes * 60))
-        let originalScheduledDate = inferredScheduledDate(for: scheduleTime, relativeTo: Date()) ?? fireDate
+        let originalScheduledDate = scheduledDate ?? inferredScheduledDate(for: scheduleTime, relativeTo: Date()) ?? fireDate
         let content = makeContent(for: medication, scheduleTime: scheduleTime, scheduledDate: originalScheduledDate, isSnooze: true)
 
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(minutes * 60), repeats: false)
@@ -911,6 +1019,19 @@ extension NotificationManager {
         if identifier.hasPrefix("followup_"), identifier.contains("_\(medID)_") { return true }
         if identifier == "snooze_\(medID)" { return true }
         if identifier.hasPrefix("snooze_\(medID)_") { return true }
+        return false
+    }
+
+    static func isManagedDoseReminder(identifier: String, validMedicationIDs: Set<String>) -> Bool {
+        if let medicationID = medicationID(from: identifier), !validMedicationIDs.contains(medicationID) {
+            return false
+        }
+
+        if let medicationID = medicationID(from: identifier) {
+            if identifier.hasPrefix("\(medicationID)_") { return true }
+            if identifier.hasPrefix("followup_"), identifier.contains("_\(medicationID)_") { return true }
+        }
+
         return false
     }
 

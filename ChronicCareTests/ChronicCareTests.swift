@@ -284,4 +284,172 @@ struct ChronicCareTests {
         #expect(calendar.component(.minute, from: dates[0]) == 0)
     }
 
+    // MARK: - DataStore Mutation Tests
+
+    @MainActor
+    @Test func addMedicationRejectsEmptyName() {
+        let store = DataStore()
+        store.clearAll()
+        let med = Medication(name: "", dose: "5mg", timesOfDay: [DateComponents(hour: 8, minute: 0)], remindersEnabled: true)
+        let error = store.addMedication(med)
+        #expect(error != nil)
+        #expect(store.medications.isEmpty)
+    }
+
+    @MainActor
+    @Test func addMedicationAcceptsValidInput() {
+        let store = DataStore()
+        store.clearAll()
+        let med = Medication(name: "Amlodipine", dose: "5mg", timesOfDay: [DateComponents(hour: 8, minute: 0)], remindersEnabled: true)
+        let error = store.addMedication(med)
+        #expect(error == nil)
+        #expect(store.medications.count == 1)
+    }
+
+    @MainActor
+    @Test func updateMedicationRejectsEmptyName() {
+        let store = DataStore()
+        store.clearAll()
+        var med = Medication(name: "Amlodipine", dose: "5mg", timesOfDay: [DateComponents(hour: 8, minute: 0)], remindersEnabled: true)
+        store.addMedication(med)
+        med.name = ""
+        let error = store.updateMedication(med)
+        #expect(error != nil)
+        #expect(store.medications.first?.name == "Amlodipine")
+    }
+
+    @MainActor
+    @Test func addMedicationRejectsNegativePills() {
+        let store = DataStore()
+        store.clearAll()
+        let med = Medication(name: "Test", dose: "5mg", timesOfDay: [], remindersEnabled: false, pillsRemaining: -5)
+        let error = store.addMedication(med)
+        #expect(error != nil)
+        #expect(store.medications.isEmpty)
+    }
+
+    @MainActor
+    @Test func decrementPillsStopsAtZero() {
+        let store = DataStore()
+        store.clearAll()
+        let med = Medication(name: "Test", dose: "5mg", timesOfDay: [DateComponents(hour: 8, minute: 0)], remindersEnabled: false, pillsRemaining: 1, pillsPerDose: 1)
+        store.addMedication(med)
+        store.decrementPills(for: med.id)
+        #expect(store.medications.first?.pillsRemaining == 0)
+        store.decrementPills(for: med.id)
+        #expect(store.medications.first?.pillsRemaining == 0)
+    }
+
+    @MainActor
+    @Test func upsertIntakeReplacesExistingLogForSameScheduleKey() {
+        let store = DataStore()
+        store.clearAll()
+        let med = Medication(name: "Test", dose: "5mg", timesOfDay: [DateComponents(hour: 8, minute: 0)], remindersEnabled: true)
+        store.addMedication(med)
+
+        let comps = DateComponents(hour: 8, minute: 0)
+        store.upsertIntake(medicationID: med.id, status: .snoozed, scheduleTime: comps)
+        #expect(store.intakeLogs.count == 1)
+        #expect(store.intakeLogs.first?.status == .snoozed)
+
+        store.upsertIntake(medicationID: med.id, status: .taken, scheduleTime: comps)
+        #expect(store.intakeLogs.count == 1)
+        #expect(store.intakeLogs.first?.status == .taken)
+    }
+
+    @MainActor
+    @Test func clearAllRemovesEverything() {
+        let store = DataStore()
+        store.clearAll()
+        let med = Medication(name: "Test", dose: "5mg", timesOfDay: [], remindersEnabled: false)
+        store.addMedication(med)
+        store.addMeasurement(Measurement(type: .weight, value: 70, date: Date()))
+        store.upsertIntake(medicationID: med.id, status: .taken, scheduleTime: nil)
+        #expect(!store.medications.isEmpty)
+        store.clearAll()
+        #expect(store.medications.isEmpty)
+        #expect(store.measurements.isEmpty)
+        #expect(store.intakeLogs.isEmpty)
+    }
+
+    // MARK: - AdherenceCalculator Tests
+
+    @Test func adherencePercentWithNoMedsReturnsZero() {
+        let pct = AdherenceCalculator.adherencePercent(medications: [], intakeLogs: [])
+        #expect(pct == 0)
+    }
+
+    @Test func adherencePercentCountsTakenDoses() {
+        let cal = Calendar.current
+        let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 10, hour: 20, minute: 0))!
+        let med = Medication(name: "Test", dose: "5mg", startDate: cal.date(byAdding: .day, value: -3, to: now)!, timesOfDay: [DateComponents(hour: 8, minute: 0)], remindersEnabled: true)
+
+        var logs: [IntakeLog] = []
+        for offset in 0..<3 {
+            let day = cal.date(byAdding: .day, value: -offset, to: now)!
+            let dayStart = cal.startOfDay(for: day)
+            let scheduled = cal.date(bySettingHour: 8, minute: 0, second: 0, of: dayStart)!
+            logs.append(IntakeLog(medicationID: med.id, date: scheduled, status: .taken, scheduleKey: "08:00"))
+        }
+
+        let pct = AdherenceCalculator.adherencePercent(for: med.id, days: 3, medications: [med], intakeLogs: logs, now: now, calendar: cal)
+        #expect(pct > 0.99)
+    }
+
+    @Test func currentStreakCountsConsecutiveTakenDays() {
+        let cal = Calendar.current
+        let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 10, hour: 20, minute: 0))!
+        let med = Medication(name: "Test", dose: "5mg", startDate: cal.date(byAdding: .day, value: -10, to: now)!, timesOfDay: [DateComponents(hour: 8, minute: 0)], remindersEnabled: true)
+
+        var logs: [IntakeLog] = []
+        for offset in 0..<5 {
+            let day = cal.date(byAdding: .day, value: -offset, to: now)!
+            let dayStart = cal.startOfDay(for: day)
+            let scheduled = cal.date(bySettingHour: 8, minute: 0, second: 0, of: dayStart)!
+            logs.append(IntakeLog(medicationID: med.id, date: scheduled, status: .taken, scheduleKey: "08:00"))
+        }
+
+        let streak = AdherenceCalculator.currentStreak(for: med.id, medications: [med], intakeLogs: logs, now: now, calendar: cal)
+        #expect(streak == 5)
+    }
+
+    @Test func consecutiveMissedDaysCountsCorrectly() {
+        let cal = Calendar.current
+        let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 10, hour: 20, minute: 0))!
+        let med = Medication(name: "Test", dose: "5mg", startDate: cal.date(byAdding: .day, value: -10, to: now)!, timesOfDay: [DateComponents(hour: 8, minute: 0)], remindersEnabled: true)
+
+        // Taken 5 days ago, then missed 4 days (yesterday through 4 days ago... wait, let me think)
+        // taken 5 days ago, skipped days -4, -3, -2, -1
+        let fiveDaysAgo = cal.date(byAdding: .day, value: -5, to: now)!
+        let dayStart = cal.startOfDay(for: fiveDaysAgo)
+        let scheduled = cal.date(bySettingHour: 8, minute: 0, second: 0, of: dayStart)!
+        let logs = [
+            IntakeLog(medicationID: med.id, date: scheduled, status: .taken, scheduleKey: "08:00")
+        ]
+
+        let missed = AdherenceCalculator.consecutiveMissedDays(for: med.id, medications: [med], intakeLogs: logs, now: now, calendar: cal)
+        #expect(missed == 4)
+    }
+
+    @Test func adherenceSkipsPRNMedications() {
+        let prn = Medication(name: "Ibuprofen", dose: "200mg", timesOfDay: [], remindersEnabled: false, isAsNeeded: true)
+        let pct = AdherenceCalculator.adherencePercent(medications: [prn], intakeLogs: [])
+        #expect(pct == 0) // no scheduled doses, so 0 expected
+    }
+
+    @Test func monthlyAdherenceReturnsCorrectDays() {
+        let cal = Calendar.current
+        let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 10, hour: 20, minute: 0))!
+        let med = Medication(name: "Test", dose: "5mg", startDate: cal.date(from: DateComponents(year: 2026, month: 4, day: 1))!, timesOfDay: [DateComponents(hour: 8, minute: 0)], remindersEnabled: true)
+
+        let result = AdherenceCalculator.monthlyAdherence(for: med.id, year: 2026, month: 4, medications: [med], intakeLogs: [], now: now, calendar: cal)
+        // Should have entries for April 1-10 (today), not future days
+        #expect(result.count == 10)
+        // All totals should be 1 (one dose per day), taken should be 0
+        for (_, counts) in result {
+            #expect(counts.total == 1)
+            #expect(counts.taken == 0)
+        }
+    }
+
 }

@@ -40,7 +40,7 @@ import UserNotifications
 
         // Cancel follow-up reminders whenever user acts on a notification
         if let comps = scheduleComps {
-            NotificationManager.shared.cancelFollowUps(for: medID, timeComponents: comps)
+            NotificationManager.shared.cancelFollowUps(for: medID, timeComponents: comps, scheduledDate: scheduledDate)
         }
 
         switch response.actionIdentifier {
@@ -62,7 +62,7 @@ import UserNotifications
                     store?.decrementPills(for: medID)
                 }
                 if let store, store.medications.contains(where: { $0.id == medID }) {
-                    NotificationManager.shared.cancelDoseNotifications(for: medID, timeComponents: comps, now: logAt)
+                    NotificationManager.shared.cancelDoseNotifications(for: medID, timeComponents: comps, scheduledDate: scheduledDate ?? logAt, now: logAt)
                     NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
                 }
             } else {
@@ -89,7 +89,7 @@ import UserNotifications
                     )
                 }
                 if let store, store.medications.contains(where: { $0.id == medID }) {
-                    NotificationManager.shared.cancelDoseNotifications(for: medID, timeComponents: comps, now: logAt)
+                    NotificationManager.shared.cancelDoseNotifications(for: medID, timeComponents: comps, scheduledDate: scheduledDate ?? logAt, now: logAt)
                     NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
                 }
             } else {
@@ -105,9 +105,9 @@ import UserNotifications
             case .snooze(let minutes):
                 NotificationManager.shared.incrementSnoozeCount(for: medID, scheduleTime: scheduleComps)
                 if let med = store?.medications.first(where: { $0.id == medID }) {
-                    NotificationManager.shared.scheduleSnooze(for: med, minutes: minutes, scheduleTime: scheduleComps)
+                    NotificationManager.shared.scheduleSnooze(for: med, minutes: minutes, scheduleTime: scheduleComps, scheduledDate: scheduledDate)
                 } else {
-                    NotificationManager.shared.scheduleSnooze(for: medID, minutes: minutes, scheduleTime: scheduleComps)
+                    NotificationManager.shared.scheduleSnooze(for: medID, minutes: minutes, scheduleTime: scheduleComps, scheduledDate: scheduledDate)
                 }
                 if let comps = scheduleComps {
                     let logAt = logDate(from: comps)
@@ -144,7 +144,7 @@ import UserNotifications
                         )
                     }
                     if let store, store.medications.contains(where: { $0.id == medID }) {
-                        NotificationManager.shared.cancelDoseNotifications(for: medID, timeComponents: comps, now: logAt)
+                        NotificationManager.shared.cancelDoseNotifications(for: medID, timeComponents: comps, scheduledDate: scheduledDate ?? logAt, now: logAt)
                         NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
                     }
                 } else {

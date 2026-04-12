@@ -1,28 +1,59 @@
 import Foundation
 
 struct AppBackup: Codable {
-    let version: Int
+    var version: Int
     let date: Date
     let measurements: [Measurement]
     let medications: [Medication]
     let intakeLogs: [IntakeLog]
     var emergencyInfo: EmergencyInfo?
     var caregivers: [CaregiverContact]?
+    var medicationImagesByPath: [String: Data]?
 }
 
 enum BackupManager {
     @MainActor
     static func makeBackup(store: DataStore) throws -> URL {
-        let backup = AppBackup(version: 1, date: Date(), measurements: store.measurements, medications: store.medications, intakeLogs: store.intakeLogs, emergencyInfo: store.emergencyInfo, caregivers: store.caregivers)
+        let medicationImagesByPath = Dictionary(
+            uniqueKeysWithValues: store.medications.compactMap { medication -> (String, Data)? in
+                guard let path = medication.imagePath,
+                      let data = loadMedImageData(path: path) else { return nil }
+                return (path, data)
+            }
+        )
+        let backup = AppBackup(
+            version: BackupManager.currentVersion,
+            date: Date(),
+            measurements: store.measurements,
+            medications: store.medications,
+            intakeLogs: store.intakeLogs,
+            emergencyInfo: store.emergencyInfo,
+            caregivers: store.caregivers,
+            medicationImagesByPath: medicationImagesByPath.isEmpty ? nil : medicationImagesByPath
+        )
         let data = try JSONEncoder().encode(backup)
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("ChronicCare_Backup_\(Int(Date().timeIntervalSince1970)).json")
         try data.write(to: url, options: .atomic)
         return url
     }
 
+    static let currentVersion = 2
+
     static func loadBackup(from url: URL) throws -> AppBackup {
         let data = try Data(contentsOf: url)
-        return try JSONDecoder().decode(AppBackup.self, from: data)
+        let backup = try JSONDecoder().decode(AppBackup.self, from: data)
+        return migrate(backup)
+    }
+
+    /// Migrate older backup versions to the current format.
+    private static func migrate(_ backup: AppBackup) -> AppBackup {
+        var result = backup
+        if result.version < 2 {
+            // v1 -> v2: emergencyInfo and caregivers were added
+            if result.emergencyInfo == nil { result.emergencyInfo = nil }
+            if result.caregivers == nil { result.caregivers = [] }
+        }
+        return result
     }
 
     // MARK: - CSV Export

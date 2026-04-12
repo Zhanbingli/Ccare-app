@@ -175,6 +175,13 @@
 "Data" = "数据";
 "Haptic Feedback" = "触觉反馈";
 
+/* Units */
+"mmHg" = "mmHg";
+"mg/dL" = "mg/dL";
+"kg" = "kg";
+"bpm" = "bpm";
+"Pills remaining cannot be negative." = "剩余药片数不能为负数。";
+
 /* Goals */
 "Blood Glucose" = "血糖";
 "Heart Rate" = "心率";
@@ -857,3 +864,33 @@
 "Use these numbers to spot missed doses and reminder gaps quickly." = "用这些数字快速发现漏服和提醒缺口。";
 "Keep the most recent reading visible so trends always have context." = "把最近一次读数放在这里，查看趋势时更有上下文。";
 "Open the detailed views only when you want to inspect history more closely." = "只有在你想进一步查看历史时，再进入详细视图。";
+"Medication Details" = "药物详情";
+"Update the saved details below if this medication changes." = "如果这款药发生变化，可以在下面更新保存的信息。";
+"Add instructions, supply tracking, category, or a photo only if they help later." = "只有在后续真的有帮助时，再补充服用说明、库存、分类或图片。";
+"30-day miss rate" = "30 天漏服率";
+"On track" = "状态稳定";
+"As-needed medication. Log only when you take it." = "这是按需药物，只在实际服用时记录即可。";
+"No schedule has been set yet." = "这款药还没有设置固定时间。";
+"This medication is logged only when needed, so fixed-dose adherence is not tracked." = "这款药按需记录，所以不会统计固定剂量依从率。";
+"Add reminder times if you want this medication to show up as a scheduled daily task." = "如果你希望它出现在每日固定任务里，需要先补充提醒时间。";
+"Reminder times are saved, but notifications are currently turned off for this medication." = "提醒时间已经保存，但这款药当前关闭了通知。";
+"This medication has not built enough scheduled history yet. Keep logging doses to make the review more useful." = "这款药还没有积累足够的固定服药历史，继续记录后这个回顾会更有价值。";
+"This medication was missed for %lld of the last %lld scheduled doses. Review the timing or reminder pattern." = "最近 %2$lld 次应服剂量里漏服了 %1$lld 次，建议检查时间设置或提醒模式。";
+"%lld of the last %lld scheduled doses were completed. The recent pattern looks stable." = "最近 %2$lld 次应服剂量里完成了 %1$lld 次，整体看起来比较稳定。";
+"%lld of %lld scheduled doses were taken in the past 30 days." = "过去 30 天里，%1$lld / %2$lld 次应服剂量已完成。";
+"Adjust instructions, supply tracking, category, or photo only when they matter for follow-up." = "只有在后续管理真的需要时，再调整服用说明、库存、分类或图片。";
+"Current Plan" = "当前方案";
+"No frequency selected" = "还没有选择频率";
+"The app will notify you at the times above." = "应用会在上面的时间点提醒你。";
+"Times stay saved, but notifications are turned off." = "时间仍会保留，但通知目前关闭。";
+"Adjust the times if needed. Frequency controls how many reminders are created each day." = "如果需要，可以微调具体时间。频率决定每天会生成几次提醒。";
+"Review the current plan first, then update only the part that needs to change." = "先看当前方案，再只修改真正需要变更的部分。";
+"Current Schedule" = "当前计划";
+"Change Frequency" = "修改频率";
+"Edit Times" = "调整时间";
+"Reminder Settings" = "提醒设置";
+"Reminders on" = "提醒开启";
+"Reminders off" = "提醒关闭";
+"Choose how many times per day this medication should appear." = "选择这款药每天应该出现几次。";
+"Adjust the time values here without changing the frequency." = "这里只调整具体时间，不改变每日次数。";
+"No times set" = "还没有设置时间";

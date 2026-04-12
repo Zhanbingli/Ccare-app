@@ -1,4 +1,7 @@
 import SwiftUI
+import Contacts
+import ContactsUI
+import UIKit
 
 // MARK: - Edit View
 
@@ -9,6 +12,11 @@ struct EmergencyInfoEditView: View {
     @State private var conditions: String
     @State private var contacts: [EmergencyContact]
     @State private var showAddContact = false
+    @State private var showAddContactOptions = false
+    @State private var showContactPicker = false
+    @State private var showContactPermissionAlert = false
+    @State private var draftContactName = ""
+    @State private var draftContactPhone = ""
 
     init() {
         _bloodType = State(initialValue: "")
@@ -20,14 +28,14 @@ struct EmergencyInfoEditView: View {
     var body: some View {
         Form {
             Section {
-                Picker(NSLocalizedString("Blood Type", comment: ""), selection: $bloodType) {
-                    Text(NSLocalizedString("Not set", comment: "")).tag("")
-                    ForEach(["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"], id: \.self) { t in
-                        Text(t).tag(t)
-                    }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(NSLocalizedString("Emergency Summary", comment: ""))
+                        .appFont(.headline)
+                    Text(emergencyEditSummary)
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
                 }
-            } header: {
-                Text(NSLocalizedString("Basic Info", comment: ""))
+                .padding(.vertical, 4)
             }
 
             Section {
@@ -36,7 +44,9 @@ struct EmergencyInfoEditView: View {
             } header: {
                 Text(NSLocalizedString("Allergies", comment: ""))
             } footer: {
-                Text(NSLocalizedString("Separate multiple items with commas", comment: ""))
+                Text(allergies.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                     ? NSLocalizedString("No allergies added yet. Separate multiple items with commas.", comment: "")
+                     : NSLocalizedString("Separate multiple items with commas", comment: ""))
             }
 
             Section {
@@ -44,40 +54,85 @@ struct EmergencyInfoEditView: View {
                     .lineLimit(2...4)
             } header: {
                 Text(NSLocalizedString("Medical Conditions", comment: ""))
+            } footer: {
+                Text(conditions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                     ? NSLocalizedString("No medical conditions added yet.", comment: "")
+                     : NSLocalizedString("List ongoing diagnoses that matter during appointments or emergencies.", comment: ""))
             }
 
             Section {
-                ForEach(contacts) { contact in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(contact.name).appFont(.subheadline)
-                        HStack(spacing: 8) {
-                            Text(contact.relationship)
-                                .appFont(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(contact.phone)
-                                .appFont(.caption)
-                                .foregroundStyle(.blue)
-                        }
+                if contacts.isEmpty {
+                    Text(NSLocalizedString("No emergency contact added yet.", comment: ""))
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(contacts) { contact in
+                        emergencyContactEditorRow(contact)
                     }
+                    .onDelete { contacts.remove(atOffsets: $0) }
                 }
-                .onDelete { contacts.remove(atOffsets: $0) }
 
                 Button {
-                    showAddContact = true
+                    showAddContactOptions = true
                 } label: {
                     Label(NSLocalizedString("Add Contact", comment: ""), systemImage: "plus.circle.fill")
                 }
             } header: {
                 Text(NSLocalizedString("Emergency Contacts", comment: ""))
+            } footer: {
+                Text(NSLocalizedString("Use emergency contacts for urgent or hospital situations. This is different from caregiver support.", comment: ""))
+            }
+
+            Section {
+                Picker(NSLocalizedString("Blood Type", comment: ""), selection: $bloodType) {
+                    Text(NSLocalizedString("Not set", comment: "")).tag("")
+                    ForEach(["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"], id: \.self) { t in
+                        Text(t).tag(t)
+                    }
+                }
+            } header: {
+                Text(NSLocalizedString("Blood Type", comment: ""))
+            } footer: {
+                Text(NSLocalizedString("Helpful in emergencies, but lower priority than allergies and contacts.", comment: ""))
             }
         }
         .navigationTitle(NSLocalizedString("Emergency Info", comment: ""))
         .onAppear { loadFromStore() }
         .onDisappear { saveToStore() }
         .sheet(isPresented: $showAddContact) {
-            AddEmergencyContactSheet { contact in
+            AddEmergencyContactSheet(initialName: draftContactName, initialPhone: draftContactPhone) { contact in
                 contacts.append(contact)
+                draftContactName = ""
+                draftContactPhone = ""
             }
+        }
+        .sheet(isPresented: $showContactPicker) {
+            EmergencyContactPickerSheet { contact in
+                draftContactName = CNContactFormatter.string(from: contact, style: .fullName) ?? contact.givenName
+                draftContactPhone = preferredPhoneNumber(from: contact) ?? ""
+                showAddContact = true
+            }
+        }
+        .confirmationDialog(NSLocalizedString("Add Contact", comment: ""), isPresented: $showAddContactOptions, titleVisibility: .visible) {
+            Button(NSLocalizedString("From Contacts", comment: "")) {
+                startContactImport()
+            }
+            Button(NSLocalizedString("Enter Manually", comment: "")) {
+                draftContactName = ""
+                draftContactPhone = ""
+                showAddContact = true
+            }
+            Button(NSLocalizedString("Cancel", comment: ""), role: .cancel) { }
+        }
+        .alert(NSLocalizedString("Contacts Access Needed", comment: ""), isPresented: $showContactPermissionAlert) {
+            Button(NSLocalizedString("Open Settings", comment: "")) {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button(NSLocalizedString("Cancel", comment: ""), role: .cancel) { }
+        } message: {
+            Text(NSLocalizedString("Allow Contacts access to choose an emergency contact from your address book.", comment: ""))
         }
     }
 
@@ -98,22 +153,111 @@ struct EmergencyInfoEditView: View {
         )
         store.updateEmergencyInfo(info)
     }
+
+    private func startContactImport() {
+        let store = CNContactStore()
+        switch CNContactStore.authorizationStatus(for: .contacts) {
+        case .authorized:
+            showContactPicker = true
+        case .notDetermined:
+            store.requestAccess(for: .contacts) { granted, _ in
+                DispatchQueue.main.async {
+                    if granted {
+                        showContactPicker = true
+                    } else {
+                        showContactPermissionAlert = true
+                    }
+                }
+            }
+        case .denied, .restricted:
+            showContactPermissionAlert = true
+        @unknown default:
+            showContactPermissionAlert = true
+        }
+    }
+
+    private func preferredPhoneNumber(from contact: CNContact) -> String? {
+        if let mobile = contact.phoneNumbers.first(where: {
+            let label = CNLabeledValue<NSString>.localizedString(forLabel: $0.label ?? "")
+            return label.localizedCaseInsensitiveContains("mobile") || label.localizedCaseInsensitiveContains("iPhone")
+        }) {
+            return mobile.value.stringValue
+        }
+        return contact.phoneNumbers.first?.value.stringValue
+    }
+
+    private var emergencyEditSummary: String {
+        var completed = 0
+        if !allergies.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { completed += 1 }
+        if !conditions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { completed += 1 }
+        if !contacts.isEmpty { completed += 1 }
+        if !bloodType.isEmpty { completed += 1 }
+
+        if completed == 0 {
+            return NSLocalizedString("Add the details most often needed during clinic visits or emergencies.", comment: "")
+        }
+        return String(format: NSLocalizedString("%lld of 4 key sections completed.", comment: ""), completed)
+    }
+
+    private func emergencyContactEditorRow(_ contact: EmergencyContact) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Circle()
+                .fill(Color.red.opacity(0.14))
+                .frame(width: 36, height: 36)
+                .overlay(
+                    Image(systemName: "phone.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.red)
+                )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(contact.name)
+                    .appFont(.subheadline)
+                    .fontWeight(.semibold)
+                Text(contact.relationship)
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+                Text(contact.phone)
+                    .appFont(.caption)
+                    .foregroundStyle(.blue)
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, 2)
+    }
 }
 
 private struct AddEmergencyContactSheet: View {
+    let initialName: String
+    let initialPhone: String
     var onSave: (EmergencyContact) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var phone = ""
     @State private var relationship = ""
 
+    init(initialName: String = "", initialPhone: String = "", onSave: @escaping (EmergencyContact) -> Void) {
+        self.initialName = initialName
+        self.initialPhone = initialPhone
+        self.onSave = onSave
+        _name = State(initialValue: initialName)
+        _phone = State(initialValue: initialPhone)
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                TextField(NSLocalizedString("Name", comment: ""), text: $name)
-                TextField(NSLocalizedString("Phone", comment: ""), text: $phone)
-                    .keyboardType(.phonePad)
-                TextField(NSLocalizedString("Relationship", comment: ""), text: $relationship)
+                Section {
+                    TextField(NSLocalizedString("Name", comment: ""), text: $name)
+                    TextField(NSLocalizedString("Phone", comment: ""), text: $phone)
+                        .keyboardType(.phonePad)
+                    TextField(NSLocalizedString("Relationship", comment: ""), text: $relationship)
+                } header: {
+                    Text(NSLocalizedString("Contact", comment: ""))
+                } footer: {
+                    Text(NSLocalizedString("Importing from Contacts fills name and phone. Add the relationship before saving.", comment: ""))
+                }
             }
             .navigationTitle(NSLocalizedString("Add Contact", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
@@ -149,6 +293,10 @@ struct EmergencyCardView: View {
             || !((info?.emergencyContacts ?? []).isEmpty)
     }
 
+    private var hasShareableSummary: Bool {
+        hasEmergencyDetails || !store.medications.isEmpty || !latestMeasurementsByType.isEmpty || !store.caregivers.isEmpty
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
@@ -159,6 +307,7 @@ struct EmergencyCardView: View {
                 coreMedicalInfoCards
                 recentMeasurementsCard
                 emergencyContactsCard
+                caregiverSupportCard
                 shareSummaryButton
             }
             .padding()
@@ -289,8 +438,31 @@ struct EmergencyCardView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Label(NSLocalizedString("Emergency Contacts", comment: ""), systemImage: "phone.fill")
                         .appFont(.headline)
+                    Text(NSLocalizedString("Use these people in urgent or emergency situations, such as going to the hospital or needing immediate help.", comment: ""))
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                     ForEach(contacts) { contact in
                         emergencyContactRow(contact)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var caregiverSupportCard: some View {
+        if !store.caregivers.isEmpty {
+            Card {
+                VStack(alignment: .leading, spacing: 12) {
+                    Label(NSLocalizedString("Caregiver Support", comment: ""), systemImage: "person.2.fill")
+                        .appFont(.headline)
+                    Text(NSLocalizedString("Caregivers are for routine support and missed-dose follow-up. They are separate from emergency contacts.", comment: ""))
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    ForEach(store.caregivers) { caregiver in
+                        caregiverSummaryRow(caregiver)
                     }
                 }
             }
@@ -302,12 +474,14 @@ struct EmergencyCardView: View {
             shareText = buildEmergencySummary()
             showShare = true
         } label: {
-            Label(NSLocalizedString("Share Emergency Info", comment: ""), systemImage: "square.and.arrow.up")
+            Label(NSLocalizedString("Share Medical Summary", comment: ""), systemImage: "square.and.arrow.up")
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
         .tint(.red)
+        .disabled(!hasShareableSummary)
+        .opacity(hasShareableSummary ? 1 : 0.6)
     }
 
     private var adherenceSummaryText: String {
@@ -444,6 +618,27 @@ struct EmergencyCardView: View {
         }
     }
 
+    private func caregiverSummaryRow(_ caregiver: CaregiverContact) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(caregiver.name)
+                    .appFont(.subheadline)
+                    .fontWeight(.semibold)
+                if let phone = caregiver.phone, !phone.isEmpty {
+                    Text(phone)
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            Text(caregiver.notifyOnMiss
+                 ? NSLocalizedString("Missed-dose alerts on", comment: "")
+                 : NSLocalizedString("Saved", comment: ""))
+                .appFont(.caption)
+                .foregroundStyle(caregiver.notifyOnMiss ? .orange : .secondary)
+        }
+    }
+
     private func timeText(_ components: DateComponents) -> String {
         let hour = components.hour ?? 0
         let minute = components.minute ?? 0
@@ -499,6 +694,55 @@ struct EmergencyCardView: View {
                 lines.append("  • \(c.name) (\(c.relationship)): \(c.phone)")
             }
         }
+        let caregivers = store.caregivers
+        if !caregivers.isEmpty {
+            lines.append("")
+            lines.append("Caregiver Support:")
+            for caregiver in caregivers {
+                if let phone = caregiver.phone, !phone.isEmpty {
+                    lines.append("  • \(caregiver.name): \(phone)")
+                } else {
+                    lines.append("  • \(caregiver.name)")
+                }
+            }
+        }
         return lines.joined(separator: "\n")
+    }
+}
+
+private struct EmergencyContactPickerSheet: UIViewControllerRepresentable {
+    var onSelect: (CNContact) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onSelect: onSelect, dismiss: dismiss)
+    }
+
+    func makeUIViewController(context: Context) -> CNContactPickerViewController {
+        let picker = CNContactPickerViewController()
+        picker.delegate = context.coordinator
+        picker.displayedPropertyKeys = [CNContactGivenNameKey, CNContactFamilyNameKey, CNContactPhoneNumbersKey]
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: CNContactPickerViewController, context: Context) {}
+
+    final class Coordinator: NSObject, CNContactPickerDelegate {
+        private let onSelect: (CNContact) -> Void
+        private let dismiss: DismissAction
+
+        init(onSelect: @escaping (CNContact) -> Void, dismiss: DismissAction) {
+            self.onSelect = onSelect
+            self.dismiss = dismiss
+        }
+
+        func contactPicker(_ picker: CNContactPickerViewController, didSelect contact: CNContact) {
+            onSelect(contact)
+            dismiss()
+        }
+
+        func contactPickerDidCancel(_ picker: CNContactPickerViewController) {
+            dismiss()
+        }
     }
 }

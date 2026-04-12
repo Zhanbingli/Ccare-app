@@ -74,12 +74,12 @@ struct HealthView: View {
                 }
             }
             .sheet(isPresented: $showAdd) {
-                AddMedicationView { med in
+                MedicationFormView(editing: nil, onSave: { med in
                     store.addMedication(med)
                     NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
                     NotificationManager.shared.updateBadge(store: store)
                     refreshNotificationStatus()
-                }
+                })
             }
             .sheet(isPresented: $showAddMeasurement) {
                 AddMeasurementView { measurement in
@@ -102,7 +102,7 @@ struct HealthView: View {
                 .environmentObject(store)
             }
             .sheet(item: $editTarget) { med in
-                EditMedicationView(medication: med, onSave: { updated in
+                MedicationFormView(editing: med, onSave: { updated in
                     store.updateMedication(updated)
                     NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
                     NotificationManager.shared.updateBadge(store: store)
@@ -810,7 +810,7 @@ private extension HealthView {
                 )
                 store.decrementPills(for: med.id)
                 NotificationManager.shared.suppressToday(for: med.id, timeComponents: dose.comps)
-                NotificationManager.shared.cancelDoseNotifications(for: med.id, timeComponents: dose.comps)
+                NotificationManager.shared.cancelDoseNotifications(for: med.id, timeComponents: dose.comps, scheduledDate: dose.scheduledDate, now: dose.scheduledDate)
                 NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
                 NotificationManager.shared.updateBadge(store: store)
                 Haptics.success()
@@ -984,7 +984,7 @@ private extension HealthView {
     }
 }
 
-private struct MedicationDetailView: View {
+struct MedicationDetailView: View {
     @EnvironmentObject var store: DataStore
     let medication: Medication
     let onEdit: (Medication) -> Void
@@ -1107,6 +1107,26 @@ private struct MedicationDetailView: View {
             return NSLocalizedString("Reminder times need setup.", comment: "")
         }
         return String(format: NSLocalizedString("Next: %@", comment: ""), nextDoseText)
+    }
+
+    private var detailHeadline: String {
+        if medication.isAsNeeded == true {
+            return NSLocalizedString("Take only when needed", comment: "")
+        }
+        if !medication.remindersEnabled {
+            return NSLocalizedString("Reminders are currently off", comment: "")
+        }
+        if medication.timesOfDay.isEmpty {
+            return NSLocalizedString("Schedule needs setup", comment: "")
+        }
+        return String(format: NSLocalizedString("Next dose at %@", comment: ""), nextDoseText)
+    }
+
+    private var detailSupportingLine: String {
+        if medication.isAsNeeded == true {
+            return NSLocalizedString("Log each dose from Today whenever you take it.", comment: "")
+        }
+        return scheduleText
     }
 
     private var reminderSummary: String {
@@ -1236,51 +1256,60 @@ private struct MedicationDetailView: View {
         correlatedTypes.contains { relatedMeasurements(for: $0) != nil }
     }
 
+    @ViewBuilder
+    private var heroMedicationThumbnail: some View {
+        if let path = medication.imagePath, let ui = loadMedImage(path: path) {
+            Image(uiImage: ui)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 52, height: 52)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        } else {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(detailAccentTint.opacity(0.14))
+                .frame(width: 52, height: 52)
+                .overlay(
+                    Image(systemName: medication.isAsNeeded == true ? "cross.case.circle.fill" : "pills.fill")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(detailAccentTint)
+                )
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     TintedCard(tint: detailAccentTint) {
                         VStack(alignment: .leading, spacing: 16) {
-                            HStack(alignment: .top) {
-                                HStack(alignment: .center, spacing: 12) {
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .fill(detailAccentTint.opacity(0.14))
-                                        .frame(width: 52, height: 52)
-                                        .overlay(
-                                            Image(systemName: medication.isAsNeeded == true ? "cross.case.circle.fill" : "pills.fill")
-                                                .font(.system(size: 22, weight: .semibold))
-                                                .foregroundStyle(detailAccentTint)
-                                        )
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text(medication.name)
-                                            .appFont(.title)
-                                            .fontWeight(.bold)
-                                        Text(medication.dose)
-                                            .appFont(.headline)
-                                            .foregroundStyle(.secondary)
-                                    }
+                            HStack(alignment: .center, spacing: 12) {
+                                heroMedicationThumbnail
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(medication.name)
+                                        .appFont(.title)
+                                        .fontWeight(.bold)
+                                    Text(medication.dose)
+                                        .appFont(.headline)
+                                        .foregroundStyle(.secondary)
                                 }
                                 Spacer()
-                                reminderBadge(reminderStateLabel, tint: reminderStateTint)
+                            }
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(detailHeadline)
+                                    .appFont(.headline)
+                                    .fontWeight(.semibold)
+                                Text(detailSupportingLine)
+                                    .appFont(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
 
                             HStack(spacing: 8) {
+                                reminderBadge(reminderStateLabel, tint: reminderStateTint)
                                 reminderBadge(modeLabel, tint: modeTint)
                                 if let categoryName = medication.displayCategoryName {
                                     reminderBadge(categoryName, tint: .secondary)
-                                }
-                            }
-
-                            InsetPanel(tint: detailAccentTint) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(detailStatusLine)
-                                        .appFont(.subheadline)
-                                        .fontWeight(.semibold)
-                                    Text(scheduleText)
-                                        .appFont(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
                         }
@@ -1289,56 +1318,28 @@ private struct MedicationDetailView: View {
                     Card {
                         VStack(alignment: .leading, spacing: 14) {
                             HStack {
-                                Text(NSLocalizedString("Snapshot", comment: ""))
+                                Text(NSLocalizedString("Next Dose", comment: ""))
                                     .appFont(.headline)
                                 Spacer()
                                 reminderBadge(detailStatusLine, tint: reminderStateTint)
                             }
                             LazyVGrid(columns: snapshotColumns, spacing: 10) {
+                                detailMetric(value: nextDoseText, label: NSLocalizedString("Scheduled", comment: ""), tint: .blue)
                                 detailMetric(value: lastTakenText, label: NSLocalizedString("Last taken", comment: ""), tint: .green)
-                                detailMetric(value: nextDoseText, label: NSLocalizedString("Next dose", comment: ""), tint: .blue)
-                                detailMetric(value: String(format: "%.0f%%", adherence7 * 100), label: NSLocalizedString("7-day", comment: ""), tint: adherence7 >= 0.8 ? .green : adherence7 >= 0.5 ? .orange : .red)
-                                detailMetric(value: "\(streakCount)", label: NSLocalizedString("day streak", comment: ""), tint: .blue)
-                            }
-                        }
-                    }
-
-                    Card {
-                        NavigationLink {
-                            AdherenceCalendarView(medicationID: medication.id)
-                        } label: {
-                            InsetPanel {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(NSLocalizedString("Adherence History", comment: ""))
-                                            .appFont(.headline)
-                                        Text(NSLocalizedString("Review daily check-ins and missed doses.", comment: ""))
-                                            .appFont(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundStyle(.tertiary)
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    Card {
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack {
-                                Text(NSLocalizedString("Reminder Strategy", comment: ""))
-                                    .appFont(.headline)
-                                Spacer()
-                                reminderBadge(reminderRiskLabel, tint: reminderRiskTint)
                             }
                             InsetPanel(tint: reminderRiskTint) {
                                 VStack(alignment: .leading, spacing: 6) {
+                                    HStack {
+                                        Text(NSLocalizedString("Reminder Strategy", comment: ""))
+                                            .appFont(.subheadline)
+                                            .fontWeight(.semibold)
+                                        Spacer()
+                                        reminderBadge(reminderRiskLabel, tint: reminderRiskTint)
+                                    }
                                     Text(reminderSummary)
-                                        .appFont(.subheadline)
-                                        .fontWeight(.semibold)
+                                        .appFont(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
                                     Text(reminderExplanation)
                                         .appFont(.caption)
                                         .foregroundStyle(.secondary)
@@ -1352,6 +1353,39 @@ private struct MedicationDetailView: View {
                                 .buttonStyle(.bordered)
                                 .controlSize(.small)
                             }
+                        }
+                    }
+
+                    Card {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text(NSLocalizedString("Adherence", comment: ""))
+                                .appFont(.headline)
+                            LazyVGrid(columns: snapshotColumns, spacing: 10) {
+                                detailMetric(value: String(format: "%.0f%%", adherence7 * 100), label: NSLocalizedString("7-day", comment: ""), tint: adherence7 >= 0.8 ? .green : adherence7 >= 0.5 ? .orange : .red)
+                                detailMetric(value: String(format: "%.0f%%", adherence30 * 100), label: NSLocalizedString("30-day", comment: ""), tint: adherence30 >= 0.8 ? .green : adherence30 >= 0.5 ? .orange : .red)
+                                detailMetric(value: "\(streakCount)", label: NSLocalizedString("day streak", comment: ""), tint: .blue)
+                            }
+
+                            NavigationLink {
+                                AdherenceCalendarView(medicationID: medication.id)
+                            } label: {
+                                InsetPanel {
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(NSLocalizedString("Adherence History", comment: ""))
+                                                .appFont(.headline)
+                                            Text(NSLocalizedString("Review daily check-ins and missed doses.", comment: ""))
+                                                .appFont(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
 
@@ -1449,19 +1483,19 @@ private struct MedicationDetailView: View {
                         }
                     }
 
-                    Button {
-                        onEdit(medication)
-                    } label: {
-                        Text(NSLocalizedString("Edit Medication", comment: ""))
-                            .appFont(.subheadline)
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
                 }
                 .padding(16)
             }
             .navigationTitle(NSLocalizedString("Medication Detail", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(NSLocalizedString("Edit", comment: "")) {
+                        onEdit(medication)
+                    }
+                    .font(.body.weight(.semibold))
+                }
+            }
         }
     }
 
@@ -1659,7 +1693,7 @@ struct ReminderDiagnosticsView: View {
         .navigationTitle(NSLocalizedString("Reminder Coverage", comment: ""))
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $editTarget) { med in
-            EditMedicationView(medication: med, onSave: { updated in
+            MedicationFormView(editing: med, onSave: { updated in
                 store.updateMedication(updated)
                 NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
                 NotificationManager.shared.updateBadge(store: store)

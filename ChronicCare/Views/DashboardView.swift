@@ -133,14 +133,14 @@ struct DashboardView: View {
                 .padding(.bottom, 24)
             }
             .sheet(isPresented: $showAddMedication) {
-                AddMedicationView { med in
+                MedicationFormView(editing: nil, onSave: { med in
                     store.addMedication(med)
                     NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
                     NotificationManager.shared.updateBadge(store: store)
-                }
+                })
             }
             .sheet(item: $reminderFixTarget) { med in
-                EditMedicationView(medication: med, onSave: { updated in
+                MedicationFormView(editing: med, onSave: { updated in
                     store.updateMedication(updated)
                     NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
                     NotificationManager.shared.updateBadge(store: store)
@@ -577,7 +577,7 @@ private extension DashboardView {
             at: item.time,
             scheduledDate: item.time
         )
-        NotificationManager.shared.cancelDoseNotifications(for: item.med.id, timeComponents: comps, now: item.time)
+        NotificationManager.shared.cancelDoseNotifications(for: item.med.id, timeComponents: comps, scheduledDate: item.time, now: item.time)
         NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
         NotificationManager.shared.updateBadge(store: store)
         Haptics.impact(.light)
@@ -591,7 +591,7 @@ private extension DashboardView {
         switch result {
         case .snooze(let minutes):
             NotificationManager.shared.incrementSnoozeCount(for: item.med.id, scheduleTime: comps)
-            NotificationManager.shared.scheduleSnooze(for: item.med, minutes: minutes, scheduleTime: comps)
+            NotificationManager.shared.scheduleSnooze(for: item.med, minutes: minutes, scheduleTime: comps, scheduledDate: item.time)
             if Calendar.current.isDateInToday(item.time) {
                 NotificationManager.shared.suppressToday(for: item.med.id, timeComponents: comps)
             }
@@ -1294,7 +1294,7 @@ private extension DashboardView {
         )
         store.decrementPills(for: item.med.id)
         NotificationManager.shared.suppressToday(for: item.med.id, timeComponents: comps)
-        NotificationManager.shared.cancelDoseNotifications(for: item.med.id, timeComponents: comps)
+        NotificationManager.shared.cancelDoseNotifications(for: item.med.id, timeComponents: comps, scheduledDate: item.time, now: item.time)
         NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
         NotificationManager.shared.updateBadge(store: store)
         Haptics.success()

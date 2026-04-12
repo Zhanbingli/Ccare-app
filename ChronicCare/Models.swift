@@ -14,10 +14,10 @@ enum MeasurementType: String, CaseIterable, Codable, Identifiable {
 
     var unit: String {
         switch self {
-        case .bloodPressure: return "mmHg"
-        case .bloodGlucose: return "mg/dL"
-        case .weight: return "kg"
-        case .heartRate: return "bpm"
+        case .bloodPressure: return NSLocalizedString("mmHg", comment: "Blood pressure unit")
+        case .bloodGlucose: return NSLocalizedString("mg/dL", comment: "Blood glucose unit")
+        case .weight: return NSLocalizedString("kg", comment: "Weight unit")
+        case .heartRate: return NSLocalizedString("bpm", comment: "Heart rate unit")
         }
     }
 }

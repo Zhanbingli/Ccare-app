@@ -66,7 +66,13 @@ final class DataStore: ObservableObject {
     }
     func removeMeasurement(at offsets: IndexSet) { measurements.remove(atOffsets: offsets) }
 
-    func addMedication(_ item: Medication) { medications.append(item) }
+    /// Returns nil on success, or a validation error message.
+    @discardableResult
+    func addMedication(_ item: Medication) -> String? {
+        if let error = validateMedication(item) { return error }
+        medications.append(item)
+        return nil
+    }
     func removeMedication(at offsets: IndexSet) {
         let removedIDs = offsets.map { medications[$0].id }
         medications.remove(atOffsets: offsets)
@@ -74,10 +80,22 @@ final class DataStore: ObservableObject {
             MedicationRuleStore.shared.removeOverride(for: id)
         }
     }
-    func updateMedication(_ item: Medication) {
+    @discardableResult
+    func updateMedication(_ item: Medication) -> String? {
+        if let error = validateMedication(item) { return error }
         if let idx = medications.firstIndex(where: { $0.id == item.id }) {
             medications[idx] = item
         }
+        return nil
+    }
+
+    private func validateMedication(_ item: Medication) -> String? {
+        if case .error(let msg) = DataValidator.validateMedicationName(item.name) { return msg }
+        if item.remindersEnabled && item.isAsNeeded != true {
+            if case .error(let msg) = DataValidator.validateMedicationSchedule(item.timesOfDay) { return msg }
+        }
+        if let remaining = item.pillsRemaining, remaining < 0 { return NSLocalizedString("Pills remaining cannot be negative.", comment: "") }
+        return nil
     }
     // Ensure one final status per day per medication per scheduleKey.
     // Callers can override the key for PRN logging where multiple same-day entries are valid.
@@ -126,7 +144,7 @@ final class DataStore: ObservableObject {
             if missed >= 2 {
                 let notifyCaregivers = caregivers.filter { $0.notifyOnMiss }
                 for cg in notifyCaregivers {
-                    NotificationManager.shared.sendCaregiverReminder(caregiverName: cg.name, medicationName: medName, missedDays: missed)
+                    NotificationManager.shared.sendCaregiverReminder(caregiverID: cg.id, caregiverName: cg.name, medicationName: medName, missedDays: missed)
                 }
             }
         }
@@ -148,11 +166,16 @@ final class DataStore: ObservableObject {
     }
 
     func clearAll() {
+        medications.forEach {
+            removeMedImage(path: $0.imagePath)
+            MedicationRuleStore.shared.removeOverride(for: $0.id)
+        }
         measurements.removeAll()
         medications.removeAll()
         intakeLogs.removeAll()
         emergencyInfo = nil
         caregivers.removeAll()
+        saveEmergencyInfo()
     }
 
     // MARK: - Emergency Info
@@ -172,57 +195,64 @@ final class DataStore: ObservableObject {
 
     // MARK: - Import Backup
     func importBackup(_ backup: AppBackup) {
+        medications.forEach { removeMedImage(path: $0.imagePath) }
+        let restoredMedications = backup.medications.map { medication -> Medication in
+            guard let path = medication.imagePath else { return medication }
+            guard let data = backup.medicationImagesByPath?[path] else {
+                var sanitized = medication
+                sanitized.imagePath = nil
+                return sanitized
+            }
+            restoreMedImageData(data, path: path)
+            return medication
+        }
         measurements = backup.measurements.sorted(by: { $0.date > $1.date })
-        medications = backup.medications
+        medications = restoredMedications
         intakeLogs = backup.intakeLogs
-        if let info = backup.emergencyInfo { emergencyInfo = info; saveEmergencyInfo() }
-        if let cg = backup.caregivers { caregivers = cg }
+        emergencyInfo = backup.emergencyInfo
+        saveEmergencyInfo()
+        caregivers = backup.caregivers ?? []
     }
 
     // MARK: - Load/Save
     private func load() {
-        do {
-            let data = try Data(contentsOf: measurementsURL)
-            let decoded = try JSONDecoder().decode([Measurement].self, from: data)
-            self.measurements = decoded.sorted(by: { $0.date > $1.date })
-        } catch {
-            // First launch or decode error; start empty but log
-            if (error as NSError).domain != NSCocoaErrorDomain {
-                #if DEBUG
-                print("Load measurements error: \(error)")
-                #endif
-            }
-        }
-        do {
-            let data = try Data(contentsOf: medicationsURL)
-            let decoded = try JSONDecoder().decode([Medication].self, from: data)
-            self.medications = decoded
-        } catch {
-            if (error as NSError).domain != NSCocoaErrorDomain {
-                #if DEBUG
-                print("Load medications error: \(error)")
-                #endif
-            }
-        }
-        do {
-            let data = try Data(contentsOf: intakeLogsURL)
-            let decoded = try JSONDecoder().decode([IntakeLog].self, from: data)
-            self.intakeLogs = decoded
-        } catch {
-            if (error as NSError).domain != NSCocoaErrorDomain {
-                #if DEBUG
-                print("Load intake logs error: \(error)")
-                #endif
-            }
-        }
+        self.measurements = loadResilient(from: measurementsURL, label: "measurements").sorted(by: { $0.date > $1.date })
+        self.medications = loadResilient(from: medicationsURL, label: "medications")
+        self.intakeLogs = loadResilient(from: intakeLogsURL, label: "intake logs")
         do {
             let data = try Data(contentsOf: emergencyInfoURL)
             self.emergencyInfo = try JSONDecoder().decode(EmergencyInfo.self, from: data)
         } catch { /* first launch or no data */ }
-        do {
-            let data = try Data(contentsOf: caregiversURL)
-            self.caregivers = try JSONDecoder().decode([CaregiverContact].self, from: data)
-        } catch { /* first launch or no data */ }
+        self.caregivers = loadResilient(from: caregiversURL, label: "caregivers")
+    }
+
+    /// Decode an array resiliently: skip individual bad records instead of losing all data.
+    private func loadResilient<T: Decodable>(from url: URL, label: String) -> [T] {
+        guard let data = try? Data(contentsOf: url) else { return [] }
+        // Fast path: try decoding the full array first
+        if let decoded = try? JSONDecoder().decode([T].self, from: data) {
+            return decoded
+        }
+        // Slow path: decode element-by-element, skipping corrupt records
+        guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            #if DEBUG
+            print("Load \(label): file is not a JSON array, starting empty")
+            #endif
+            return []
+        }
+        var results: [T] = []
+        for (index, element) in jsonArray.enumerated() {
+            do {
+                let elementData = try JSONSerialization.data(withJSONObject: element)
+                let decoded = try JSONDecoder().decode(T.self, from: elementData)
+                results.append(decoded)
+            } catch {
+                #if DEBUG
+                print("Load \(label): skipped corrupt record at index \(index): \(error)")
+                #endif
+            }
+        }
+        return results
     }
 
     private func saveMeasurements() {
@@ -238,6 +268,8 @@ final class DataStore: ObservableObject {
     private func saveEmergencyInfo() {
         if let info = emergencyInfo {
             persist(info, to: emergencyInfoURL, label: "emergency info")
+        } else {
+            try? FileManager.default.removeItem(at: emergencyInfoURL)
         }
     }
 
@@ -251,25 +283,13 @@ final class DataStore: ObservableObject {
         persist(snapshot, to: intakeLogsURL, label: "intake logs")
     }
 
-    // Background persistence to avoid blocking the main thread
+    // Serial writer ensures writes for the same URL are ordered correctly
+    private static let writer = SerialFileWriter()
+
     private func persist<T: Encodable>(_ value: T, to url: URL, label: String) {
         let payload = value
-        Task.detached(priority: .utility) {
-            do {
-                let encoder = JSONEncoder()
-                let data = try encoder.encode(payload)
-                do {
-                    try data.write(to: url, options: [.atomic, .completeFileProtection])
-                } catch {
-                    // Fallback when file protection blocks writes (e.g., device locked)
-                    try data.write(to: url, options: [.atomic])
-                }
-                try? (url as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
-            } catch {
-                #if DEBUG
-                print("Failed to save \(label): \(error)")
-                #endif
-            }
+        Task {
+            await Self.writer.write(payload, to: url, label: label)
         }
     }
 
@@ -278,255 +298,30 @@ final class DataStore: ObservableObject {
         return Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: date)
     }
 
-    // MARK: - Stats
+    // MARK: - Stats (delegated to AdherenceCalculator)
+
     func weeklyAdherence(for medicationID: UUID? = nil, endingOn endDate: Date = Date()) -> [(Date, Double)] {
-        let cal = Calendar.current
-        let endDay = cal.startOfDay(for: endDate)
-        let startDay = cal.date(byAdding: .day, value: -6, to: endDay)!
-
-        // Pre-slice logs to last 7 days and (optionally) specific medication
-        let logsWindow = intakeLogs.filter { log in
-            let day = cal.startOfDay(for: log.date)
-            guard day >= startDay && day <= endDay else { return false }
-            if let mid = medicationID { return log.medicationID == mid }
-            return true
-        }
-
-        // Helper: latest log status for a given day/med/scheduleKey
-        func latestStatus(on day: Date, medID: UUID, scheduleKey: String?, medTimesCount: Int) -> IntakeStatus? {
-            // Prefer exact scheduleKey match; if med has only one time, allow nil as fallback
-            let dayStart = day
-            let dayEnd = cal.date(byAdding: .day, value: 1, to: dayStart)!
-            let candidates = logsWindow.filter { log in
-                guard log.medicationID == medID && log.date >= dayStart && log.date < dayEnd else { return false }
-                if let key = scheduleKey {
-                    return log.scheduleKey == key || (medTimesCount == 1 && log.scheduleKey == nil)
-                } else {
-                    // No schedule key provided: only accept nil logs (rare)
-                    return log.scheduleKey == nil
-                }
-            }.sorted(by: { $0.date > $1.date })
-            return candidates.first?.status
-        }
-
-        // Enumerate expected schedules per day based on medication times (exclude PRN)
-        let allMeds: [Medication] = {
-            if let mid = medicationID { return medications.filter { $0.id == mid } }
-            return medications
-        }()
-        let meds = allMeds.filter { $0.isAsNeeded != true }
-
-        let now = Date()
-        var byDay: [Date: (taken: Int, total: Int)] = [:]
-        for i in 0..<7 {
-            let day = cal.date(byAdding: .day, value: i, to: startDay)!
-            let dayKey = cal.startOfDay(for: day)
-            let isToday = cal.isDateInToday(dayKey)
-            var taken = 0
-            var total = 0
-            for med in meds {
-                let times = med.timesOfDay.compactMap { comps -> (Int, Int)? in
-                    guard let h = comps.hour, let m = comps.minute else { return nil }
-                    return (h, m)
-                }
-                for (h, m) in times {
-                    // Skip future doses today — they haven't come due yet
-                    if isToday, let scheduled = cal.date(bySettingHour: h, minute: m, second: 0, of: now), scheduled > now {
-                        continue
-                    }
-                    guard let scheduled = cal.date(bySettingHour: h, minute: m, second: 0, of: dayKey),
-                          med.isDoseActive(on: scheduled) else { continue }
-                    total += 1
-                    let key = String(format: "%02d:%02d", h, m)
-                    if latestStatus(on: dayKey, medID: med.id, scheduleKey: key, medTimesCount: times.count) == .taken {
-                        taken += 1
-                    }
-                }
-            }
-            byDay[dayKey] = (taken, total)
-        }
-
-        return byDay.keys.sorted().map { day in
-            let v = byDay[day] ?? (0,0)
-            let pct = v.total > 0 ? Double(v.taken) / Double(v.total) : 0
-            return (day, pct)
-        }
+        AdherenceCalculator.weeklyAdherence(for: medicationID, endingOn: endDate, medications: medications, intakeLogs: intakeLogs)
     }
 
-    /// Adherence data for a full month. Returns dictionary: startOfDay -> (taken, total) counts.
     func monthlyAdherence(for medicationID: UUID? = nil, year: Int, month: Int) -> [Date: (taken: Int, total: Int)] {
-        let cal = Calendar.current
-        guard let monthStart = cal.date(from: DateComponents(year: year, month: month, day: 1)),
-              let monthRange = cal.range(of: .day, in: .month, for: monthStart) else { return [:] }
-        let now = Date()
-        let today = cal.startOfDay(for: now)
-
-        let logsWindow = intakeLogs.filter { log in
-            let day = cal.startOfDay(for: log.date)
-            guard let monthEnd = cal.date(byAdding: .month, value: 1, to: monthStart) else { return false }
-            guard day >= monthStart && day < monthEnd else { return false }
-            if let mid = medicationID { return log.medicationID == mid }
-            return true
-        }
-
-        let allMeds2: [Medication] = {
-            if let mid = medicationID { return medications.filter { $0.id == mid } }
-            return medications
-        }()
-        let meds = allMeds2.filter { $0.isAsNeeded != true }
-
-        var result: [Date: (taken: Int, total: Int)] = [:]
-        for dayNum in monthRange {
-            guard let day = cal.date(from: DateComponents(year: year, month: month, day: dayNum)) else { continue }
-            let dayKey = cal.startOfDay(for: day)
-            if dayKey > today { continue } // skip future days
-            let isToday = cal.isDateInToday(dayKey)
-            var taken = 0, total = 0
-            for med in meds {
-                let times = med.timesOfDay.compactMap { c -> (Int, Int)? in
-                    guard let h = c.hour, let m = c.minute else { return nil }
-                    return (h, m)
-                }
-                for (h, m) in times {
-                    if isToday, let sched = cal.date(bySettingHour: h, minute: m, second: 0, of: now), sched > now { continue }
-                    guard let scheduled = cal.date(bySettingHour: h, minute: m, second: 0, of: dayKey),
-                          med.isDoseActive(on: scheduled) else { continue }
-                    total += 1
-                    let key = String(format: "%02d:%02d", h, m)
-                    let dayEnd = cal.date(byAdding: .day, value: 1, to: dayKey)!
-                    let match = logsWindow.filter { log in
-                        guard log.medicationID == med.id && log.date >= dayKey && log.date < dayEnd else { return false }
-                        return log.scheduleKey == key || (times.count == 1 && log.scheduleKey == nil)
-                    }.sorted(by: { $0.date > $1.date }).first
-                    if match?.status == .taken { taken += 1 }
-                }
-            }
-            result[dayKey] = (taken, total)
-        }
-        return result
+        AdherenceCalculator.monthlyAdherence(for: medicationID, year: year, month: month, medications: medications, intakeLogs: intakeLogs)
     }
 
-    /// Intake logs for a specific day, optionally filtered by medication
     func intakeLogs(for date: Date, medicationID: UUID? = nil) -> [IntakeLog] {
-        let cal = Calendar.current
-        let dayStart = cal.startOfDay(for: date)
-        let dayEnd = cal.date(byAdding: .day, value: 1, to: dayStart)!
-        return intakeLogs.filter { log in
-            guard log.date >= dayStart && log.date < dayEnd else { return false }
-            if let mid = medicationID { return log.medicationID == mid }
-            return true
-        }.sorted(by: { $0.date < $1.date })
+        AdherenceCalculator.intakeLogs(for: date, medicationID: medicationID, intakeLogs: intakeLogs)
     }
 
-    /// Adherence percentage over N days for a specific (or all) medication(s)
     func adherencePercent(for medicationID: UUID? = nil, days: Int = 30) -> Double {
-        let cal = Calendar.current
-        let endDay = cal.startOfDay(for: Date())
-        let startDay = cal.date(byAdding: .day, value: -(days - 1), to: endDay)!
-        var taken = 0, total = 0
-        let now = Date()
-        let allMeds3: [Medication] = {
-            if let mid = medicationID { return medications.filter { $0.id == mid } }
-            return medications
-        }()
-        let meds = allMeds3.filter { $0.isAsNeeded != true }
-        for i in 0..<days {
-            let day = cal.date(byAdding: .day, value: i, to: startDay)!
-            let dayKey = cal.startOfDay(for: day)
-            if dayKey > endDay { continue }
-            let isToday = cal.isDateInToday(dayKey)
-            let dayEnd = cal.date(byAdding: .day, value: 1, to: dayKey)!
-            for med in meds {
-                let times = med.timesOfDay.compactMap { c -> (Int, Int)? in
-                    guard let h = c.hour, let m = c.minute else { return nil }
-                    return (h, m)
-                }
-                for (h, m) in times {
-                    if isToday, let sched = cal.date(bySettingHour: h, minute: m, second: 0, of: now), sched > now { continue }
-                    guard let scheduled = cal.date(bySettingHour: h, minute: m, second: 0, of: dayKey),
-                          med.isDoseActive(on: scheduled) else { continue }
-                    total += 1
-                    let key = String(format: "%02d:%02d", h, m)
-                    let match = intakeLogs.filter { log in
-                        guard log.medicationID == med.id && log.date >= dayKey && log.date < dayEnd else { return false }
-                        return log.scheduleKey == key || (times.count == 1 && log.scheduleKey == nil)
-                    }.sorted(by: { $0.date > $1.date }).first
-                    if match?.status == .taken { taken += 1 }
-                }
-            }
-        }
-        return total > 0 ? Double(taken) / Double(total) : 0
+        AdherenceCalculator.adherencePercent(for: medicationID, days: days, medications: medications, intakeLogs: intakeLogs)
     }
 
-    /// Current streak: consecutive days (ending today/yesterday) with all doses taken
     func currentStreak(for medicationID: UUID) -> Int {
-        guard let med = medications.first(where: { $0.id == medicationID }),
-              med.isAsNeeded != true else { return 0 }
-        let cal = Calendar.current
-        let today = cal.startOfDay(for: Date())
-        var streak = 0
-        for offset in 0..<365 {
-            let day = cal.date(byAdding: .day, value: -offset, to: today)!
-            let dayKey = cal.startOfDay(for: day)
-            let dayEnd = cal.date(byAdding: .day, value: 1, to: dayKey)!
-            let times = med.timesOfDay.compactMap { c -> (Int, Int)? in
-                guard let h = c.hour, let m = c.minute else { return nil }
-                return (h, m)
-            }
-            if times.isEmpty { break }
-            if dayKey < cal.startOfDay(for: med.startDate) { break }
-            let now = Date()
-            let isToday = cal.isDateInToday(dayKey)
-            var allTaken = true
-            var hasDue = false
-            for (h, m) in times {
-                if isToday, let sched = cal.date(bySettingHour: h, minute: m, second: 0, of: now), sched > now { continue }
-                guard let scheduled = cal.date(bySettingHour: h, minute: m, second: 0, of: dayKey),
-                      med.isDoseActive(on: scheduled) else { continue }
-                hasDue = true
-                let key = String(format: "%02d:%02d", h, m)
-                let match = intakeLogs.filter { log in
-                    guard log.medicationID == medicationID && log.date >= dayKey && log.date < dayEnd else { return false }
-                    return log.scheduleKey == key || (times.count == 1 && log.scheduleKey == nil)
-                }.sorted(by: { $0.date > $1.date }).first
-                if match?.status != .taken { allTaken = false; break }
-            }
-            if !hasDue && offset == 0 { continue } // no doses due yet today, look at yesterday
-            if !hasDue || !allTaken { break }
-            streak += 1
-        }
-        return streak
+        AdherenceCalculator.currentStreak(for: medicationID, medications: medications, intakeLogs: intakeLogs)
     }
 
-    /// Consecutive days (ending yesterday) where the medication had zero taken doses.
-    /// Only looks back to the earliest log for this medication (avoids false positives for newly added meds).
     func consecutiveMissedDays(for medicationID: UUID) -> Int {
-        let cal = Calendar.current
-        let today = cal.startOfDay(for: Date())
-
-        // Don't count days before the medication had any activity
-        let medLogs = intakeLogs.filter { $0.medicationID == medicationID }
-        guard let earliest = medLogs.min(by: { $0.date < $1.date }) else { return 0 }
-        let earliestDay = cal.startOfDay(for: earliest.date)
-
-        guard let med = medications.first(where: { $0.id == medicationID }) else { return 0 }
-        let times = med.timesOfDay.compactMap { c -> (Int, Int)? in
-            guard let h = c.hour, let m = c.minute else { return nil }
-            return (h, m)
-        }
-        if times.isEmpty { return 0 }
-
-        var missed = 0
-        for offset in 1..<60 {
-            guard let day = cal.date(byAdding: .day, value: -offset, to: today) else { break }
-            if day < earliestDay { break }
-            let dayEnd = cal.date(byAdding: .day, value: 1, to: day)!
-            let dayLogs = intakeLogs.filter { $0.medicationID == medicationID && $0.date >= day && $0.date < dayEnd }
-            let hasTaken = dayLogs.contains { $0.status == .taken }
-            if hasTaken { break }
-            missed += 1
-        }
-        return missed
+        AdherenceCalculator.consecutiveMissedDays(for: medicationID, medications: medications, intakeLogs: intakeLogs)
     }
 
     // MARK: - Goal Ranges (UserDefaults-backed)
