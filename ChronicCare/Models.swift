@@ -193,8 +193,11 @@ enum MedicationCourseState: Equatable {
 }
 
 extension Medication {
-    func isDoseActive(on scheduledDate: Date) -> Bool {
-        scheduledDate >= startDate
+    func isDoseActive(on scheduledDate: Date, calendar: Calendar = .current) -> Bool {
+        guard scheduledDate >= startDate else { return false }
+        guard let courseEndDate else { return true }
+        let courseWindowEnd = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: courseEndDate)) ?? courseEndDate
+        return scheduledDate < courseWindowEnd
     }
 
     /// How many days of supply remain (nil if not tracking)

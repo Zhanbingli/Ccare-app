@@ -20,7 +20,7 @@ struct MedicationRuleConfig: Codable, Equatable {
         duplicateGuardMinutes: 30,
         makeupWindowFraction: 0.5,
         timingConflictMinutes: 60,
-        snoozeEscalation: [10, 5],
+        snoozeEscalation: [10, 30, 60],
         missEscalationThresholds: [2, 3]
     )
 }

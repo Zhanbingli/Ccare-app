@@ -22,6 +22,8 @@ struct AdherenceProfile: Equatable {
 }
 
 enum AdaptiveReminderEngine {
+    private static let minimumAdaptiveSampleCount = 6
+
     private enum DoseOutcome {
         case taken(delayMinutes: Int)
         case snoozed
@@ -34,6 +36,14 @@ enum AdaptiveReminderEngine {
         now: Date = Date()
     ) -> AdaptiveReminderStrategy {
         let profile = profile(for: medication, intakeLogs: intakeLogs, now: now)
+
+        guard profile.sampleCount >= minimumAdaptiveSampleCount else {
+            return AdaptiveReminderStrategy(
+                leadMinutes: 0,
+                followUpIntervals: [10, 30],
+                riskLevel: .medium
+            )
+        }
 
         var leadMinutes = 0
         if profile.meanDelayMinutes >= 20 {
@@ -73,11 +83,7 @@ enum AdaptiveReminderEngine {
         let cal = Calendar.current
         let today = cal.startOfDay(for: now)
         let startDay = cal.date(byAdding: .day, value: -13, to: today) ?? today
-        let earliestLogDay = intakeLogs
-            .filter { $0.medicationID == medication.id }
-            .map { cal.startOfDay(for: $0.date) }
-            .min()
-        let effectiveStartDay = max(startDay, earliestLogDay ?? today)
+        let effectiveStartDay = max(startDay, cal.startOfDay(for: medication.startDate))
         let outcomesByDay = outcomes(for: medication, intakeLogs: intakeLogs, startDay: effectiveStartDay, endDate: now)
         let flatOutcomes = outcomesByDay.keys.sorted().flatMap { outcomesByDay[$0] ?? [] }
         let delays = flatOutcomes.compactMap { outcome -> Int? in
@@ -130,6 +136,7 @@ enum AdaptiveReminderEngine {
                       let minute = comps.minute,
                       let scheduledDoseDate = cal.date(bySettingHour: hour, minute: minute, second: 0, of: dayStart),
                       scheduledDoseDate <= endDate else { continue }
+                guard medication.isDoseActive(on: scheduledDoseDate, calendar: cal) else { continue }
 
                 let key = String(format: "%02d:%02d", hour, minute)
                 let latest = medicationLogs
