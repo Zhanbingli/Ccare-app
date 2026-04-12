@@ -24,138 +24,28 @@ struct InsightsView: View {
         }.count + (notificationStatus == .denied ? 1 : 0)
     }
 
+    private var reminderStateText: String {
+        reminderGapCount > 0
+            ? NSLocalizedString("Needs Review", comment: "")
+            : NSLocalizedString("Healthy", comment: "")
+    }
+
+    private var reminderStateTint: Color {
+        reminderGapCount > 0 ? .orange : .green
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    TintedCard(tint: .blue) {
-                        VStack(alignment: .leading, spacing: 16) {
-                            HStack(alignment: .top, spacing: 12) {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text(NSLocalizedString("Insights", comment: ""))
-                                        .appFont(.largeTitle)
-                                        .fontWeight(.bold)
-                                    Text(NSLocalizedString("Review adherence, measurements, and reminder setup without interrupting Today.", comment: ""))
-                                        .appFont(.footnote)
-                                        .foregroundStyle(.secondary)
-                                }
-
-                                Spacer(minLength: 12)
-
-                                AppBadge(
-                                    text: "\(max(reminderGapCount, 0))",
-                                    tint: reminderGapCount > 0 ? .orange : .green,
-                                    icon: "bell.badge"
-                                )
-                            }
-
-                            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                                metricPanel(
-                                    value: String(format: "%.0f%%", adherence7 * 100),
-                                    label: NSLocalizedString("7-day adherence", comment: ""),
-                                    tint: adherence7 >= 0.8 ? .green : adherence7 >= 0.5 ? .orange : .red
-                                )
-                                metricPanel(
-                                    value: String(format: "%.0f%%", adherence30 * 100),
-                                    label: NSLocalizedString("30-day adherence", comment: ""),
-                                    tint: adherence30 >= 0.8 ? .green : adherence30 >= 0.5 ? .orange : .red
-                                )
-                                metricPanel(
-                                    value: "\(scheduledMedicationCount)",
-                                    label: NSLocalizedString("Scheduled meds", comment: ""),
-                                    tint: .blue
-                                )
-                                metricPanel(
-                                    value: "\(max(reminderGapCount, 0))",
-                                    label: NSLocalizedString("Reminder gaps", comment: ""),
-                                    tint: reminderGapCount > 0 ? .orange : .green
-                                )
-                            }
-                        }
-                    }
-
-                    if let latest = store.measurements.first {
-                        Card {
-                            VStack(alignment: .leading, spacing: 12) {
-                                HStack {
-                                    Text(NSLocalizedString("Latest Measurement", comment: ""))
-                                        .appFont(.headline)
-                                    Spacer()
-                                    Button(NSLocalizedString("Log", comment: "")) {
-                                        showAddMeasurement = true
-                                    }
-                                    .buttonStyle(.bordered)
-                                    .controlSize(.small)
-                                }
-
-                                InsetPanel(tint: latest.type.tint) {
-                                    latestMeasurementRow(latest)
-                                }
-                            }
-                        }
-                    } else {
-                        Card {
-                            EmptyStateView(
-                                systemImage: "waveform.path.ecg",
-                                title: NSLocalizedString("No measurements yet", comment: ""),
-                                subtitle: NSLocalizedString("Log blood pressure, glucose, weight, or heart rate to unlock trend review.", comment: ""),
-                                actionTitle: NSLocalizedString("Log Measurement", comment: ""),
-                                action: { showAddMeasurement = true }
-                            )
-                        }
-                    }
-
-                    Card {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text(NSLocalizedString("Review Tools", comment: ""))
-                                .appFont(.headline)
-
-                            NavigationLink {
-                                EnhancedTrendsView()
-                                    .environmentObject(store)
-                            } label: {
-                                insightsLinkRow(
-                                    title: NSLocalizedString("Trends", comment: ""),
-                                    subtitle: NSLocalizedString("Review blood pressure, glucose, weight, and heart rate over time.", comment: ""),
-                                    systemImage: "chart.line.uptrend.xyaxis",
-                                    tint: .blue
-                                )
-                            }
-                            .buttonStyle(.plain)
-
-                            NavigationLink {
-                                AdherenceCalendarView()
-                            } label: {
-                                insightsLinkRow(
-                                    title: NSLocalizedString("Adherence Calendar", comment: ""),
-                                    subtitle: NSLocalizedString("See which days were taken, skipped, or missed.", comment: ""),
-                                    systemImage: "calendar",
-                                    tint: .green
-                                )
-                            }
-                            .buttonStyle(.plain)
-
-                            NavigationLink {
-                                ReminderDiagnosticsView(
-                                    notificationStatus: notificationStatus,
-                                    scheduledWithoutRemindersCount: store.medications.filter { $0.isAsNeeded != true && !$0.timesOfDay.isEmpty && !$0.remindersEnabled }.count,
-                                    untimedScheduledCount: store.medications.filter { $0.isAsNeeded != true && $0.timesOfDay.isEmpty }.count
-                                )
-                                .environmentObject(store)
-                            } label: {
-                                insightsLinkRow(
-                                    title: NSLocalizedString("Reminder Diagnostics", comment: ""),
-                                    subtitle: NSLocalizedString("Check permission, schedule times, and reminder reliability.", comment: ""),
-                                    systemImage: "bell.badge.fill",
-                                    tint: reminderGapCount > 0 ? .orange : .green
-                                )
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
+                VStack(alignment: .leading, spacing: 28) {
+                    overviewHeader
+                    snapshotSection
+                    latestMeasurementSection
+                    toolsSection
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 28)
             }
             .navigationTitle(NSLocalizedString("Insights", comment: ""))
             .navigationBarTitleDisplayMode(.large)
@@ -170,6 +60,185 @@ struct InsightsView: View {
         }
     }
 
+    private var overviewHeader: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(NSLocalizedString("Review Snapshot", comment: ""))
+                        .appFont(.title)
+                        .fontWeight(.bold)
+                    Text(NSLocalizedString("See adherence, measurements, and reminder health in one place.", comment: ""))
+                        .appFont(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 12)
+
+                AppBadge(
+                    text: reminderStateText,
+                    tint: reminderStateTint,
+                    icon: reminderGapCount > 0 ? "exclamationmark.circle.fill" : "checkmark.circle.fill"
+                )
+            }
+
+            if reminderGapCount > 0 {
+                Text(String(format: NSLocalizedString("%lld reminder issues still need attention.", comment: ""), reminderGapCount))
+                    .appFont(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text(NSLocalizedString("Your scheduled medications currently look covered.", comment: ""))
+                    .appFont(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var snapshotSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel(
+                title: NSLocalizedString("Adherence & Coverage", comment: ""),
+                subtitle: NSLocalizedString("Use these numbers to spot missed doses and reminder gaps quickly.", comment: "")
+            )
+
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                snapshotTile(
+                    value: String(format: "%.0f%%", adherence7 * 100),
+                    label: NSLocalizedString("7-day adherence", comment: ""),
+                    tint: adherence7 >= 0.8 ? .green : adherence7 >= 0.5 ? .orange : .red
+                )
+                snapshotTile(
+                    value: String(format: "%.0f%%", adherence30 * 100),
+                    label: NSLocalizedString("30-day adherence", comment: ""),
+                    tint: adherence30 >= 0.8 ? .green : adherence30 >= 0.5 ? .orange : .red
+                )
+                snapshotTile(
+                    value: "\(scheduledMedicationCount)",
+                    label: NSLocalizedString("Scheduled meds", comment: ""),
+                    tint: .blue
+                )
+                snapshotTile(
+                    value: "\(max(reminderGapCount, 0))",
+                    label: NSLocalizedString("Reminder gaps", comment: ""),
+                    tint: reminderStateTint
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var latestMeasurementSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                sectionLabel(
+                    title: NSLocalizedString("Latest Measurement", comment: ""),
+                    subtitle: NSLocalizedString("Keep the most recent reading visible so trends always have context.", comment: "")
+                )
+
+                Spacer(minLength: 12)
+
+                Button(NSLocalizedString("Log", comment: "")) {
+                    showAddMeasurement = true
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+
+            if let latest = store.measurements.first {
+                InsetPanel(tint: latest.type.tint) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 10) {
+                            Circle()
+                                .fill(latest.type.tint)
+                                .frame(width: 8, height: 8)
+                            Text(latest.type.displayName)
+                                .appFont(.subheadline)
+                                .fontWeight(.semibold)
+                            Spacer()
+                            measurementValueText(latest)
+                        }
+
+                        HStack(spacing: 10) {
+                            Text(latest.date.formatted(date: .abbreviated, time: .shortened))
+                                .appFont(.footnote)
+                                .foregroundStyle(.secondary)
+
+                            if let note = latest.note, !note.isEmpty {
+                                Text(note)
+                                    .appFont(.footnote)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
+                        }
+                    }
+                }
+            } else {
+                InsetPanel {
+                    EmptyStateView(
+                        systemImage: "waveform.path.ecg",
+                        title: NSLocalizedString("No measurements yet", comment: ""),
+                        subtitle: NSLocalizedString("Log blood pressure, glucose, weight, or heart rate to unlock trend review.", comment: ""),
+                        actionTitle: NSLocalizedString("Log Measurement", comment: ""),
+                        action: { showAddMeasurement = true }
+                    )
+                }
+            }
+        }
+    }
+
+    private var toolsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel(
+                title: NSLocalizedString("Review Tools", comment: ""),
+                subtitle: NSLocalizedString("Open the detailed views only when you want to inspect history more closely.", comment: "")
+            )
+
+            VStack(spacing: 10) {
+                NavigationLink {
+                    EnhancedTrendsView()
+                        .environmentObject(store)
+                } label: {
+                    toolRow(
+                        title: NSLocalizedString("Trends", comment: ""),
+                        subtitle: NSLocalizedString("Review blood pressure, glucose, weight, and heart rate over time.", comment: ""),
+                        systemImage: "chart.line.uptrend.xyaxis",
+                        tint: .blue
+                    )
+                }
+                .buttonStyle(.plain)
+
+                NavigationLink {
+                    AdherenceCalendarView()
+                } label: {
+                    toolRow(
+                        title: NSLocalizedString("Adherence Calendar", comment: ""),
+                        subtitle: NSLocalizedString("See which days were taken, skipped, or missed.", comment: ""),
+                        systemImage: "calendar",
+                        tint: .green
+                    )
+                }
+                .buttonStyle(.plain)
+
+                NavigationLink {
+                    ReminderDiagnosticsView(
+                        notificationStatus: notificationStatus,
+                        scheduledWithoutRemindersCount: store.medications.filter { $0.isAsNeeded != true && !$0.timesOfDay.isEmpty && !$0.remindersEnabled }.count,
+                        untimedScheduledCount: store.medications.filter { $0.isAsNeeded != true && $0.timesOfDay.isEmpty }.count
+                    )
+                    .environmentObject(store)
+                } label: {
+                    toolRow(
+                        title: NSLocalizedString("Reminder Diagnostics", comment: ""),
+                        subtitle: NSLocalizedString("Check permission, schedule times, and reminder reliability.", comment: ""),
+                        systemImage: "bell.badge.fill",
+                        tint: reminderStateTint,
+                        badgeText: reminderGapCount > 0 ? "\(reminderGapCount)" : nil
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
     private func refreshNotificationStatus() {
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             DispatchQueue.main.async {
@@ -178,42 +247,67 @@ struct InsightsView: View {
         }
     }
 
-    private func metricPanel(value: String, label: String, tint: Color) -> some View {
+    private func sectionLabel(title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .appFont(.headline)
+            Text(subtitle)
+                .appFont(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func snapshotTile(value: String, label: String, tint: Color) -> some View {
         InsetPanel(tint: tint) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(value)
-                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundStyle(tint)
                     .monospacedDigit()
                 Text(label)
                     .appFont(.footnote)
                     .foregroundStyle(.secondary)
             }
-            .frame(maxWidth: .infinity, minHeight: 74, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: 82, alignment: .topLeading)
         }
     }
 
-    private func insightsLinkRow(title: String, subtitle: String, systemImage: String, tint: Color) -> some View {
-        InsetPanel(tint: tint) {
-            HStack(spacing: 12) {
+    private func toolRow(
+        title: String,
+        subtitle: String,
+        systemImage: String,
+        tint: Color,
+        badgeText: String? = nil
+    ) -> some View {
+        InsetPanel {
+            HStack(alignment: .center, spacing: 12) {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(tint.opacity(0.14))
-                    .frame(width: 40, height: 40)
+                    .frame(width: 42, height: 42)
                     .overlay(
                         Image(systemName: systemImage)
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(tint)
                     )
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
                         .appFont(.subheadline)
+                        .fontWeight(.semibold)
                         .foregroundStyle(.primary)
                     Text(subtitle)
                         .appFont(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+
                 Spacer()
+
+                if let badgeText {
+                    AppBadge(text: badgeText, tint: tint)
+                }
+
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.tertiary)
@@ -221,27 +315,21 @@ struct InsightsView: View {
         }
     }
 
-    private func latestMeasurementRow(_ m: Measurement) -> some View {
-        HStack(spacing: 10) {
-            Circle()
-                .fill(m.type.tint)
-                .frame(width: 8, height: 8)
-            Text(m.type.rawValue)
-                .appFont(.subheadline)
-            Spacer()
-            Group {
-                if m.type == .bloodPressure, let dia = m.diastolic {
-                    Text("\(Int(m.value))/\(Int(dia)) \(m.type.unit)")
-                } else if m.type == .bloodGlucose {
-                    let v = UnitPreferences.mgdlToPreferred(m.value)
-                    let formatted = UnitPreferences.glucoseUnit == .mgdL ? String(format: "%.0f", v) : String(format: "%.1f", v)
-                    Text("\(formatted) \(UnitPreferences.glucoseUnit.rawValue)")
-                } else {
-                    Text("\(String(format: "%.1f", m.value)) \(m.type.unit)")
-                }
+    private func measurementValueText(_ measurement: Measurement) -> some View {
+        Group {
+            if measurement.type == .bloodPressure, let dia = measurement.diastolic {
+                Text("\(Int(measurement.value))/\(Int(dia)) \(measurement.type.unit)")
+            } else if measurement.type == .bloodGlucose {
+                let value = UnitPreferences.mgdlToPreferred(measurement.value)
+                let formatted = UnitPreferences.glucoseUnit == .mgdL
+                    ? String(format: "%.0f", value)
+                    : String(format: "%.1f", value)
+                Text("\(formatted) \(UnitPreferences.glucoseUnit.rawValue)")
+            } else {
+                Text("\(String(format: "%.1f", measurement.value)) \(measurement.type.unit)")
             }
-            .appFont(.subheadline)
-            .fontWeight(.medium)
         }
+        .appFont(.subheadline)
+        .fontWeight(.medium)
     }
 }

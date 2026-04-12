@@ -848,3 +848,12 @@
 "Enabled, but an API key is still needed." = "已开启，但仍需要 API Key。";
 "%@ analysis is enabled." = "已启用 %@ 分析。";
 "Export reports, create backups, or restore this device from a backup." = "导出报告、创建备份，或从备份恢复这台设备。";
+"Healthy" = "状态良好";
+"Review Snapshot" = "回顾概览";
+"See adherence, measurements, and reminder health in one place." = "把依从率、测量和提醒状态集中放在这里查看。";
+"%lld reminder issues still need attention." = "还有 %lld 个提醒问题需要处理。";
+"Your scheduled medications currently look covered." = "当前固定用药的提醒覆盖看起来正常。";
+"Adherence & Coverage" = "依从率与覆盖";
+"Use these numbers to spot missed doses and reminder gaps quickly." = "用这些数字快速发现漏服和提醒缺口。";
+"Keep the most recent reading visible so trends always have context." = "把最近一次读数放在这里，查看趋势时更有上下文。";
+"Open the detailed views only when you want to inspect history more closely." = "只有在你想进一步查看历史时，再进入详细视图。";
