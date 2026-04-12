@@ -174,7 +174,7 @@ struct MedicationsView: View {
                 }, onDelete: {
                     if let idx = store.medications.firstIndex(where: { $0.id == med.id }) {
                         NotificationManager.shared.cancelAll(for: med)
-                        removeMedImage(path: med.imagePath)
+                        deleteMedicationImage(path: med.imagePath)
                         store.removeMedication(at: IndexSet(integer: idx))
                         NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
                         NotificationManager.shared.updateBadge(store: store)
@@ -629,12 +629,13 @@ private extension MedicationsView {
 
     @ViewBuilder
     private func medicationThumbnail(for med: Medication) -> some View {
-        if let path = med.imagePath, let ui = loadMedImage(path: path) {
+        if let path = med.imagePath, let ui = loadMedicationImage(path: path) {
             Image(uiImage: ui)
                 .resizable()
                 .scaledToFill()
                 .frame(width: 40, height: 40)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .accessibilityLabel(String(format: NSLocalizedString("%@ photo", comment: "Medication thumbnail accessibility"), med.name))
         } else {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(Color.accentColor.opacity(0.10))
@@ -644,6 +645,7 @@ private extension MedicationsView {
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(Color.accentColor)
                 )
+                .accessibilityHidden(true)
         }
     }
 
@@ -747,64 +749,6 @@ private extension MedicationsView {
     }
 }
 
-private func medImagesDir() -> URL {
-    let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-    let dir = docs.appendingPathComponent("med_images", conformingTo: .directory)
-    if !FileManager.default.fileExists(atPath: dir.path) {
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    }
-    // Exclude directory from iCloud backups
-    try? (dir as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
-    return dir
-}
-
-func saveMedImage(image: UIImage, id: UUID) -> String? {
-    let url = medImagesDir().appendingPathComponent("\(id.uuidString).jpg")
-    guard let data = image.jpegData(compressionQuality: 0.9) else { return nil }
-    do {
-        try data.write(to: url, options: [.atomic, .completeFileProtection])
-        try? (url as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
-        return "med_images/\(id.uuidString).jpg"
-    } catch { return nil }
-}
-
-func loadMedImage(path: String?) -> UIImage? {
-    guard let path = path else { return nil }
-    let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-    let url = docs.appendingPathComponent(path)
-    return UIImage(contentsOfFile: url.path)
-}
-
-func loadMedImageData(path: String?) -> Data? {
-    guard let path = path else { return nil }
-    let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-    let url = docs.appendingPathComponent(path)
-    return try? Data(contentsOf: url)
-}
-
-func restoreMedImageData(_ data: Data, path: String) {
-    let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-    let url = docs.appendingPathComponent(path)
-    let dir = url.deletingLastPathComponent()
-    if !FileManager.default.fileExists(atPath: dir.path) {
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    }
-    do {
-        try data.write(to: url, options: [.atomic, .completeFileProtection])
-    } catch {
-        try? data.write(to: url, options: [.atomic])
-    }
-    try? (dir as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
-    try? (url as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
-}
-
-func removeMedImage(path: String?) {
-    guard let path = path else { return }
-    let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-    let url = docs.appendingPathComponent(path)
-    try? FileManager.default.removeItem(at: url)
-}
-
 private extension MedicationsView {
     func refreshNotificationStatus() {
         UNUserNotificationCenter.current().getNotificationSettings { settings in
@@ -819,7 +763,7 @@ private extension MedicationsView {
         let items = store.medications.filter { ids.contains($0.id) }
         items.forEach {
             NotificationManager.shared.cancelAll(for: $0)
-            removeMedImage(path: $0.imagePath)
+            deleteMedicationImage(path: $0.imagePath)
         }
         let toRemove = IndexSet(store.medications.enumerated().compactMap { ids.contains($0.element.id) ? $0.offset : nil })
         store.removeMedication(at: toRemove)

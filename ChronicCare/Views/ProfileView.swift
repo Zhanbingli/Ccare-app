@@ -22,6 +22,7 @@ struct ProfileView: View {
     @State private var showHealthSection = false
     @State private var showGoalsSection = false
     @State private var showSafetySection = false
+    @State private var showPrivacyPolicy = false
     @AppStorage("hapticsEnabled") private var hapticsEnabled: Bool = true
     @AppStorage("units.glucose") private var glucoseUnitRaw: String = GlucoseUnit.mgdL.rawValue
     @AppStorage("prefs.graceMinutes") private var graceMinutes: Int = 30
@@ -41,53 +42,14 @@ struct ProfileView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    HStack {
-                        Label(NSLocalizedString("Status", comment: ""), systemImage: "bell.badge.fill")
-                        Spacer()
-                        Text(permissionHint())
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                        if !notificationsEnabled {
-                            permissionButton()
-                        }
-                    }
-                    Text(notificationCoverageSummary)
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-
-                    DisclosureGroup(NSLocalizedString("Reminder Rules", comment: ""), isExpanded: $showReminderRules) {
-                        LabeledContent(NSLocalizedString("Overdue Grace Period", comment: "")) {
-                            Menu(graceMinutesLabel) {
-                                Button("15 min") { graceMinutes = 15 }
-                                Button("30 min") { graceMinutes = 30 }
-                                Button("1 hour") { graceMinutes = 60 }
-                            }
-                        }
-                        LabeledContent(NSLocalizedString("Refill Reminder", comment: "")) {
-                            Menu(refillThresholdLabel) {
-                                Button("3 days") { refillThresholdDays = 3 }
-                                Button("7 days") { refillThresholdDays = 7 }
-                                Button("14 days") { refillThresholdDays = 14 }
-                            }
-                        }
-                        LabeledContent(NSLocalizedString("Course End Reminder", comment: "")) {
-                            Menu(courseEndThresholdLabel) {
-                                Button("1 day") { courseEndThresholdDays = 1 }
-                                Button("3 days") { courseEndThresholdDays = 3 }
-                                Button("7 days") { courseEndThresholdDays = 7 }
-                            }
-                        }
-                    }
-                } header: {
-                    Text(NSLocalizedString("Reminder Setup", comment: ""))
-                } footer: {
-                    Text(NSLocalizedString("Scheduled medications need both permission and reminder times before alerts can fire.", comment: ""))
-                        .appFont(.caption)
-                }
-
-                Section {
-                    DisclosureGroup(isExpanded: $showSafetySection) {
+                reminderSetupSection
+                safetyHealthGoalsSection
+                generalSection
+                aiSection
+                dataSection
+                dangerZoneSection
+                aboutSection
+            }
                         NavigationLink {
                             EmergencyInfoEditView().environmentObject(store)
                         } label: {
@@ -269,23 +231,8 @@ struct ProfileView: View {
                         .appFont(.caption)
                 }
 
-                Section {
-                    Button(role: .destructive) { showConfirmClear = true } label: {
-                        Label(NSLocalizedString("Clear All Data", comment: ""), systemImage: "trash.fill")
-                    }
-                } header: {
-                    Text(NSLocalizedString("Danger Zone", comment: ""))
-                } footer: {
-                    Text(NSLocalizedString("This permanently removes medications, measurements, and intake history from this device.", comment: ""))
-                        .appFont(.caption)
-                }
-
-                // MARK: - About
-                Section {
-                    Text(NSLocalizedString("ChronicCare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice.", comment: ""))
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                dangerZoneSection
+                aboutSection
             }
             .navigationTitle(NSLocalizedString("Settings", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
@@ -311,6 +258,9 @@ struct ProfileView: View {
                 Button("Export") { exportToHealthRecentDedup() }
             }
             #endif
+            .sheet(isPresented: $showPrivacyPolicy) {
+                PrivacyPolicyView()
+            }
             .sheet(isPresented: $showShare) {
                 if let url = shareURL {
                     ShareSheet(activityItems: [url])
@@ -754,5 +704,88 @@ private struct ExportOptionsSheet: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private var reminderSetupSection: some View {
+        Section {
+            HStack {
+                Label(NSLocalizedString("Status", comment: ""), systemImage: "bell.badge.fill")
+                Spacer()
+                Text(permissionHint())
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+                if !notificationsEnabled {
+                    permissionButton()
+                }
+            }
+            Text(notificationCoverageSummary)
+                .appFont(.caption)
+                .foregroundStyle(.secondary)
+
+            DisclosureGroup(NSLocalizedString("Reminder Rules", comment: ""), isExpanded: $showReminderRules) {
+                LabeledContent(NSLocalizedString("Overdue Grace Period", comment: "")) {
+                    Menu(graceMinutesLabel) {
+                        Button("15 min") { graceMinutes = 15 }
+                        Button("30 min") { graceMinutes = 30 }
+                        Button("1 hour") { graceMinutes = 60 }
+                    }
+                }
+                LabeledContent(NSLocalizedString("Refill Reminder", comment: "")) {
+                    Menu(refillThresholdLabel) {
+                        Button("3 days") { refillThresholdDays = 3 }
+                        Button("7 days") { refillThresholdDays = 7 }
+                        Button("14 days") { refillThresholdDays = 14 }
+                    }
+                }
+                LabeledContent(NSLocalizedString("Course End Reminder", comment: "")) {
+                    Menu(courseEndThresholdLabel) {
+                        Button("1 day") { courseEndThresholdDays = 1 }
+                        Button("3 days") { courseEndThresholdDays = 3 }
+                        Button("7 days") { courseEndThresholdDays = 7 }
+                    }
+                }
+            }
+        } header: {
+            Text(NSLocalizedString("Reminder Setup", comment: ""))
+        } footer: {
+            Text(NSLocalizedString("Scheduled medications need both permission and reminder times before alerts can fire.", comment: ""))
+                .appFont(.caption)
+        }
+    }
+
+    private var dangerZoneSection: some View {
+        Section {
+            Button(role: .destructive) { showConfirmClear = true } label: {
+                Label(NSLocalizedString("Clear All Data", comment: ""), systemImage: "trash.fill")
+            }
+        } header: {
+            Text(NSLocalizedString("Danger Zone", comment: ""))
+        } footer: {
+            Text(NSLocalizedString("This permanently removes medications, measurements, and intake history from this device.", comment: ""))
+                .appFont(.caption)
+        }
+    }
+
+    private var aboutSection: some View {
+        Section {
+            Button { showPrivacyPolicy = true } label: {
+                Label(NSLocalizedString("Privacy Policy", comment: ""), systemImage: "lock.shield")
+            }
+        } header: {
+            Text(NSLocalizedString("About", comment: ""))
+        } footer: {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(NSLocalizedString("ChronicCare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice — always consult your doctor.", comment: ""))
+                Text(appVersionString)
+            }
+            .appFont(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private var appVersionString: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "ChronicCare v\(version) (\(build))"
     }
 }

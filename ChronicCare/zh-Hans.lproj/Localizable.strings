@@ -894,3 +894,56 @@
 "Choose how many times per day this medication should appear." = "选择这款药每天应该出现几次。";
 "Adjust the time values here without changing the frequency." = "这里只调整具体时间，不改变每日次数。";
 "No times set" = "还没有设置时间";
+"More Details" = "更多信息";
+"Keep the first pass short. Add instructions, supply tracking, category, or a photo only if they matter right now." = "第一次添加尽量保持简短。只有当服用说明、库存、分类或图片此刻真的重要时，再补充这些信息。";
+"You can save now and add instructions, supply, category, or a photo later." = "现在就可以保存，服用说明、库存、分类或图片都可以之后再补。";
+"%lld optional sections filled in." = "已填写 %lld 个附加信息区块。";
+"Add More Details" = "添加更多信息";
+"These fields help with context and maintenance, but they are not required to save the medication." = "这些字段有助于后续管理和补充背景信息，但保存药物并不依赖它们。";
+
+// MARK: - MedicationFormView
+"How is it taken?" = "服用方式";
+"Once daily" = "每天一次";
+"Twice daily" = "每天两次";
+"Three times daily" = "每天三次";
+"Custom schedule · %lld times" = "自定义 · 每天 %lld 次";
+"Choose how often this medication is taken, then confirm the reminder times." = "选择服药频率，然后确认提醒时间。";
+"Choose how often this medication is taken, then confirm the times below." = "选择服药频率，然后确认下方的时间。";
+"Scheduled for %@" = "计划于 %@";
+"Course end date is in the past." = "疗程结束日期已过。";
+"Pills remaining" = "剩余药量";
+"Review Scan" = "检查扫描结果";
+"Detected Text" = "识别文字";
+"Edit anything that looks wrong before applying it to the form." = "在应用到表单前，先修改任何看起来不对的内容。";
+"Snooze" = "稍后提醒";
+
+// MARK: - Privacy Policy
+"Privacy Policy" = "隐私政策";
+"About" = "关于";
+"ChronicCare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice — always consult your doctor." = "ChronicCare 将数据保存在设备上，仅在获得许可后使用 Apple 健康。本应用不提供医疗建议——请咨询医生。";
+"Overview" = "概述";
+"ChronicCare is designed with your privacy as a priority. All health data is stored locally on your device. We do not collect, transmit, or share your personal information with any third party." = "ChronicCare 以保护隐私为首要设计原则。所有健康数据仅存储在您的设备上，我们不会收集、传输或与任何第三方共享您的个人信息。";
+"Data Stored on Device" = "存储在设备上的数据";
+"The following data is stored only on your device:\n• Medications and dosing schedules\n• Health measurements (blood pressure, blood glucose, weight, heart rate)\n• Intake logs and adherence history\n• Emergency contacts and medical information\n• Caregiver contact information\n• App preferences and settings" = "以下数据仅存储在您的设备上：\n• 药物和服药计划\n• 健康测量数据（血压、血糖、体重、心率）\n• 服药记录和依从性历史\n• 紧急联系人和医疗信息\n• 照护人联系信息\n• 应用偏好设置";
+"Apple Health Integration" = "Apple 健康整合";
+"If you grant permission, ChronicCare can read and write health measurements to Apple Health. This data exchange happens entirely on your device through Apple's HealthKit framework. We never access your Apple Health data remotely." = "如果您授权，ChronicCare 可以向 Apple 健康读取和写入健康测量数据。数据交换完全在您的设备上通过 Apple HealthKit 框架进行，我们绝不会远程访问您的 Apple 健康数据。";
+"Camera Access" = "相机访问";
+"The camera is used solely to scan medication labels for assisted data entry. Photos taken for scanning are processed on-device and are not stored or transmitted unless you choose to save a medication photo." = "相机仅用于扫描药物标签以辅助数据录入。扫描拍摄的照片在设备上处理，除非您选择保存药物照片，否则不会被存储或传输。";
+"Notifications" = "通知";
+"With your permission, ChronicCare sends local notifications to remind you of medication doses. These notifications are scheduled on-device and do not involve any external server." = "经您许可，ChronicCare 会发送本地通知提醒您服药。这些通知在设备上调度，不涉及任何外部服务器。";
+"AI Features" = "AI 功能";
+"If you choose to enable AI-powered features (such as drug interaction checks), your query is sent to the configured AI service. No personal health data is included in these requests unless you explicitly type it. The AI API key is stored securely in your device's Keychain." = "如果您启用 AI 功能（如药物相互作用检查），您的查询将被发送到配置的 AI 服务。除非您主动输入，否则请求中不包含个人健康数据。AI API 密钥安全存储在设备的钥匙串中。";
+"No Analytics or Tracking" = "无分析或追踪";
+"ChronicCare does not use any analytics, crash reporting, or advertising frameworks. We do not track your usage or behavior in any way." = "ChronicCare 不使用任何分析、崩溃报告或广告框架。我们不会以任何方式追踪您的使用情况或行为。";
+"Data Deletion" = "数据删除";
+"You can delete all your data at any time from Settings > Clear All Data. Uninstalling the app also removes all stored data from your device." = "您可以随时在「设置 > 清除所有数据」中删除所有数据。卸载应用也会从设备中移除所有存储的数据。";
+"Changes to This Policy" = "政策变更";
+"If we update this privacy policy, the changes will be reflected in the app and on our website. Since we do not collect your contact information, please check periodically." = "如果我们更新隐私政策，更改将在应用和网站中体现。由于我们不收集您的联系信息，请定期查看。";
+"Contact" = "联系方式";
+"If you have questions about this privacy policy, please contact us through the App Store listing." = "如果您对本隐私政策有疑问，请通过 App Store 页面与我们联系。";
+"Last updated: April 2026" = "最后更新：2026 年 4 月";
+
+// MARK: - Accessibility
+"Take %@ %@ now" = "立即服用 %@ %@";
+"%@ photo" = "%@ 照片";
+"Call %@, %@" = "拨打 %@，%@";

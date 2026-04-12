@@ -698,9 +698,8 @@ final class NotificationManager {
         }
     }
 
-    static func computeOutstandingCount(medications: [Medication], intakeLogs: [IntakeLog], graceMinutes: Int, activeSnoozes: Set<String> = []) -> Int {
+    static func computeOutstandingCount(medications: [Medication], intakeLogs: [IntakeLog], graceMinutes: Int, activeSnoozes: Set<String> = [], now: Date = Date()) -> Int {
         let cal = Calendar.current
-        let now = Date()
         let todayStart = cal.startOfDay(for: now)
         var total = 0
         for med in medications where med.remindersEnabled {

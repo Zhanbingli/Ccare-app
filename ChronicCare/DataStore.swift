@@ -167,7 +167,7 @@ final class DataStore: ObservableObject {
 
     func clearAll() {
         medications.forEach {
-            removeMedImage(path: $0.imagePath)
+            deleteMedicationImage(path: $0.imagePath)
             MedicationRuleStore.shared.removeOverride(for: $0.id)
         }
         measurements.removeAll()
@@ -195,7 +195,7 @@ final class DataStore: ObservableObject {
 
     // MARK: - Import Backup
     func importBackup(_ backup: AppBackup) {
-        medications.forEach { removeMedImage(path: $0.imagePath) }
+        medications.forEach { deleteMedicationImage(path: $0.imagePath) }
         let restoredMedications = backup.medications.map { medication -> Medication in
             guard let path = medication.imagePath else { return medication }
             guard let data = backup.medicationImagesByPath?[path] else {
@@ -203,7 +203,7 @@ final class DataStore: ObservableObject {
                 sanitized.imagePath = nil
                 return sanitized
             }
-            restoreMedImageData(data, path: path)
+            restoreMedicationImageData(data, path: path)
             return medication
         }
         measurements = backup.measurements.sorted(by: { $0.date > $1.date })

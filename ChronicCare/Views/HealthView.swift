@@ -110,7 +110,7 @@ struct HealthView: View {
                 }, onDelete: {
                     if let idx = store.medications.firstIndex(where: { $0.id == med.id }) {
                         NotificationManager.shared.cancelAll(for: med)
-                        removeMedImage(path: med.imagePath)
+                        deleteMedicationImage(path: med.imagePath)
                         store.removeMedication(at: IndexSet(integer: idx))
                         NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
                         NotificationManager.shared.updateBadge(store: store)
@@ -852,7 +852,7 @@ private extension HealthView {
 
     @ViewBuilder
     func medicationThumbnail(for med: Medication) -> some View {
-        if let path = med.imagePath, let ui = loadMedImage(path: path) {
+        if let path = med.imagePath, let ui = loadMedicationImage(path: path) {
             Image(uiImage: ui).resizable().scaledToFill()
                 .frame(width: 40, height: 40)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -1258,7 +1258,7 @@ struct MedicationDetailView: View {
 
     @ViewBuilder
     private var heroMedicationThumbnail: some View {
-        if let path = medication.imagePath, let ui = loadMedImage(path: path) {
+        if let path = medication.imagePath, let ui = loadMedicationImage(path: path) {
             Image(uiImage: ui)
                 .resizable()
                 .scaledToFill()

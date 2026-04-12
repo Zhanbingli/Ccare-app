@@ -39,6 +39,7 @@ struct MedicationFormView: View {
     @State private var showInstructionsDetails = false
     @State private var showInventoryDetails = false
     @State private var showCategoryDetails = false
+    @State private var showAddOptionalDetails = false
     @FocusState private var focusedField: EntryField?
 
     // MARK: - Validation state
@@ -207,43 +208,64 @@ struct MedicationFormView: View {
         pickedImage != nil || (editing?.imagePath != nil && !removePhoto)
     }
 
+    private var existingMedicationImage: UIImage? {
+        guard !removePhoto, let path = editing?.imagePath else { return nil }
+        return loadMedicationImage(path: path)
+    }
+
+    private var navigationTitleText: String {
+        isEditing
+            ? NSLocalizedString("Edit Medication", comment: "")
+            : NSLocalizedString("Add Medication", comment: "")
+    }
+
+    private var optionalDetailsCompletedCount: Int {
+        var count = 0
+        if instructionsSummary != NSLocalizedString("None", comment: "") { count += 1 }
+        if inventorySummary != NSLocalizedString("Not tracking", comment: "") { count += 1 }
+        if categorySummary != NSLocalizedString("Optional", comment: "") { count += 1 }
+        return count
+    }
+
+    private var addOptionalDetailsSummaryText: String {
+        if optionalDetailsCompletedCount == 0 {
+            return NSLocalizedString("You can save now and add instructions, supply, category, or a photo later.", comment: "")
+        }
+        return String(format: NSLocalizedString("%lld optional sections filled in.", comment: ""), optionalDetailsCompletedCount)
+    }
+
+    @ViewBuilder
+    private var formSections: some View {
+        VStack(alignment: .leading, spacing: isEditing ? 16 : 24) {
+            medicationSection
+            intakeModeSection
+            if !isAsNeeded { scheduleSection }
+            if isEditing {
+                optionalDetailsSection
+            } else {
+                addOptionalDetailsEntrySection
+            }
+            if isEditing, onDelete != nil { deleteSection }
+        }
+        .padding(.horizontal, isEditing ? 16 : 20)
+        .padding(.top, 12)
+        .padding(.bottom, 28)
+    }
+
+    private var editorScrollView: some View {
+        ScrollView(.vertical) {
+            formSections
+        }
+    }
+
     // MARK: - Body
 
     var body: some View {
         NavigationStack {
-            ScrollView(.vertical) {
-                VStack(alignment: .leading, spacing: isEditing ? 16 : 24) {
-                    medicationSection
-                    intakeModeSection
-                    if !isAsNeeded { scheduleSection }
-                    optionalDetailsSection
-                    if isEditing, onDelete != nil { deleteSection }
-                }
-                .padding(.horizontal, isEditing ? 16 : 20)
-                .padding(.top, 12)
-                .padding(.bottom, 28)
-            }
-            .navigationTitle(isEditing ? NSLocalizedString("Edit Medication", comment: "") : NSLocalizedString("Add Medication", comment: ""))
+            editorScrollView
+            .navigationTitle(navigationTitleText)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        if !isAsNeeded && remindersEnabled && times.isEmpty {
-                            showScheduleAlert = true
-                            return
-                        }
-                        saveAndDismiss(remindersOverride: nil)
-                    }
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button(NSLocalizedString("Done", comment: "")) { focusedField = nil }
-                }
-            }
+            .toolbar { bodyToolbar }
             .onAppear { populateFromEditing() }
             .onChange(of: schedulePreset) { newValue in updateSchedulePreset(newValue) }
             .onChange(of: name) { _ in validateName() }
@@ -261,9 +283,10 @@ struct MedicationFormView: View {
                 Text(NSLocalizedString("Reminders are enabled but no times are set. Add a time or save without reminders.", comment: ""))
             }
             .sheet(item: $ocrSuggestion) { suggestion in
-                MedicationOCRReviewSheet(suggestion: suggestion) { edited in
-                    applyOCRSuggestion(edited)
-                }
+                medicationOCRReviewSheet(for: suggestion)
+            }
+            .sheet(isPresented: $showAddOptionalDetails) {
+                addOptionalDetailsSheet
             }
             .fullScreenCover(isPresented: $showOCRCamera) {
                 CameraCaptureView { image in runOCR(from: image) }
@@ -285,6 +308,33 @@ struct MedicationFormView: View {
             } message: {
                 Text(NSLocalizedString("This will turn off fixed reminders for this medication and remove any scheduled times from the form.", comment: ""))
             }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var bodyToolbar: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            Button("Cancel") { dismiss() }
+        }
+        ToolbarItem(placement: .confirmationAction) {
+            Button("Save") {
+                if !isAsNeeded && remindersEnabled && times.isEmpty {
+                    showScheduleAlert = true
+                    return
+                }
+                saveAndDismiss(remindersOverride: nil)
+            }
+            .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        ToolbarItemGroup(placement: .keyboard) {
+            Spacer()
+            Button(NSLocalizedString("Done", comment: "")) { focusedField = nil }
+        }
+    }
+
+    private func medicationOCRReviewSheet(for suggestion: MedicationOCRSuggestion) -> some View {
+        MedicationOCRReviewSheet(suggestion: suggestion) { edited in
+            applyOCRSuggestion(edited)
         }
     }
 
@@ -386,16 +436,23 @@ struct MedicationFormView: View {
 
                 InsetPanel {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text(NSLocalizedString("Reminder Times", comment: ""))
+                        Text(NSLocalizedString("Frequency", comment: ""))
                             .appFont(.caption)
                             .foregroundStyle(.secondary)
 
-                        Picker(NSLocalizedString("Frequency", comment: ""), selection: $schedulePreset) {
+                        VStack(spacing: 8) {
                             ForEach(SchedulePreset.allCases) { preset in
-                                Text(preset.title).tag(preset)
+                                frequencyRow(for: preset)
                             }
                         }
-                        .pickerStyle(.menu)
+                    }
+                }
+
+                InsetPanel {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(NSLocalizedString("Reminder Times", comment: ""))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
 
                         ForEach(Array(times.indices), id: \.self) { idx in
                             timeRow(for: idx)
@@ -448,113 +505,172 @@ struct MedicationFormView: View {
                     detail: NSLocalizedString("Add instructions, supply tracking, category, or a photo only if they help later.", comment: "")
                 )
 
-                // Instructions
-                optionalSectionButton(
-                    title: NSLocalizedString("Instructions", comment: ""),
-                    summary: instructionsSummary,
-                    isExpanded: $showInstructionsDetails
+                optionalDetailsControls
+            }
+        }
+    }
+
+    private var addOptionalDetailsEntrySection: some View {
+        sectionWrapper(showDivider: false) {
+            VStack(alignment: .leading, spacing: 16) {
+                sectionHeader(
+                    step: "4",
+                    title: NSLocalizedString("More Details", comment: ""),
+                    detail: NSLocalizedString("Keep the first pass short. Add instructions, supply tracking, category, or a photo only if they matter right now.", comment: "")
                 )
-                if showInstructionsDetails {
-                    InsetPanel {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Picker(NSLocalizedString("Food Instruction", comment: ""), selection: $foodInstruction) {
-                                Text(NSLocalizedString("None", comment: "")).tag(FoodInstruction?.none)
-                                ForEach(FoodInstruction.allCases) { f in
-                                    Text(f.displayName).tag(Optional(f))
-                                }
-                            }
 
-                            textInputCard(
-                                title: NSLocalizedString("Special Instructions", comment: ""),
-                                placeholder: NSLocalizedString("Take after dinner", comment: ""),
-                                text: $specialInstructions,
-                                field: .specialInstructions,
-                                axis: .vertical,
-                                lineLimit: 2...4
-                            )
+                InsetPanel {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text(addOptionalDetailsSummaryText)
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
 
-                            textInputCard(
-                                title: NSLocalizedString("Notes", comment: ""),
-                                placeholder: NSLocalizedString("Optional context", comment: ""),
-                                text: $notes,
-                                field: .notes,
-                                axis: .vertical,
-                                lineLimit: 2...4
-                            )
+                        compactOptionalRow(title: NSLocalizedString("Instructions", comment: ""), summary: instructionsSummary)
+                        compactOptionalRow(title: NSLocalizedString("Inventory & Course", comment: ""), summary: inventorySummary)
+                        compactOptionalRow(title: NSLocalizedString("Category & Photo", comment: ""), summary: categorySummary)
+
+                        Button {
+                            showAddOptionalDetails = true
+                        } label: {
+                            secondaryActionLabel(NSLocalizedString("Add More Details", comment: ""), systemImage: "slider.horizontal.3")
                         }
+                        .buttonStyle(.plain)
                     }
                 }
+            }
+        }
+    }
 
-                // Inventory & Course
-                optionalSectionButton(
-                    title: NSLocalizedString("Inventory & Course", comment: ""),
-                    summary: inventorySummary,
-                    isExpanded: $showInventoryDetails
-                )
-                if showInventoryDetails {
-                    InsetPanel {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Toggle(NSLocalizedString("Track Supply", comment: ""), isOn: $trackSupply)
-                            if trackSupply {
-                                pillsRemainingField
-                                Stepper(value: $pillsPerDose, in: 1...10) {
-                                    Text(String(format: NSLocalizedString("Pills per dose: %lld", comment: ""), pillsPerDose))
-                                }
-                                quickPillButtons
-                                if let estimatedSupplyDays {
-                                    Text(String(format: NSLocalizedString("About %lld days of supply at your current schedule.", comment: ""), estimatedSupplyDays))
-                                        .appFont(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Text(String(format: NSLocalizedString("Refill reminders start when about %lld days remain.", comment: ""), refillThresholdDays))
-                                    .appFont(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Toggle(NSLocalizedString("Has Course End Date", comment: ""), isOn: $hasCourseEnd)
-                            if hasCourseEnd {
-                                DatePicker(NSLocalizedString("End Date", comment: ""), selection: $courseEndDate, displayedComponents: .date)
-                                validationHint(courseEndValidation)
-                                quickCourseButtons
-                                if let courseDaysRemaining {
-                                    Text(String(format: NSLocalizedString("Course ends in %lld days.", comment: ""), max(courseDaysRemaining, 0)))
-                                        .appFont(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Text(String(format: NSLocalizedString("Course reminders start %lld days before the end date.", comment: ""), courseReminderThresholdDays))
-                                    .appFont(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
+    @ViewBuilder
+    private var optionalDetailsControls: some View {
+        optionalSectionButton(
+            title: NSLocalizedString("Instructions", comment: ""),
+            summary: instructionsSummary,
+            isExpanded: $showInstructionsDetails
+        )
+        if showInstructionsDetails {
+            InsetPanel {
+                VStack(alignment: .leading, spacing: 14) {
+                    Picker(NSLocalizedString("Food Instruction", comment: ""), selection: $foodInstruction) {
+                        Text(NSLocalizedString("None", comment: "")).tag(FoodInstruction?.none)
+                        ForEach(FoodInstruction.allCases) { f in
+                            Text(f.displayName).tag(Optional(f))
                         }
                     }
+
+                    textInputCard(
+                        title: NSLocalizedString("Special Instructions", comment: ""),
+                        placeholder: NSLocalizedString("Take after dinner", comment: ""),
+                        text: $specialInstructions,
+                        field: .specialInstructions,
+                        axis: .vertical,
+                        lineLimit: 2...4
+                    )
+
+                    textInputCard(
+                        title: NSLocalizedString("Notes", comment: ""),
+                        placeholder: NSLocalizedString("Optional context", comment: ""),
+                        text: $notes,
+                        field: .notes,
+                        axis: .vertical,
+                        lineLimit: 2...4
+                    )
                 }
+            }
+        }
 
-                // Category & Photo
-                optionalSectionButton(
-                    title: NSLocalizedString("Category & Photo", comment: ""),
-                    summary: categorySummary,
-                    isExpanded: $showCategoryDetails
-                )
-                if showCategoryDetails {
-                    InsetPanel {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Picker(NSLocalizedString("Category", comment: ""), selection: $category) {
-                                ForEach(MedicationCategory.allCases) { c in
-                                    Text(c.displayName).tag(c)
-                                }
-                            }
-
-                            if category == .custom {
-                                textInputCard(
-                                    title: NSLocalizedString("Custom Category", comment: ""),
-                                    placeholder: NSLocalizedString("Cardiology", comment: ""),
-                                    text: $customCategoryName,
-                                    field: .customCategory
-                                )
-                            }
-
-                            photoAttachmentRow
+        optionalSectionButton(
+            title: NSLocalizedString("Inventory & Course", comment: ""),
+            summary: inventorySummary,
+            isExpanded: $showInventoryDetails
+        )
+        if showInventoryDetails {
+            InsetPanel {
+                VStack(alignment: .leading, spacing: 14) {
+                    Toggle(NSLocalizedString("Track Supply", comment: ""), isOn: $trackSupply)
+                    if trackSupply {
+                        pillsRemainingField
+                        Stepper(value: $pillsPerDose, in: 1...10) {
+                            Text(String(format: NSLocalizedString("Pills per dose: %lld", comment: ""), pillsPerDose))
                         }
+                        quickPillButtons
+                        if let estimatedSupplyDays {
+                            Text(String(format: NSLocalizedString("About %lld days of supply at your current schedule.", comment: ""), estimatedSupplyDays))
+                                .appFont(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Text(String(format: NSLocalizedString("Refill reminders start when about %lld days remain.", comment: ""), refillThresholdDays))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Toggle(NSLocalizedString("Has Course End Date", comment: ""), isOn: $hasCourseEnd)
+                    if hasCourseEnd {
+                        DatePicker(NSLocalizedString("End Date", comment: ""), selection: $courseEndDate, displayedComponents: .date)
+                        validationHint(courseEndValidation)
+                        quickCourseButtons
+                        if let courseDaysRemaining {
+                            Text(String(format: NSLocalizedString("Course ends in %lld days.", comment: ""), max(courseDaysRemaining, 0)))
+                                .appFont(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Text(String(format: NSLocalizedString("Course reminders start %lld days before the end date.", comment: ""), courseReminderThresholdDays))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+
+        optionalSectionButton(
+            title: NSLocalizedString("Category & Photo", comment: ""),
+            summary: categorySummary,
+            isExpanded: $showCategoryDetails
+        )
+        if showCategoryDetails {
+            InsetPanel {
+                VStack(alignment: .leading, spacing: 14) {
+                    Picker(NSLocalizedString("Category", comment: ""), selection: $category) {
+                        ForEach(MedicationCategory.allCases) { c in
+                            Text(c.displayName).tag(c)
+                        }
+                    }
+
+                    if category == .custom {
+                        textInputCard(
+                            title: NSLocalizedString("Custom Category", comment: ""),
+                            placeholder: NSLocalizedString("Cardiology", comment: ""),
+                            text: $customCategoryName,
+                            field: .customCategory
+                        )
+                    }
+
+                    photoAttachmentRow
+                }
+            }
+        }
+    }
+
+    private var addOptionalDetailsSheet: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    sectionHeader(
+                        step: "4",
+                        title: NSLocalizedString("Optional Details", comment: ""),
+                        detail: NSLocalizedString("These fields help with context and maintenance, but they are not required to save the medication.", comment: "")
+                    )
+                    optionalDetailsControls
+                }
+                .padding(20)
+            }
+            .navigationTitle(NSLocalizedString("More Details", comment: ""))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(NSLocalizedString("Done", comment: "")) {
+                        showAddOptionalDetails = false
                     }
                 }
             }
@@ -746,17 +862,17 @@ struct MedicationFormView: View {
         if let existing = editing {
             id = existing.id
             if removePhoto {
-                removeMedImage(path: existing.imagePath)
+                deleteMedicationImage(path: existing.imagePath)
                 imagePath = nil
             } else if let img = pickedImage {
-                imagePath = saveMedImage(image: img, id: id)
+                imagePath = storeMedicationImage(img, id: id)
             } else {
                 imagePath = existing.imagePath
             }
         } else {
             id = UUID()
             if let img = pickedImage {
-                imagePath = saveMedImage(image: img, id: id)
+                imagePath = storeMedicationImage(img, id: id)
             }
         }
 
@@ -905,6 +1021,78 @@ struct MedicationFormView: View {
     }
 }
 
+private struct MedicationOCRReviewSheet: View {
+    let suggestion: MedicationOCRSuggestion
+    var onApply: (MedicationOCRSuggestion) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var name: String
+    @State private var dose: String
+    @State private var notes: String
+
+    init(suggestion: MedicationOCRSuggestion, onApply: @escaping (MedicationOCRSuggestion) -> Void) {
+        self.suggestion = suggestion
+        self.onApply = onApply
+        _name = State(initialValue: suggestion.name ?? "")
+        _dose = State(initialValue: suggestion.dose ?? "")
+        _notes = State(initialValue: suggestion.notes ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField(NSLocalizedString("Medication Name", comment: ""), text: $name)
+                    TextField(NSLocalizedString("Dose", comment: ""), text: $dose)
+                    TextField(NSLocalizedString("Notes", comment: ""), text: $notes, axis: .vertical)
+                        .lineLimit(2...4)
+                } header: {
+                    Text(NSLocalizedString("Review OCR Result", comment: ""))
+                } footer: {
+                    Text(NSLocalizedString("Edit anything that looks wrong before applying it to the form.", comment: ""))
+                }
+
+                if !suggestion.rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Section(NSLocalizedString("Detected Text", comment: "")) {
+                        Text(suggestion.rawText)
+                            .appFont(.footnote)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+            .navigationTitle(NSLocalizedString("Review Scan", comment: ""))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(NSLocalizedString("Cancel", comment: "")) {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(NSLocalizedString("Apply", comment: "")) {
+                        let edited = MedicationOCRSuggestion(
+                            name: name.nilIfBlank,
+                            dose: dose.nilIfBlank,
+                            notes: notes.nilIfBlank,
+                            rawText: suggestion.rawText
+                        )
+                        onApply(edited)
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+private extension String {
+    var nilIfBlank: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
 // MARK: - Subviews
 
 private extension MedicationFormView {
@@ -958,6 +1146,51 @@ private extension MedicationFormView {
                     .foregroundStyle(.secondary)
             }
             .padding(.vertical, 2)
+        }
+        .buttonStyle(.plain)
+    }
+
+    func compactOptionalRow(title: String, summary: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(title)
+                .appFont(.subheadline)
+                .foregroundStyle(.primary)
+            Spacer(minLength: 12)
+            Text(summary)
+                .appFont(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+
+    func frequencyRow(for preset: SchedulePreset) -> some View {
+        Button {
+            schedulePreset = preset
+        } label: {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(preset.title)
+                        .appFont(.subheadline)
+                        .foregroundStyle(.primary)
+                    Text(preset.subtitle)
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: schedulePreset == preset ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(schedulePreset == preset ? Color.accentColor : Color(uiColor: .tertiaryLabel))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(schedulePreset == preset ? Color.accentColor.opacity(0.08) : Color(.secondarySystemBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(schedulePreset == preset ? Color.accentColor.opacity(0.22) : Color.clear, lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
     }
@@ -1149,7 +1382,7 @@ private extension MedicationFormView {
                     .resizable().scaledToFill()
                     .frame(width: 64, height: 64)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            } else if !removePhoto, let path = editing?.imagePath, let existing = loadMedImage(path: path) {
+            } else if let existing = existingMedicationImage {
                 Image(uiImage: existing)
                     .resizable().scaledToFill()
                     .frame(width: 64, height: 64)

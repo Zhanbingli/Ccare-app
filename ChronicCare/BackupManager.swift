@@ -17,7 +17,7 @@ enum BackupManager {
         let medicationImagesByPath = Dictionary(
             uniqueKeysWithValues: store.medications.compactMap { medication -> (String, Data)? in
                 guard let path = medication.imagePath,
-                      let data = loadMedImageData(path: path) else { return nil }
+                      let data = loadMedicationImageData(path: path) else { return nil }
                 return (path, data)
             }
         )

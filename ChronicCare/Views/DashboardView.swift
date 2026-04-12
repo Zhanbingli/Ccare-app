@@ -407,6 +407,7 @@ private extension DashboardView {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(timelineStatusTint(for: status))
                 .frame(width: 24)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.med.name)
@@ -423,6 +424,8 @@ private extension DashboardView {
                 .appFont(.caption)
                 .foregroundStyle(timelineStatusTint(for: status))
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(item.med.name), \(item.med.dose), \(item.time.formatted(date: .omitted, time: .shortened)), \(timelineStatusText(for: status))")
     }
 
     private func summaryStrip(
@@ -668,6 +671,7 @@ private extension DashboardView {
                     .buttonStyle(.borderedProminent)
                     .tint(.green)
                     .controlSize(.large)
+                    .accessibilityLabel(String(format: NSLocalizedString("Take %@ %@ now", comment: "Take medication accessibility"), item.med.name, item.med.dose))
                 }
             }
         } else if let upcoming = schedules.first(where: { !isFinalStatus(statusCache[$0.id] ?? .none) }) {

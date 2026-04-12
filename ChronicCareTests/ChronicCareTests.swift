@@ -70,10 +70,12 @@ struct ChronicCareTests {
         let med = Medication(id: medID, name: "Example", dose: "5mg", timesOfDay: [morning, evening], remindersEnabled: true)
 
         let cal = Calendar.current
-        let takenDate = cal.date(bySettingHour: 8, minute: 5, second: 0, of: Date()) ?? Date()
+        // Use a fixed reference time (23:00) so both morning and evening doses have passed
+        let referenceDate = cal.date(bySettingHour: 23, minute: 0, second: 0, of: Date()) ?? Date()
+        let takenDate = cal.date(bySettingHour: 8, minute: 5, second: 0, of: referenceDate) ?? referenceDate
         let log = IntakeLog(medicationID: medID, date: takenDate, status: .taken, scheduleKey: "08:00")
 
-        let count = NotificationManager.computeOutstandingCount(medications: [med], intakeLogs: [log], graceMinutes: 0)
+        let count = NotificationManager.computeOutstandingCount(medications: [med], intakeLogs: [log], graceMinutes: 0, now: referenceDate)
         #expect(count == 1)
     }
 

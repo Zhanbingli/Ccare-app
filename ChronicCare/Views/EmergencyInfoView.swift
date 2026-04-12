@@ -611,6 +611,7 @@ struct EmergencyCardView: View {
                     Label(contact.phone, systemImage: "phone.fill")
                         .appFont(.subheadline)
                 }
+                .accessibilityLabel(String(format: NSLocalizedString("Call %@, %@", comment: "Call emergency contact accessibility"), contact.name, contact.phone))
             } else {
                 Label(contact.phone, systemImage: "phone.fill")
                     .appFont(.subheadline)
