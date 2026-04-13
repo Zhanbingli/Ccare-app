@@ -262,8 +262,7 @@ struct OnboardingView: View {
                 remindersEnabled: true
             )
             store.addMedication(med)
-            NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
-            NotificationManager.shared.updateBadge(store: store)
+            store.syncNotifications()
         }
         Haptics.success()
         onComplete()

@@ -114,7 +114,7 @@ final class DataStore: ObservableObject {
         let effectiveDate = effectiveScheduledDate ?? date
         let cal = Calendar.current
         let dayStart = cal.startOfDay(for: effectiveDate)
-        let dayEnd = cal.date(byAdding: .day, value: 1, to: dayStart)!
+        guard let dayEnd = cal.date(byAdding: .day, value: 1, to: dayStart) else { return }
         intakeLogs.removeAll { log in
             log.medicationID == medicationID && log.date >= dayStart && log.date < dayEnd && log.scheduleKey == key
         }
@@ -156,6 +156,29 @@ final class DataStore: ObservableObject {
         return String(format: "%02d:%02d", h, m)
     }
 
+    /// Record a taken dose: logs intake and decrements pill supply atomically.
+    func recordTakenDose(
+        medicationID: UUID,
+        scheduleTime: DateComponents?,
+        at date: Date = Date(),
+        scheduledDate: Date? = nil,
+        recordedAt: Date = Date(),
+        scheduleKeyOverride: String? = nil,
+        note: String? = nil
+    ) {
+        upsertIntake(
+            medicationID: medicationID,
+            status: .taken,
+            scheduleTime: scheduleTime,
+            at: date,
+            scheduledDate: scheduledDate,
+            recordedAt: recordedAt,
+            scheduleKeyOverride: scheduleKeyOverride,
+            note: note
+        )
+        decrementPills(for: medicationID)
+    }
+
     /// Decrement pill supply when a dose is taken
     func decrementPills(for medicationID: UUID) {
         guard let idx = medications.firstIndex(where: { $0.id == medicationID }),
@@ -163,6 +186,12 @@ final class DataStore: ObservableObject {
         let perDose = medications[idx].pillsPerDose ?? 1
         medications[idx].pillsRemaining = max(0, remaining - perDose)
         NotificationManager.shared.scheduleRefillReminder(for: medications[idx])
+    }
+
+    /// Sync all notification schedules and update the badge in one call.
+    func syncNotifications(now: Date = Date()) {
+        NotificationManager.shared.syncAll(medications: medications, intakeLogs: intakeLogs, now: now)
+        NotificationManager.shared.updateBadge(store: self)
     }
 
     func clearAll() {
@@ -203,7 +232,12 @@ final class DataStore: ObservableObject {
                 sanitized.imagePath = nil
                 return sanitized
             }
-            restoreMedicationImageData(data, path: path)
+            let restored = restoreMedicationImageData(data, path: path)
+            if !restored {
+                var sanitized = medication
+                sanitized.imagePath = nil
+                return sanitized
+            }
             return medication
         }
         measurements = backup.measurements.sorted(by: { $0.date > $1.date })

@@ -28,10 +28,8 @@ struct ChronicCareApp: App {
                 .onAppear {
                     notifHandler.store = store
                     NotificationManager.shared.registerCategories()
-                    NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
-                    // Start badge refresh observers and update once on launch
+                    store.syncNotifications()
                     NotificationManager.shared.startBadgeAutoRefresh(store: store)
-                    NotificationManager.shared.updateBadge(store: store)
                 }
         }
     }

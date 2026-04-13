@@ -49,9 +49,9 @@ enum BackupManager {
     private static func migrate(_ backup: AppBackup) -> AppBackup {
         var result = backup
         if result.version < 2 {
-            // v1 -> v2: emergencyInfo and caregivers were added
-            if result.emergencyInfo == nil { result.emergencyInfo = nil }
+            // v1 -> v2: emergencyInfo and caregivers were added; ensure non-nil defaults
             if result.caregivers == nil { result.caregivers = [] }
+            result.version = 2
         }
         return result
     }

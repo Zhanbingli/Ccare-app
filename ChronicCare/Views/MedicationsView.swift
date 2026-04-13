@@ -151,8 +151,7 @@ struct MedicationsView: View {
             .sheet(isPresented: $showAdd) {
                 MedicationFormView(editing: nil, onSave: { med in
                     store.addMedication(med)
-                    NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
-                    NotificationManager.shared.updateBadge(store: store)
+                    store.syncNotifications()
                     refreshNotificationStatus()
                 })
             }
@@ -168,16 +167,14 @@ struct MedicationsView: View {
             .sheet(item: $editTarget) { med in
                 MedicationFormView(editing: med, onSave: { updated in
                     store.updateMedication(updated)
-                    NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
-                    NotificationManager.shared.updateBadge(store: store)
+                    store.syncNotifications()
                     refreshNotificationStatus()
                 }, onDelete: {
                     if let idx = store.medications.firstIndex(where: { $0.id == med.id }) {
                         NotificationManager.shared.cancelAll(for: med)
                         deleteMedicationImage(path: med.imagePath)
                         store.removeMedication(at: IndexSet(integer: idx))
-                        NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
-                        NotificationManager.shared.updateBadge(store: store)
+                        store.syncNotifications()
                         refreshNotificationStatus()
                     }
                 })
@@ -575,17 +572,14 @@ private extension MedicationsView {
                     Haptics.notification(.warning)
                     return
                 }
-                store.upsertIntake(
+                store.recordTakenDose(
                     medicationID: med.id,
-                    status: .taken,
                     scheduleTime: dose.comps,
                     scheduledDate: dose.scheduledDate
                 )
-                store.decrementPills(for: med.id)
                 NotificationManager.shared.suppressToday(for: med.id, timeComponents: dose.comps)
                 NotificationManager.shared.cancelDoseNotifications(for: med.id, timeComponents: dose.comps, scheduledDate: dose.scheduledDate, now: dose.scheduledDate)
-                NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
-                NotificationManager.shared.updateBadge(store: store)
+                store.syncNotifications()
                 Haptics.success()
             } label: {
                 HStack(spacing: 5) {
@@ -687,8 +681,7 @@ private extension MedicationsView {
                             var updated = med
                             updated.remindersEnabled = true
                             store.updateMedication(updated)
-                            NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
-                            NotificationManager.shared.updateBadge(store: store)
+                            store.syncNotifications()
                             Haptics.impact(.light)
                             refreshNotificationStatus()
                         }
@@ -697,8 +690,7 @@ private extension MedicationsView {
                             var updated = med
                             updated.remindersEnabled = false
                             store.updateMedication(updated)
-                            NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
-                            NotificationManager.shared.updateBadge(store: store)
+                            store.syncNotifications()
                             Haptics.impact(.light)
                             refreshNotificationStatus()
                         }
@@ -767,6 +759,6 @@ private extension MedicationsView {
         }
         let toRemove = IndexSet(store.medications.enumerated().compactMap { ids.contains($0.element.id) ? $0.offset : nil })
         store.removeMedication(at: toRemove)
-        NotificationManager.shared.updateBadge(store: store)
+        store.syncNotifications()
     }
 }

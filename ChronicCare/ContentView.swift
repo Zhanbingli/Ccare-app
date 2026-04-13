@@ -46,8 +46,7 @@ struct ContentView: View {
         .onChange(of: scenePhase) { newPhase in
             guard newPhase == .active else { return }
             let now = Date()
-            NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs, now: now)
-            NotificationManager.shared.updateBadge(store: store)
+            store.syncNotifications(now: now)
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("openMedicationDetail"))) { notification in
             selectedTab = 1

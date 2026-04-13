@@ -9,32 +9,41 @@ struct MedicationFormView: View {
     var onDelete: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
 
+    // MARK: - Core medication fields
     @State private var name: String = ""
     @State private var dose: String = ""
     @State private var notes: String = ""
-    @State private var times: [Date] = []
-    @State private var remindersEnabled: Bool = true
     @State private var category: MedicationCategory = .unspecified
     @State private var customCategoryName: String = ""
-    @State private var pickedItem: PhotosPickerItem? = nil
-    @State private var pickedImage: UIImage? = nil
-    @State private var removePhoto: Bool = false
-    @State private var showScheduleAlert = false
+
+    // MARK: - Schedule
+    @State private var times: [Date] = []
+    @State private var remindersEnabled: Bool = true
+    @State private var isAsNeeded: Bool = false
+    @State private var schedulePreset: SchedulePreset = .custom
+    @State private var hasCourseEnd: Bool = false
+    @State private var courseEndDate: Date = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
+
+    // MARK: - Inventory
     @State private var trackSupply: Bool = false
     @State private var pillsRemainingText: String = "30"
     @State private var pillsPerDose: Int = 1
     @State private var foodInstruction: FoodInstruction?
-    @State private var isAsNeeded: Bool = false
-    @State private var hasCourseEnd: Bool = false
-    @State private var courseEndDate: Date = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
     @State private var specialInstructions: String = ""
+
+    // MARK: - Photo / OCR
+    @State private var pickedItem: PhotosPickerItem? = nil
+    @State private var pickedImage: UIImage? = nil
+    @State private var removePhoto: Bool = false
     @State private var isOCRLoading = false
     @State private var ocrSuggestion: MedicationOCRSuggestion?
     @State private var ocrErrorMessage: String?
+
+    // MARK: - UI presentation flags
+    @State private var showScheduleAlert = false
     @State private var showOCRError = false
     @State private var showOCRCamera = false
     @State private var showCameraUnavailableAlert = false
-    @State private var schedulePreset: SchedulePreset = .custom
     @State private var showPRNConfirmation = false
     @State private var showInstructionsDetails = false
     @State private var showInventoryDetails = false
@@ -42,7 +51,7 @@ struct MedicationFormView: View {
     @State private var showAddOptionalDetails = false
     @FocusState private var focusedField: EntryField?
 
-    // MARK: - Validation state
+    // MARK: - Validation
     @State private var nameValidation: ValidationResult = .valid
     @State private var scheduleValidation: ValidationResult = .valid
     @State private var courseEndValidation: ValidationResult = .valid

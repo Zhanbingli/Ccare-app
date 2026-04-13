@@ -40,44 +40,121 @@ struct DashboardView: View {
         case snoozed(Date)
         case dueSoon // past scheduled time but within grace period
         case overdue
+
+        var displayText: String {
+            switch self {
+            case .taken:   return NSLocalizedString("Taken", comment: "")
+            case .skipped: return NSLocalizedString("Skipped", comment: "")
+            case .snoozed: return NSLocalizedString("Snoozed", comment: "")
+            case .overdue: return NSLocalizedString("Overdue", comment: "")
+            case .dueSoon: return NSLocalizedString("Due now", comment: "")
+            case .none:    return NSLocalizedString("Later", comment: "")
+            }
+        }
+
+        var tint: Color {
+            switch self {
+            case .taken:   return .green
+            case .skipped: return .orange
+            case .snoozed: return .blue
+            case .overdue: return .red
+            case .dueSoon: return .orange
+            case .none:    return .secondary
+            }
+        }
+
+        var iconName: String {
+            switch self {
+            case .taken:   return "checkmark.circle.fill"
+            case .skipped: return "xmark.circle.fill"
+            case .snoozed: return "zzz"
+            case .overdue: return "exclamationmark.circle.fill"
+            case .dueSoon: return "clock.fill"
+            case .none:    return "clock"
+            }
+        }
+
+        var isFinal: Bool {
+            switch self {
+            case .taken, .skipped: return true
+            default: return false
+            }
+        }
+    }
+
+    private struct TodayState {
+        let schedules: [MedSchedule]
+        let statusCache: [String: TodayMedStatus]
+        let takenCount: Int
+        let skippedCount: Int
+        let totalCount: Int
+        let overdueCount: Int
+        let remainingCount: Int
+        let actionableSchedules: [MedSchedule]
+        let currentAction: MedSchedule?
+        let nextUpcoming: MedSchedule?
+        let prnMeds: [Medication]
+    }
+
+    private func buildTodayState() -> TodayState {
+        let schedules = todaySchedules()
+        let statusLookup = latestTodayLogMap()
+        let statusCache: [String: TodayMedStatus] = Dictionary(uniqueKeysWithValues: schedules.map { item in
+            let s = status(for: item.med, at: item.time, lookup: statusLookup)
+            let resolved: TodayMedStatus = {
+                switch s {
+                case .none:
+                    let now = Date()
+                    let graceMin = Double(graceMinutes)
+                    if now > item.time.addingTimeInterval(graceMin * 60) { return .overdue }
+                    else if now > item.time { return .dueSoon }
+                    else { return s }
+                default: return s
+                }
+            }()
+            return (item.id, resolved)
+        })
+        let takenCount = statusCache.values.filter { if case .taken = $0 { return true } else { return false } }.count
+        let skippedCount = statusCache.values.filter { if case .skipped = $0 { return true } else { return false } }.count
+        let totalCount = schedules.count
+        let actionableSchedules = schedules.filter { canLogDose(for: $0, status: statusCache[$0.id] ?? .none) }
+        let nextUpcoming = schedules.first {
+            let status = statusCache[$0.id] ?? .none
+            return !canLogDose(for: $0, status: status) && !status.isFinal
+        }
+        let overdueCount = schedules.filter {
+            if case .overdue = statusCache[$0.id] ?? .none { return true }
+            return false
+        }.count
+        return TodayState(
+            schedules: schedules,
+            statusCache: statusCache,
+            takenCount: takenCount,
+            skippedCount: skippedCount,
+            totalCount: totalCount,
+            overdueCount: overdueCount,
+            remainingCount: max(totalCount - takenCount - skippedCount, 0),
+            actionableSchedules: actionableSchedules,
+            currentAction: actionableSchedules.first,
+            nextUpcoming: nextUpcoming,
+            prnMeds: store.medications.filter { $0.isAsNeeded == true }
+        )
     }
 
     var body: some View {
         let _ = tick // force re-render on timer
         NavigationStack {
-            let schedules = todaySchedules()
-            let statusLookup = latestTodayLogMap()
-            // Resolve statuses upfront (including grace period)
-            let statusCache: [String: TodayMedStatus] = Dictionary(uniqueKeysWithValues: schedules.map { item in
-                let s = status(for: item.med, at: item.time, lookup: statusLookup)
-                let resolved: TodayMedStatus = {
-                    switch s {
-                    case .none:
-                        let now = Date()
-                        let graceMin = Double(graceMinutes)
-                        if now > item.time.addingTimeInterval(graceMin * 60) { return .overdue }
-                        else if now > item.time { return .dueSoon }
-                        else { return s }
-                    default: return s
-                    }
-                }()
-                return (item.id, resolved)
-            })
-            let takenCount = statusCache.values.filter { if case .taken = $0 { return true } else { return false } }.count
-            let skippedCount = statusCache.values.filter { if case .skipped = $0 { return true } else { return false } }.count
-            let totalCount = schedules.count
-            let actionableSchedules = schedules.filter { canLogDose(for: $0, status: statusCache[$0.id] ?? .none) }
-            let currentAction = actionableSchedules.first
-            let nextUpcoming = schedules.first {
-                let status = statusCache[$0.id] ?? .none
-                return !canLogDose(for: $0, status: status) && !isFinalStatus(status)
-            }
-            let overdueCount = schedules.filter {
-                if case .overdue = statusCache[$0.id] ?? .none { return true }
-                return false
-            }.count
-            let remainingCount = max(totalCount - takenCount - skippedCount, 0)
-            let prnMeds = store.medications.filter { $0.isAsNeeded == true }
+            let state = buildTodayState()
+            let schedules = state.schedules
+            let statusCache = state.statusCache
+            let takenCount = state.takenCount
+            let skippedCount = state.skippedCount
+            let totalCount = state.totalCount
+            let currentAction = state.currentAction
+            let nextUpcoming = state.nextUpcoming
+            let overdueCount = state.overdueCount
+            let remainingCount = state.remainingCount
+            let prnMeds = state.prnMeds
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -93,7 +170,7 @@ struct DashboardView: View {
                         }
                     } else {
                         todayHeader(
-                            actionableCount: actionableSchedules.count,
+                            actionableCount: state.actionableSchedules.count,
                             takenCount: takenCount,
                             totalCount: totalCount
                         )
@@ -135,22 +212,19 @@ struct DashboardView: View {
             .sheet(isPresented: $showAddMedication) {
                 MedicationFormView(editing: nil, onSave: { med in
                     store.addMedication(med)
-                    NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
-                    NotificationManager.shared.updateBadge(store: store)
+                    store.syncNotifications()
                 })
             }
             .sheet(item: $reminderFixTarget) { med in
                 MedicationFormView(editing: med, onSave: { updated in
                     store.updateMedication(updated)
-                    NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
-                    NotificationManager.shared.updateBadge(store: store)
+                    store.syncNotifications()
                     refreshNotificationStatus()
                 })
             }
             .refreshable {
                 let now = Date()
-                NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs, now: now)
-                NotificationManager.shared.updateBadge(store: store)
+                store.syncNotifications(now: now)
                 refreshNotificationStatus()
                 store.objectWillChange.send()
             }
@@ -403,9 +477,9 @@ private extension DashboardView {
 
     private func timelineRow(item: MedSchedule, status: TodayMedStatus) -> some View {
         HStack(alignment: .center, spacing: 12) {
-            Image(systemName: timelineStatusIcon(for: status))
+            Image(systemName: status.iconName)
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(timelineStatusTint(for: status))
+                .foregroundStyle(status.tint)
                 .frame(width: 24)
                 .accessibilityHidden(true)
 
@@ -420,12 +494,12 @@ private extension DashboardView {
 
             Spacer()
 
-            Text(timelineStatusText(for: status))
+            Text(status.displayText)
                 .appFont(.caption)
-                .foregroundStyle(timelineStatusTint(for: status))
+                .foregroundStyle(status.tint)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(item.med.name), \(item.med.dose), \(item.time.formatted(date: .omitted, time: .shortened)), \(timelineStatusText(for: status))")
+        .accessibilityLabel("\(item.med.name), \(item.med.dose), \(item.time.formatted(date: .omitted, time: .shortened)), \(status.displayText)")
     }
 
     private func summaryStrip(
@@ -495,56 +569,6 @@ private extension DashboardView {
         }
     }
 
-    private func timelineStatusText(for status: TodayMedStatus) -> String {
-        switch status {
-        case .taken:
-            return NSLocalizedString("Taken", comment: "")
-        case .skipped:
-            return NSLocalizedString("Skipped", comment: "")
-        case .snoozed:
-            return NSLocalizedString("Snoozed", comment: "")
-        case .overdue:
-            return NSLocalizedString("Overdue", comment: "")
-        case .dueSoon:
-            return NSLocalizedString("Due now", comment: "")
-        case .none:
-            return NSLocalizedString("Later", comment: "")
-        }
-    }
-
-    private func timelineStatusTint(for status: TodayMedStatus) -> Color {
-        switch status {
-        case .taken:
-            return .green
-        case .skipped:
-            return .orange
-        case .snoozed:
-            return .blue
-        case .overdue:
-            return .red
-        case .dueSoon:
-            return .orange
-        case .none:
-            return .secondary
-        }
-    }
-
-    private func timelineStatusIcon(for status: TodayMedStatus) -> String {
-        switch status {
-        case .taken:
-            return "checkmark.circle.fill"
-        case .skipped:
-            return "xmark.circle.fill"
-        case .snoozed:
-            return "zzz"
-        case .overdue:
-            return "exclamationmark.circle.fill"
-        case .dueSoon:
-            return "clock.fill"
-        case .none:
-            return "clock"
-        }
-    }
 
     private func tomorrowsFirstDoseText() -> String? {
         let cal = Calendar.current
@@ -581,8 +605,7 @@ private extension DashboardView {
             scheduledDate: item.time
         )
         NotificationManager.shared.cancelDoseNotifications(for: item.med.id, timeComponents: comps, scheduledDate: item.time, now: item.time)
-        NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
-        NotificationManager.shared.updateBadge(store: store)
+        store.syncNotifications()
         Haptics.impact(.light)
     }
 
@@ -674,7 +697,7 @@ private extension DashboardView {
                     .accessibilityLabel(String(format: NSLocalizedString("Take %@ %@ now", comment: "Take medication accessibility"), item.med.name, item.med.dose))
                 }
             }
-        } else if let upcoming = schedules.first(where: { !isFinalStatus(statusCache[$0.id] ?? .none) }) {
+        } else if let upcoming = schedules.first(where: { !(statusCache[$0.id] ?? .none).isFinal }) {
             Card {
                 VStack(alignment: .leading, spacing: 14) {
                     Text(NSLocalizedString("Up Next", comment: ""))
@@ -1152,8 +1175,8 @@ private extension DashboardView {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.med.name)
                     .appFont(.body)
-                    .strikethrough(isFinalStatus(status), color: .secondary)
-                    .foregroundStyle(isFinalStatus(status) ? .secondary : .primary)
+                    .strikethrough(status.isFinal, color: .secondary)
+                    .foregroundStyle(status.isFinal ? .secondary : .primary)
                 Text("\(item.med.dose) · \(item.time, style: .time)")
                     .appFont(.caption)
                     .foregroundStyle(.secondary)
@@ -1255,14 +1278,12 @@ private extension DashboardView {
                 Button {
                     let now = Date()
                     let comps = cal.dateComponents([.hour, .minute], from: now)
-                    store.upsertIntake(
+                    store.recordTakenDose(
                         medicationID: med.id,
-                        status: .taken,
                         scheduleTime: comps,
                         scheduledDate: now,
                         scheduleKeyOverride: "prn_\(now.timeIntervalSince1970)"
                     )
-                    store.decrementPills(for: med.id)
                     Haptics.success()
                 } label: {
                     Text(NSLocalizedString("Take Now", comment: ""))
@@ -1279,28 +1300,20 @@ private extension DashboardView {
         .contentShape(Rectangle())
     }
 
-    private func isFinalStatus(_ status: TodayMedStatus) -> Bool {
-        switch status {
-        case .taken, .skipped: return true
-        default: return false
-        }
-    }
+
 
     private func commitTaken(note: String?) {
         guard let item = pendingNoteItem else { return }
         let comps = Calendar.current.dateComponents([.hour, .minute], from: item.time)
-        store.upsertIntake(
+        store.recordTakenDose(
             medicationID: item.med.id,
-            status: .taken,
             scheduleTime: comps,
             scheduledDate: item.time,
             note: note
         )
-        store.decrementPills(for: item.med.id)
         NotificationManager.shared.suppressToday(for: item.med.id, timeComponents: comps)
         NotificationManager.shared.cancelDoseNotifications(for: item.med.id, timeComponents: comps, scheduledDate: item.time, now: item.time)
-        NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
-        NotificationManager.shared.updateBadge(store: store)
+        store.syncNotifications()
         Haptics.success()
         takenMedName = item.med.name
         withAnimation(.easeInOut(duration: 0.25)) { showTakenConfirmation = true }
@@ -1339,8 +1352,7 @@ private extension DashboardView {
                         updated.remindersEnabled = true
                         store.updateMedication(updated)
                     }
-                    NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
-                    NotificationManager.shared.updateBadge(store: store)
+                    store.syncNotifications()
                     refreshNotificationStatus()
                     Haptics.success()
                 }
@@ -1389,7 +1401,7 @@ private extension DashboardView {
     }
 
     private func canLogDose(for item: MedSchedule, status: TodayMedStatus) -> Bool {
-        guard !isFinalStatus(status) else { return false }
+        guard !status.isFinal else { return false }
         switch status {
         case .dueSoon, .overdue, .snoozed:
             return true

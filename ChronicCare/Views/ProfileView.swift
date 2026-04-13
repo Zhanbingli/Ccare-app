@@ -291,7 +291,7 @@ struct ProfileView: View {
                     let meds = store.medications
                     meds.forEach { NotificationManager.shared.cancelAll(for: $0) }
                     store.clearAll()
-                    NotificationManager.shared.updateBadge(store: store)
+                    store.syncNotifications()
                     Haptics.success()
                     showClearedConfirmation = true
                 }
@@ -323,8 +323,7 @@ struct ProfileView: View {
                         let current = store.medications
                         current.forEach { NotificationManager.shared.cancelAll(for: $0) }
                         store.importBackup(backup)
-                        NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
-                        NotificationManager.shared.updateBadge(store: store)
+                        store.syncNotifications()
                         Haptics.success()
                         successMessage = NSLocalizedString("Backup restored successfully.", comment: "")
                         showSuccessAlert = true
@@ -378,8 +377,7 @@ struct ProfileView: View {
     }
 
     private func refreshNotificationConfiguration() {
-        NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
-        NotificationManager.shared.updateBadge(store: store)
+        store.syncNotifications()
     }
 
     @MainActor

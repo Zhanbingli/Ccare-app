@@ -51,27 +51,23 @@ import UserNotifications
                     NotificationManager.shared.suppressToday(for: medID, timeComponents: comps)
                 }
                 await MainActor.run {
-                    store?.upsertIntake(
+                    store?.recordTakenDose(
                         medicationID: medID,
-                        status: .taken,
                         scheduleTime: comps,
                         at: logAt,
                         scheduledDate: scheduledDate ?? logAt,
                         recordedAt: actionTimestamp
                     )
-                    store?.decrementPills(for: medID)
                 }
                 if let store, store.medications.contains(where: { $0.id == medID }) {
                     NotificationManager.shared.cancelDoseNotifications(for: medID, timeComponents: comps, scheduledDate: scheduledDate ?? logAt, now: logAt)
-                    NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
                 }
             } else {
                 await MainActor.run {
-                    store?.upsertIntake(medicationID: medID, status: .taken, scheduleTime: nil, recordedAt: actionTimestamp)
-                    store?.decrementPills(for: medID)
+                    store?.recordTakenDose(medicationID: medID, scheduleTime: nil, recordedAt: actionTimestamp)
                 }
             }
-            if let store = store { NotificationManager.shared.updateBadge(store: store) }
+            if let store = store { await MainActor.run { store.syncNotifications() } }
         case NotificationManager.actionSkip:
             if let comps = scheduleComps {
                 let logAt = logDate(from: comps)
@@ -90,12 +86,11 @@ import UserNotifications
                 }
                 if let store, store.medications.contains(where: { $0.id == medID }) {
                     NotificationManager.shared.cancelDoseNotifications(for: medID, timeComponents: comps, scheduledDate: scheduledDate ?? logAt, now: logAt)
-                    NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
                 }
             } else {
                 await MainActor.run { store?.upsertIntake(medicationID: medID, status: .skipped, scheduleTime: nil, recordedAt: actionTimestamp) }
             }
-            if let store = store { NotificationManager.shared.updateBadge(store: store) }
+            if let store = store { await MainActor.run { store.syncNotifications() } }
         case NotificationManager.actionSnooze, NotificationManager.actionSnooze10,
              NotificationManager.actionSnooze30, NotificationManager.actionSnooze60:
             // Data-driven snooze escalation via MedicationRules
@@ -145,13 +140,12 @@ import UserNotifications
                     }
                     if let store, store.medications.contains(where: { $0.id == medID }) {
                         NotificationManager.shared.cancelDoseNotifications(for: medID, timeComponents: comps, scheduledDate: scheduledDate ?? logAt, now: logAt)
-                        NotificationManager.shared.syncAll(medications: store.medications, intakeLogs: store.intakeLogs)
                     }
                 } else {
                     await MainActor.run { store?.upsertIntake(medicationID: medID, status: .skipped, scheduleTime: nil, recordedAt: actionTimestamp) }
                 }
             }
-            if let store = store { NotificationManager.shared.updateBadge(store: store) }
+            if let store = store { await MainActor.run { store.syncNotifications() } }
         default:
             break
         }

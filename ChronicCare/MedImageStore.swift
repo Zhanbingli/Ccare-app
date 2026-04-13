@@ -37,7 +37,8 @@ func loadMedicationImageData(path: String?) -> Data? {
     return try? Data(contentsOf: url)
 }
 
-func restoreMedicationImageData(_ data: Data, path: String) {
+@discardableResult
+func restoreMedicationImageData(_ data: Data, path: String) -> Bool {
     let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
     let url = docs.appendingPathComponent(path)
     let dir = url.deletingLastPathComponent()
@@ -47,10 +48,15 @@ func restoreMedicationImageData(_ data: Data, path: String) {
     do {
         try data.write(to: url, options: [.atomic, .completeFileProtection])
     } catch {
-        try? data.write(to: url, options: [.atomic])
+        do {
+            try data.write(to: url, options: [.atomic])
+        } catch {
+            return false
+        }
     }
     try? (dir as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
     try? (url as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
+    return true
 }
 
 func deleteMedicationImage(path: String?) {
