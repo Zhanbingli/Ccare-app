@@ -116,9 +116,12 @@ struct HealthView: View {
             }
             .sheet(isPresented: $showAdd) {
                 MedicationFormView(editing: nil, onSave: { med in
-                    store.addMedication(med)
-                    store.syncNotifications()
-                    refreshNotificationStatus()
+                    let result = store.addMedication(med)
+                    if result == nil {
+                        store.syncNotifications()
+                        refreshNotificationStatus()
+                    }
+                    return result
                 })
             }
             .sheet(isPresented: $showAddMeasurement) {
@@ -143,9 +146,12 @@ struct HealthView: View {
             }
             .sheet(item: $editTarget) { med in
                 MedicationFormView(editing: med, onSave: { updated in
-                    store.updateMedication(updated)
-                    store.syncNotifications()
-                    refreshNotificationStatus()
+                    let result = store.updateMedication(updated)
+                    if result == nil {
+                        store.syncNotifications()
+                        refreshNotificationStatus()
+                    }
+                    return result
                 }, onDelete: {
                     if let idx = store.medications.firstIndex(where: { $0.id == med.id }) {
                         NotificationManager.shared.cancelAll(for: med)

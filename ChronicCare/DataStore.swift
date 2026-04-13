@@ -91,7 +91,7 @@ final class DataStore: ObservableObject {
 
     private func validateMedication(_ item: Medication) -> String? {
         if case .error(let msg) = DataValidator.validateMedicationName(item.name) { return msg }
-        if item.remindersEnabled && item.isAsNeeded != true {
+        if item.isAsNeeded != true {
             if case .error(let msg) = DataValidator.validateMedicationSchedule(item.timesOfDay) { return msg }
         }
         if let remaining = item.pillsRemaining, remaining < 0 { return NSLocalizedString("Pills remaining cannot be negative.", comment: "") }

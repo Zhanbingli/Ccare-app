@@ -211,15 +211,21 @@ struct DashboardView: View {
             }
             .sheet(isPresented: $showAddMedication) {
                 MedicationFormView(editing: nil, onSave: { med in
-                    store.addMedication(med)
-                    store.syncNotifications()
+                    let result = store.addMedication(med)
+                    if result == nil {
+                        store.syncNotifications()
+                    }
+                    return result
                 })
             }
             .sheet(item: $reminderFixTarget) { med in
                 MedicationFormView(editing: med, onSave: { updated in
-                    store.updateMedication(updated)
-                    store.syncNotifications()
-                    refreshNotificationStatus()
+                    let result = store.updateMedication(updated)
+                    if result == nil {
+                        store.syncNotifications()
+                        refreshNotificationStatus()
+                    }
+                    return result
                 })
             }
             .refreshable {

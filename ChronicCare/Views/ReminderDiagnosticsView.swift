@@ -176,8 +176,11 @@ struct ReminderDiagnosticsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $editTarget) { med in
             MedicationFormView(editing: med, onSave: { updated in
-                store.updateMedication(updated)
-                store.syncNotifications()
+                let result = store.updateMedication(updated)
+                if result == nil {
+                    store.syncNotifications()
+                }
+                return result
             }, onDelete: {
                 if let idx = store.medications.firstIndex(where: { $0.id == med.id }) {
                     NotificationManager.shared.cancelAll(for: med)

@@ -124,7 +124,7 @@ struct DataValidator {
         }
 
         if Set(timeStrings).count < timeStrings.count {
-            return .warning(NSLocalizedString("Some reminder times are duplicated.", comment: ""))
+            return .error(NSLocalizedString("Reminder times must be unique.", comment: ""))
         }
 
         return .valid

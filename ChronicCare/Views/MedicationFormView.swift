@@ -5,7 +5,7 @@ import UIKit
 /// Unified medication add/edit form. Pass `editing` to pre-fill for edit mode.
 struct MedicationFormView: View {
     let editing: Medication?
-    var onSave: (Medication) -> Void
+    var onSave: (Medication) -> String?
     var onDelete: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
 
@@ -49,6 +49,8 @@ struct MedicationFormView: View {
     @State private var showInventoryDetails = false
     @State private var showCategoryDetails = false
     @State private var showAddOptionalDetails = false
+    @State private var showSaveError = false
+    @State private var saveErrorMessage: String?
     @FocusState private var focusedField: EntryField?
 
     // MARK: - Validation
@@ -62,7 +64,7 @@ struct MedicationFormView: View {
         Int(pillsRemainingText) ?? 0
     }
 
-    init(editing: Medication? = nil, onSave: @escaping (Medication) -> Void, onDelete: (() -> Void)? = nil) {
+    init(editing: Medication? = nil, onSave: @escaping (Medication) -> String?, onDelete: (() -> Void)? = nil) {
         self.editing = editing
         self.onSave = onSave
         self.onDelete = onDelete
@@ -316,6 +318,11 @@ struct MedicationFormView: View {
                 Button(NSLocalizedString("Switch", comment: ""), role: .destructive) { confirmSwitchToPRN() }
             } message: {
                 Text(NSLocalizedString("This will turn off fixed reminders for this medication and remove any scheduled times from the form.", comment: ""))
+            }
+            .alert(NSLocalizedString("Couldn't Save Medication", comment: ""), isPresented: $showSaveError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(saveErrorMessage ?? NSLocalizedString("Review the medication details and try again.", comment: ""))
             }
         }
     }
@@ -864,6 +871,14 @@ struct MedicationFormView: View {
         let comps = isAsNeeded ? [] : times.sorted(by: { $0 < $1 }).map { Calendar.current.dateComponents([.hour, .minute], from: $0) }
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
+        if case .error(let message) = DataValidator.validateMedicationName(trimmedName) {
+            presentSaveError(message)
+            return
+        }
+        if !isAsNeeded, case .error(let message) = DataValidator.validateMedicationSchedule(comps) {
+            presentSaveError(message)
+            return
+        }
 
         let id: UUID
         var imagePath: String?
@@ -905,9 +920,17 @@ struct MedicationFormView: View {
             courseEndDate: hasCourseEnd ? courseEndDate : nil,
             specialInstructions: specialInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : specialInstructions.trimmingCharacters(in: .whitespacesAndNewlines)
         )
-        onSave(med)
+        if let error = onSave(med) {
+            presentSaveError(error)
+            return
+        }
         Haptics.success()
         dismiss()
+    }
+
+    private func presentSaveError(_ message: String) {
+        saveErrorMessage = message
+        showSaveError = true
     }
 
     // MARK: - PRN
@@ -1266,11 +1289,31 @@ private extension MedicationFormView {
                 .lineLimit(lineLimit)
                 .textFieldStyle(.plain)
                 .appFont(field == .name || field == .dose ? .subheadline : .body)
+                .submitLabel(submitLabel(for: field))
+                .onSubmit { handleSubmit(for: field) }
                 .padding(13)
                 .background(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(Color(.secondarySystemBackground))
                 )
+        }
+    }
+
+    func submitLabel(for field: EntryField) -> SubmitLabel {
+        switch field {
+        case .name:
+            return .next
+        default:
+            return .done
+        }
+    }
+
+    func handleSubmit(for field: EntryField) {
+        switch field {
+        case .name:
+            focusedField = .dose
+        default:
+            focusedField = nil
         }
     }
 

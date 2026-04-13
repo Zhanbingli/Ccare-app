@@ -953,3 +953,6 @@
 "Take %@ %@ now" = "立即服用 %@ %@";
 "%@ photo" = "%@ 照片";
 "Call %@, %@" = "拨打 %@，%@";
+"Couldn't Save Medication" = "无法保存药物";
+"Review the medication details and try again." = "请检查药物信息后重试。";
+"Reminder times must be unique." = "提醒时间不能重复。";

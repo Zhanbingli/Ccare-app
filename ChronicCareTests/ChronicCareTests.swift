@@ -235,6 +235,41 @@ struct ChronicCareTests {
         #expect(count == 0)
     }
 
+    @Test func duplicateMedicationScheduleIsValidationError() {
+        let duplicateTimes = [
+            DateComponents(hour: 8, minute: 0),
+            DateComponents(hour: 8, minute: 0)
+        ]
+
+        let result = DataValidator.validateMedicationSchedule(duplicateTimes)
+
+        guard case .error(let message) = result else {
+            Issue.record("Expected duplicate schedule times to be rejected.")
+            return
+        }
+        #expect(message == "Reminder times must be unique.")
+    }
+
+    @MainActor
+    @Test func dataStoreRejectsMedicationWithDuplicateScheduleTimes() {
+        let store = DataStore()
+        store.clearAll()
+        let medication = Medication(
+            name: "Metformin",
+            dose: "500mg",
+            timesOfDay: [
+                DateComponents(hour: 8, minute: 0),
+                DateComponents(hour: 8, minute: 0)
+            ],
+            remindersEnabled: false
+        )
+
+        let error = store.addMedication(medication)
+
+        #expect(error == "Reminder times must be unique.")
+        #expect(store.medications.isEmpty)
+    }
+
     @Test func medicationCourseStateTracksEndingSoonAndEnded() {
         let calendar = Calendar.current
         let now = calendar.date(from: DateComponents(year: 2026, month: 4, day: 9, hour: 10, minute: 0))!
