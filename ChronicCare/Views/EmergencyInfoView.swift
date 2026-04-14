@@ -159,6 +159,8 @@ struct EmergencyInfoEditView: View {
         switch CNContactStore.authorizationStatus(for: .contacts) {
         case .authorized:
             showContactPicker = true
+        case .limited:
+            showContactPicker = true
         case .notDetermined:
             store.requestAccess(for: .contacts) { granted, _ in
                 DispatchQueue.main.async {

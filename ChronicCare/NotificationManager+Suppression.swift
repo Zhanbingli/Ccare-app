@@ -20,6 +20,8 @@ extension NotificationManager {
     }
 
     func isSuppressedToday(requestIdentifier: String) -> Bool {
+        // Snooze notifications are user-requested — never suppress them
+        if requestIdentifier.hasPrefix("snooze_") { return false }
         let set = loadSuppressedIds()
         if set.contains(requestIdentifier) { return true }
         guard let short = Self.suppressionKey(for: requestIdentifier) else { return false }

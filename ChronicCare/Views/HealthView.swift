@@ -105,6 +105,7 @@ struct HealthView: View {
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
+                    .accessibilityLabel(NSLocalizedString("More actions", comment: ""))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -112,6 +113,7 @@ struct HealthView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .accessibilityLabel(NSLocalizedString("Add Medication", comment: ""))
                 }
             }
             .sheet(isPresented: $showAdd) {

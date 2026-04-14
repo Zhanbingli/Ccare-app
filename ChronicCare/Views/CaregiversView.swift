@@ -105,6 +105,7 @@ struct CaregiversView: View {
             if !store.caregivers.isEmpty {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showAddOptions = true } label: { Image(systemName: "plus") }
+                        .accessibilityLabel(NSLocalizedString("Add Caregiver", comment: ""))
                 }
             }
         }

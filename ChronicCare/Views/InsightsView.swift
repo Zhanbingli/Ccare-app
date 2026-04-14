@@ -262,9 +262,11 @@ struct InsightsView: View {
         InsetPanel(tint: tint) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(value)
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .appFont(.largeTitle)
+                    .fontWeight(.bold)
                     .foregroundStyle(tint)
                     .monospacedDigit()
+                    .minimumScaleFactor(0.8)
                 Text(label)
                     .appFont(.footnote)
                     .foregroundStyle(.secondary)

@@ -148,7 +148,6 @@ struct DashboardView: View {
             let schedules = state.schedules
             let statusCache = state.statusCache
             let takenCount = state.takenCount
-            let skippedCount = state.skippedCount
             let totalCount = state.totalCount
             let currentAction = state.currentAction
             let nextUpcoming = state.nextUpcoming
@@ -348,6 +347,7 @@ private extension DashboardView {
                 Text(NSLocalizedString("Today", comment: ""))
                     .appFont(.largeTitle)
                     .fontWeight(.bold)
+                    .minimumScaleFactor(0.85)
                 Text(Date(), format: .dateTime.weekday(.wide).month(.abbreviated).day())
                     .appFont(.subheadline)
                     .foregroundStyle(.secondary)
@@ -398,33 +398,31 @@ private extension DashboardView {
 
                     HStack(spacing: 10) {
                         Button {
+                            snoozeDose(for: item)
+                        } label: {
+                            Text(NSLocalizedString("Later", comment: "Snooze button"))
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(snoozeButtonTint(for: item))
+
+                        Button {
                             beginTakeFlow(for: item)
                         } label: {
                             Text(NSLocalizedString("Take", comment: ""))
-                                .frame(maxWidth: .infinity)
+                                .fontWeight(.semibold)
+                                .frame(maxWidth: .infinity, minHeight: 44)
                         }
                         .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
                         .tint(.green)
-
-                        Button {
-                            snoozeDose(for: item)
-                        } label: {
-                            Text(NSLocalizedString("Snooze", comment: ""))
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
-                        .tint(snoozeButtonTint(for: item))
 
                         Button {
                             skipDose(for: item)
                         } label: {
                             Text(NSLocalizedString("Skip", comment: ""))
-                                .frame(maxWidth: .infinity)
+                                .frame(maxWidth: .infinity, minHeight: 44)
                         }
                         .buttonStyle(.bordered)
-                        .controlSize(.large)
                         .tint(.orange)
                     }
                 }

@@ -13,27 +13,27 @@ enum AppFontStyle {
     var font: Font {
         switch self {
         case .largeTitle:
-            return Font.system(size: 30, weight: .bold, design: .rounded)
+            return .system(.largeTitle, design: .rounded).weight(.bold)
         case .title:
-            return Font.system(size: 24, weight: .semibold, design: .rounded)
+            return .system(.title2, design: .rounded).weight(.semibold)
         case .headline:
-            return Font.system(size: 18, weight: .semibold, design: .rounded)
+            return .system(.headline, design: .rounded).weight(.semibold)
         case .subheadline:
-            return Font.system(size: 16, weight: .medium, design: .rounded)
+            return .system(.subheadline, design: .rounded).weight(.medium)
         case .body:
-            return Font.system(size: 16, weight: .regular, design: .rounded)
+            return .system(.body, design: .rounded)
         case .label:
-            return Font.system(size: 15, weight: .semibold, design: .rounded)
+            return .system(.callout, design: .rounded).weight(.semibold)
         case .footnote:
-            return Font.system(size: 14, weight: .regular, design: .rounded)
+            return .system(.footnote, design: .rounded)
         case .caption:
-            return Font.system(size: 13, weight: .medium, design: .rounded)
+            return .system(.caption, design: .rounded).weight(.medium)
         }
     }
 }
 
 extension View {
     func appFont(_ style: AppFontStyle) -> some View {
-        font(style.font).dynamicTypeSize(.medium ... .accessibility5)
+        font(style.font)
     }
 }

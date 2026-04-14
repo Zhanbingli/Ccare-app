@@ -91,6 +91,7 @@ struct MeasurementsView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showAdd = true } label: { Image(systemName: "plus") }
+                        .accessibilityLabel(NSLocalizedString("Add Measurement", comment: ""))
                 }
             }
             .sheet(isPresented: $showAdd) {

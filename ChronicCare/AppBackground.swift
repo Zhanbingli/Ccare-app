@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AppBackground: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
 
     var body: some View {
         ZStack {
@@ -12,24 +13,28 @@ struct AppBackground: View {
             )
 
             Circle()
-                .fill(Color.blue.opacity(colorScheme == .dark ? 0.22 : 0.14))
+                .fill(Color.blue.opacity(colorScheme == .dark ? (reduceVisualNoise ? 0.12 : 0.22) : (reduceVisualNoise ? 0.07 : 0.14)))
                 .frame(width: 340, height: 340)
-                .blur(radius: 70)
+                .blur(radius: reduceVisualNoise ? 44 : 70)
                 .offset(x: -120, y: -240)
 
             Circle()
-                .fill(Color.mint.opacity(colorScheme == .dark ? 0.18 : 0.12))
+                .fill(Color.mint.opacity(colorScheme == .dark ? (reduceVisualNoise ? 0.10 : 0.18) : (reduceVisualNoise ? 0.06 : 0.12)))
                 .frame(width: 300, height: 300)
-                .blur(radius: 80)
+                .blur(radius: reduceVisualNoise ? 50 : 80)
                 .offset(x: 150, y: -120)
 
             Circle()
-                .fill(Color.orange.opacity(colorScheme == .dark ? 0.10 : 0.08))
+                .fill(Color.orange.opacity(colorScheme == .dark ? (reduceVisualNoise ? 0.06 : 0.10) : (reduceVisualNoise ? 0.04 : 0.08)))
                 .frame(width: 260, height: 260)
-                .blur(radius: 90)
+                .blur(radius: reduceVisualNoise ? 54 : 90)
                 .offset(x: 170, y: 320)
         }
         .ignoresSafeArea()
+    }
+
+    private var reduceVisualNoise: Bool {
+        colorSchemeContrast == .increased
     }
 
     private var backgroundStops: [Color] {

@@ -643,7 +643,7 @@ final class NotificationManager {
         let cal = Calendar.current
         let todayStart = cal.startOfDay(for: now)
         var total = 0
-        for med in medications where med.remindersEnabled {
+        for med in medications where med.remindersEnabled && med.isAsNeeded != true {
             let times = med.timesOfDay.compactMap { comps -> (Int, Int)? in
                 guard let h = comps.hour, let m = comps.minute else { return nil }
                 return (h, m)
@@ -659,8 +659,9 @@ final class NotificationManager {
                     .filter { log in
                         guard log.medicationID == med.id else { return false }
                         let d = log.date
+                        guard let dayEnd = cal.date(byAdding: .day, value: 1, to: todayStart) else { return false }
                         return d >= todayStart
-                            && d < cal.date(byAdding: .day, value: 1, to: todayStart)!
+                            && d < dayEnd
                             && (log.scheduleKey == key || (allowNil && log.scheduleKey == nil))
                     }
                     .sorted { $0.date > $1.date }
@@ -776,10 +777,18 @@ extension NotificationManager {
 
     static func scheduledDate(fromIdentifier identifier: String) -> Date? {
         let parts = identifier.split(separator: "_")
-        guard parts.count >= 3 else { return nil }
-        // Pattern: <medID>_yyyyMMdd_HH_MM
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd"
-        return formatter.date(from: String(parts[1]))
+
+        // Primary: <UUID>_yyyyMMdd_HH_MM  → parts[1] is date
+        if parts.count >= 4, parts[0] != "snooze", parts[0] != "followup" {
+            return formatter.date(from: String(parts[1]))
+        }
+        // followup_<attempt>_<UUID>_yyyyMMdd_HH_MM → parts[3] is date
+        if parts.count >= 6, parts[0] == "followup" {
+            return formatter.date(from: String(parts[3]))
+        }
+        // snooze_<UUID>_HH_MM → no date component, return nil (caller uses userInfo)
+        return nil
     }
 }

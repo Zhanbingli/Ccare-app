@@ -41,8 +41,7 @@ struct ContentView: View {
                     .tabItem { Label(NSLocalizedString("Insights", comment: ""), systemImage: "chart.line.uptrend.xyaxis") }
             }
         }
-        .environment(\.font, AppFontStyle.body.font)
-        .dynamicTypeSize(.medium ... .accessibility5)
+        .dynamicTypeSize(.xSmall ... .accessibility5)
         .onChange(of: scenePhase) { newPhase in
             guard newPhase == .active else { return }
             let now = Date()

@@ -1176,6 +1176,7 @@ private extension MedicationFormView {
                 Image(systemName: isExpanded.wrappedValue ? "chevron.up" : "chevron.down")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
             }
             .padding(.vertical, 2)
         }
@@ -1212,6 +1213,7 @@ private extension MedicationFormView {
                 Image(systemName: schedulePreset == preset ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(schedulePreset == preset ? Color.accentColor : Color(uiColor: .tertiaryLabel))
+                    .accessibilityHidden(true)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 11)
@@ -1225,6 +1227,9 @@ private extension MedicationFormView {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text(preset.title))
+        .accessibilityValue(schedulePreset == preset ? Text(NSLocalizedString("Selected", comment: "")) : Text(NSLocalizedString("Not selected", comment: "")))
     }
 
     var scanAssistPanel: some View {
