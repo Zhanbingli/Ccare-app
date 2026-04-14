@@ -908,6 +908,7 @@
 "Pick a frequency, then adjust the times." = "选择频率，再调整时间。";
 "Time" = "时间";
 "Times saved, but notifications won't fire." = "时间已保存，但不会发送通知。";
+"As Needed Only" = "仅按需服用";
 "How is it taken?" = "服用方式";
 "Once daily" = "每天一次";
 "Twice daily" = "每天两次";

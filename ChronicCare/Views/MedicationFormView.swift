@@ -234,14 +234,15 @@ struct MedicationFormView: View {
     private var formSections: some View {
         VStack(alignment: .leading, spacing: isEditing ? 16 : 24) {
             medicationSection
-            intakeModeSection
-            if !isAsNeeded { scheduleSection }
             if isEditing {
+                intakeModeSection
+                if !isAsNeeded { scheduleSection }
                 optionalDetailsSection
+                if onDelete != nil { deleteSection }
             } else {
+                combinedScheduleSection
                 addOptionalDetailsEntrySection
             }
-            if isEditing, onDelete != nil { deleteSection }
         }
         .padding(.horizontal, isEditing ? 16 : 20)
         .padding(.top, 12)
@@ -413,6 +414,124 @@ struct MedicationFormView: View {
         }
     }
 
+    /// Combined schedule section for new-entry mode: frequency + times + as-needed toggle in one panel.
+    private var combinedScheduleSection: some View {
+        sectionWrapper {
+            VStack(alignment: .leading, spacing: 16) {
+                sectionHeader(
+                    step: "2",
+                    title: NSLocalizedString("Schedule", comment: ""),
+                    detail: NSLocalizedString("Pick a frequency, then adjust the times.", comment: "")
+                )
+
+                InsetPanel {
+                    VStack(alignment: .leading, spacing: 14) {
+                        if !isAsNeeded {
+                            // Frequency picker
+                            Picker(NSLocalizedString("Frequency", comment: ""), selection: $schedulePreset) {
+                                ForEach(SchedulePreset.allCases) { preset in
+                                    Text(preset.shortLabel).tag(preset)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+
+                            Divider()
+
+                            // Inline time pickers
+                            ForEach(Array(times.indices), id: \.self) { idx in
+                                HStack {
+                                    Text(times.count == 1
+                                         ? NSLocalizedString("Time", comment: "Single reminder time label")
+                                         : String(format: NSLocalizedString("Time %lld", comment: ""), idx + 1))
+                                        .appFont(.subheadline)
+                                    Spacer()
+                                    DatePicker(
+                                        "",
+                                        selection: Binding(
+                                            get: { times[idx] },
+                                            set: { newValue in
+                                                schedulePreset = .custom
+                                                times[idx] = newValue
+                                            }
+                                        ),
+                                        displayedComponents: .hourAndMinute
+                                    )
+                                    .labelsHidden()
+                                    if schedulePreset == .custom && times.count > 1 {
+                                        Button(role: .destructive) {
+                                            times.remove(at: idx)
+                                        } label: {
+                                            Image(systemName: "minus.circle.fill")
+                                                .foregroundStyle(.red)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+
+                            validationHint(scheduleValidation)
+
+                            if schedulePreset == .custom {
+                                Button {
+                                    times.append(defaultCustomTime(after: times.last))
+                                } label: {
+                                    secondaryActionLabel(NSLocalizedString("Add Time", comment: ""), systemImage: "plus.circle.fill")
+                                }
+                                .buttonStyle(.plain)
+                            }
+
+                            Divider()
+
+                            // Reminders toggle
+                            HStack {
+                                Text(NSLocalizedString("Reminders", comment: ""))
+                                    .appFont(.subheadline)
+                                Spacer()
+                                Toggle("", isOn: $remindersEnabled)
+                                    .labelsHidden()
+                            }
+                            if !remindersEnabled {
+                                Text(NSLocalizedString("Times saved, but notifications won't fire.", comment: ""))
+                                    .appFont(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else {
+                            Text(NSLocalizedString("As-needed medications skip fixed reminder times. Log each dose from Today only when you actually take it.", comment: ""))
+                                .appFont(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        Divider()
+
+                        // As-needed toggle at bottom
+                        HStack {
+                            Text(NSLocalizedString("As Needed Only", comment: ""))
+                                .appFont(.subheadline)
+                            Spacer()
+                            Toggle("", isOn: Binding(
+                                get: { isAsNeeded },
+                                set: { newValue in
+                                    if newValue {
+                                        requestSwitchToPRN()
+                                    } else {
+                                        isAsNeeded = false
+                                        if times.isEmpty {
+                                            schedulePreset = .onceDaily
+                                            updateSchedulePreset(.onceDaily)
+                                        }
+                                        remindersEnabled = true
+                                    }
+                                }
+                            ))
+                            .labelsHidden()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private var scheduleSection: some View {
         sectionWrapper {
             VStack(alignment: .leading, spacing: 16) {
@@ -516,7 +635,7 @@ struct MedicationFormView: View {
         sectionWrapper(showDivider: false) {
             VStack(alignment: .leading, spacing: 16) {
                 sectionHeader(
-                    step: "4",
+                    step: "3",
                     title: NSLocalizedString("More Details", comment: ""),
                     detail: NSLocalizedString("Keep the first pass short. Add instructions, supply tracking, category, or a photo only if they matter right now.", comment: "")
                 )
@@ -844,7 +963,13 @@ struct MedicationFormView: View {
             courseEndDate = med.courseEndDate ?? Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
             specialInstructions = med.specialInstructions ?? ""
         }
-        schedulePreset = inferredSchedulePreset(from: times)
+        if editing != nil {
+            schedulePreset = inferredSchedulePreset(from: times)
+        } else {
+            // New entry: default to once daily with pre-filled time
+            schedulePreset = .onceDaily
+            updateSchedulePreset(.onceDaily)
+        }
         showInstructionsDetails = foodInstruction != nil || !specialInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         showInventoryDetails = trackSupply || hasCourseEnd
         showCategoryDetails = category != .unspecified || hasPhoto

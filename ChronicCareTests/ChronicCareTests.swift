@@ -120,7 +120,7 @@ struct ChronicCareTests {
         let cal = Calendar.current
         let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 8, hour: 10, minute: 0))!
         let comps = DateComponents(hour: 8, minute: 0)
-        let medStart = cal.date(byAdding: .day, value: -6, to: now)!
+        let medStart = cal.startOfDay(for: cal.date(byAdding: .day, value: -6, to: now)!)
         let med = Medication(name: "Metformin", dose: "500mg", startDate: medStart, timesOfDay: [comps], remindersEnabled: true)
 
         let logs = (0..<7).compactMap { offset -> IntakeLog? in

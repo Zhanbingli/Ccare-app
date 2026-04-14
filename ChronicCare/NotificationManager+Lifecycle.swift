@@ -205,10 +205,29 @@ extension NotificationManager {
     }
 
     /// Ensures refill and course reminders are in sync with the current medication list.
+    /// Checks the pending notification count first and skips lifecycle scheduling
+    /// if it would push the total past the iOS 64-notification limit.
     func checkLifecycleReminders(medications: [Medication], now: Date = Date()) {
-        for med in medications {
-            scheduleRefillReminder(for: med)
-            scheduleCourseReminder(for: med, now: now)
+        let center = UNUserNotificationCenter.current()
+        center.getPendingNotificationRequests { [weak self] list in
+            guard let self else { return }
+            let lifecycleIds = Set(medications.flatMap { med -> [String] in
+                [self.refillIdentifier(for: med.id), self.courseIdentifier(for: med.id)]
+            })
+            let nonLifecycleCount = list.filter { !lifecycleIds.contains($0.identifier) }.count
+            let budget = max(0, SchedulingConfig.maxPendingNotifications - nonLifecycleCount)
+
+            // Sort medications: those with urgent refill/course needs first
+            let sorted = medications.sorted { a, b in
+                (a.daysOfSupplyRemaining ?? Int.max) < (b.daysOfSupplyRemaining ?? Int.max)
+            }
+            var used = 0
+            for med in sorted {
+                if used < budget { self.scheduleRefillReminder(for: med); used += 1 }
+                else { self.cancelRefillReminder(for: med.id) }
+                if used < budget { self.scheduleCourseReminder(for: med, now: now); used += 1 }
+                else { self.cancelCourseReminder(for: med.id) }
+            }
         }
     }
 

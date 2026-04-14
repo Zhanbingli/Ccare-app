@@ -28,7 +28,10 @@ struct ChronicCareApp: App {
                 .onAppear {
                     notifHandler.store = store
                     NotificationManager.shared.registerCategories()
-                    store.syncNotifications()
+                    Task {
+                        _ = await NotificationManager.shared.ensureAuthorization()
+                        await MainActor.run { store.syncNotifications() }
+                    }
                     NotificationManager.shared.startBadgeAutoRefresh(store: store)
                 }
         }

@@ -620,6 +620,7 @@ private extension DashboardView {
 
         switch result {
         case .snooze(let minutes):
+            NotificationManager.shared.cancelFollowUps(for: item.med.id, timeComponents: comps, scheduledDate: item.time)
             NotificationManager.shared.incrementSnoozeCount(for: item.med.id, scheduleTime: comps)
             NotificationManager.shared.scheduleSnooze(for: item.med, minutes: minutes, scheduleTime: comps, scheduledDate: item.time)
             if Calendar.current.isDateInToday(item.time) {

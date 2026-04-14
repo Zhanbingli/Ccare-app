@@ -340,6 +340,13 @@ final class NotificationManager {
     private func followUpBudget(for medications: [Medication]) -> Int {
         let reserved = lifecycleReservationSlots(for: medications) + manualActionReserveSlots
         let remaining = max(0, maxPendingNotificationBudget - reserved)
+        // Count daily dose slots to estimate primary pressure
+        let dailyDoseCount = medications.filter(isReminderEligible).reduce(0) { $0 + $1.timesOfDay.count }
+        // If primary budget can't cover 3 days, yield all follow-up slots to primaries
+        let minPrimaryDays = 3
+        if dailyDoseCount > 0 && remaining < dailyDoseCount * minPrimaryDays {
+            return 0
+        }
         return min(maxScheduledFollowUpRequests, max(0, remaining / 6))
     }
 
@@ -554,6 +561,7 @@ final class NotificationManager {
         if let scheduledDate { info["scheduledDate"] = isoFormatter.string(from: scheduledDate) }
         content.userInfo = info
         content.threadIdentifier = medication.id.uuidString
+        content.badge = NSNumber(value: 1)
         if #available(iOS 15.0, *) { content.interruptionLevel = riskLevel == .low ? .active : .timeSensitive }
         if #available(iOS 15.0, *) { content.relevanceScore = min(baseRelevanceScore(for: riskLevel) + Double(attempt) * 0.03, 1.0) }
         return content
@@ -592,6 +600,7 @@ final class NotificationManager {
         if let scheduledDate { info["scheduledDate"] = isoFormatter.string(from: scheduledDate) }
         content.userInfo = info
         content.threadIdentifier = medication.id.uuidString
+        content.badge = NSNumber(value: 1)
         if #available(iOS 15.0, *) { content.interruptionLevel = riskLevel == .low ? .active : .timeSensitive }
         if #available(iOS 15.0, *) { content.relevanceScore = baseRelevanceScore(for: riskLevel) }
         return content
