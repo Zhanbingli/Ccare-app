@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ChronicCare", category: "FileWriter")
 
 /// Serializes file writes so rapid mutations cannot race and overwrite each other.
 actor SerialFileWriter {
@@ -13,9 +16,7 @@ actor SerialFileWriter {
             }
             try? (url as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
         } catch {
-            #if DEBUG
-            print("Failed to save \(label): \(error)")
-            #endif
+            logger.error("Failed to save \(label): \(error.localizedDescription)")
         }
     }
 }

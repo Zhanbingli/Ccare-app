@@ -1,6 +1,9 @@
 import Foundation
 import UserNotifications
 import UIKit
+import os
+
+private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ChronicCare", category: "Notifications")
 
 // MARK: - NotificationManager
 // Central singleton for all UNUserNotificationCenter interactions.
@@ -102,13 +105,9 @@ final class NotificationManager {
     func requestAuthorization() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if let error = error {
-                #if DEBUG
-                print("Notification auth error: \(error)")
-                #endif
+                logger.error("Notification auth error: \(error.localizedDescription)")
             } else {
-                #if DEBUG
-                print("Notifications granted: \(granted)")
-                #endif
+                logger.info("Notifications granted: \(granted)")
             }
         }
     }
@@ -302,9 +301,7 @@ final class NotificationManager {
         )
         let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
         center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger)) { error in
-            #if DEBUG
-            if let error = error { print("Notification schedule error: \(error)") }
-            #endif
+            if let error = error { logger.error("Notification schedule error: \(error.localizedDescription)") }
         }
     }
 

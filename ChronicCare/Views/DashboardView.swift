@@ -174,6 +174,10 @@ struct DashboardView: View {
                             totalCount: totalCount
                         )
 
+                        if notificationStatus == .denied {
+                            reminderRepairCard()
+                        }
+
                         currentStateCard(
                             currentAction: currentAction,
                             nextUpcoming: nextUpcoming,
@@ -199,7 +203,7 @@ struct DashboardView: View {
                             asNeededCompactSection(medications: prnMeds)
                         }
 
-                        if hasReminderSetupIssues {
+                        if notificationStatus != .denied && hasReminderSetupIssues {
                             reminderRepairCard()
                         }
                     }

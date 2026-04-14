@@ -1,5 +1,8 @@
 import Foundation
 import Combine
+import os
+
+private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ChronicCare", category: "DataStore")
 
 @MainActor
 final class DataStore: ObservableObject {
@@ -269,9 +272,7 @@ final class DataStore: ObservableObject {
         }
         // Slow path: decode element-by-element, skipping corrupt records
         guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            #if DEBUG
-            print("Load \(label): file is not a JSON array, starting empty")
-            #endif
+            logger.warning("Load \(label): file is not a JSON array, starting empty")
             return []
         }
         var results: [T] = []
@@ -281,9 +282,7 @@ final class DataStore: ObservableObject {
                 let decoded = try JSONDecoder().decode(T.self, from: elementData)
                 results.append(decoded)
             } catch {
-                #if DEBUG
-                print("Load \(label): skipped corrupt record at index \(index): \(error)")
-                #endif
+                logger.warning("Load \(label): skipped corrupt record at index \(index): \(error.localizedDescription)")
             }
         }
         return results
