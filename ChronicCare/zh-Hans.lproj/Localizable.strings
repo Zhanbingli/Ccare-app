@@ -902,6 +902,12 @@
 "These fields help with context and maintenance, but they are not required to save the medication." = "这些字段有助于后续管理和补充背景信息，但保存药物并不依赖它们。";
 
 // MARK: - MedicationFormView
+"1×/day" = "1×/天";
+"2×/day" = "2×/天";
+"3×/day" = "3×/天";
+"Pick a frequency, then adjust the times." = "选择频率，再调整时间。";
+"Time" = "时间";
+"Times saved, but notifications won't fire." = "时间已保存，但不会发送通知。";
 "How is it taken?" = "服用方式";
 "Once daily" = "每天一次";
 "Twice daily" = "每天两次";

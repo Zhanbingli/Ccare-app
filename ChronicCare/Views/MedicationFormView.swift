@@ -85,6 +85,15 @@ struct MedicationFormView: View {
         case onceDaily, twiceDaily, threeTimesDaily, custom
         var id: String { rawValue }
 
+        var shortLabel: String {
+            switch self {
+            case .onceDaily: return NSLocalizedString("1×/day", comment: "Once daily short")
+            case .twiceDaily: return NSLocalizedString("2×/day", comment: "Twice daily short")
+            case .threeTimesDaily: return NSLocalizedString("3×/day", comment: "Three times daily short")
+            case .custom: return NSLocalizedString("Custom", comment: "Custom schedule short")
+            }
+        }
+
         var title: LocalizedStringKey {
             switch self {
             case .onceDaily: return "Once Daily"
@@ -158,30 +167,6 @@ struct MedicationFormView: View {
         )
     }
 
-    private var scheduleHelperText: String {
-        if times.isEmpty {
-            return NSLocalizedString("Choose how often this medication is taken, then confirm the reminder times.", comment: "")
-        }
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        let timeSummary = times.sorted(by: { $0 < $1 }).map { formatter.string(from: $0) }.joined(separator: " • ")
-        if remindersEnabled {
-            return String(format: NSLocalizedString("Scheduled for %@", comment: ""), timeSummary)
-        }
-        return String(format: NSLocalizedString("Times saved without reminders: %@", comment: ""), timeSummary)
-    }
-
-    private var schedulePlanTitle: String {
-        if times.isEmpty {
-            return NSLocalizedString("No frequency selected", comment: "")
-        }
-        switch schedulePreset {
-        case .onceDaily: return NSLocalizedString("Once daily", comment: "")
-        case .twiceDaily: return NSLocalizedString("Twice daily", comment: "")
-        case .threeTimesDaily: return NSLocalizedString("Three times daily", comment: "")
-        case .custom: return String(format: NSLocalizedString("Custom schedule · %lld times", comment: ""), times.count)
-        }
-    }
 
     private var instructionsSummary: String {
         if let foodInstruction { return foodInstruction.displayName }
@@ -434,44 +419,51 @@ struct MedicationFormView: View {
                 sectionHeader(
                     step: "3",
                     title: NSLocalizedString("Schedule", comment: ""),
-                    detail: NSLocalizedString("Choose how often this medication is taken, then confirm the times below.", comment: "")
+                    detail: NSLocalizedString("Pick a frequency, then adjust the times.", comment: "")
                 )
 
-                InsetPanel(tint: remindersEnabled ? .blue : .gray) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(NSLocalizedString("Current Plan", comment: ""))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(schedulePlanTitle)
-                            .appFont(.headline)
-                        Text(scheduleHelperText)
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
                 InsetPanel {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(NSLocalizedString("Frequency", comment: ""))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-
-                        VStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        // Frequency picker
+                        Picker(NSLocalizedString("Frequency", comment: ""), selection: $schedulePreset) {
                             ForEach(SchedulePreset.allCases) { preset in
-                                frequencyRow(for: preset)
+                                Text(preset.shortLabel).tag(preset)
                             }
                         }
-                    }
-                }
+                        .pickerStyle(.segmented)
 
-                InsetPanel {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(NSLocalizedString("Reminder Times", comment: ""))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
+                        Divider()
 
+                        // Inline time pickers
                         ForEach(Array(times.indices), id: \.self) { idx in
-                            timeRow(for: idx)
+                            HStack {
+                                Text(times.count == 1
+                                     ? NSLocalizedString("Time", comment: "Single reminder time label")
+                                     : String(format: NSLocalizedString("Time %lld", comment: ""), idx + 1))
+                                    .appFont(.subheadline)
+                                Spacer()
+                                DatePicker(
+                                    "",
+                                    selection: Binding(
+                                        get: { times[idx] },
+                                        set: { newValue in
+                                            schedulePreset = .custom
+                                            times[idx] = newValue
+                                        }
+                                    ),
+                                    displayedComponents: .hourAndMinute
+                                )
+                                .labelsHidden()
+                                if schedulePreset == .custom && times.count > 1 {
+                                    Button(role: .destructive) {
+                                        times.remove(at: idx)
+                                    } label: {
+                                        Image(systemName: "minus.circle.fill")
+                                            .foregroundStyle(.red)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
                         }
 
                         validationHint(scheduleValidation)
@@ -483,29 +475,23 @@ struct MedicationFormView: View {
                                 secondaryActionLabel(NSLocalizedString("Add Time", comment: ""), systemImage: "plus.circle.fill")
                             }
                             .buttonStyle(.plain)
-                        } else {
-                            Text(NSLocalizedString("Adjust the times if needed. Frequency controls how many reminders are created each day.", comment: ""))
-                                .appFont(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
                         }
-                    }
-                }
 
-                InsetPanel {
-                    HStack(spacing: 10) {
-                        VStack(alignment: .leading, spacing: 3) {
+                        Divider()
+
+                        // Reminders toggle
+                        HStack {
                             Text(NSLocalizedString("Reminders", comment: ""))
                                 .appFont(.subheadline)
-                            Text(remindersEnabled
-                                 ? NSLocalizedString("The app will notify you at the times above.", comment: "")
-                                 : NSLocalizedString("Times stay saved, but notifications are turned off.", comment: ""))
+                            Spacer()
+                            Toggle("", isOn: $remindersEnabled)
+                                .labelsHidden()
+                        }
+                        if !remindersEnabled {
+                            Text(NSLocalizedString("Times saved, but notifications won't fire.", comment: ""))
                                 .appFont(.caption)
                                 .foregroundStyle(.secondary)
                         }
-                        Spacer()
-                        Toggle(NSLocalizedString("Reminders", comment: ""), isOn: $remindersEnabled)
-                            .labelsHidden()
                     }
                 }
             }
@@ -1196,41 +1182,6 @@ private extension MedicationFormView {
         }
     }
 
-    func frequencyRow(for preset: SchedulePreset) -> some View {
-        Button {
-            schedulePreset = preset
-        } label: {
-            HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(preset.title)
-                        .appFont(.subheadline)
-                        .foregroundStyle(.primary)
-                    Text(preset.subtitle)
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Image(systemName: schedulePreset == preset ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(schedulePreset == preset ? Color.accentColor : Color(uiColor: .tertiaryLabel))
-                    .accessibilityHidden(true)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 11)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(schedulePreset == preset ? Color.accentColor.opacity(0.08) : Color(.secondarySystemBackground))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(schedulePreset == preset ? Color.accentColor.opacity(0.22) : Color.clear, lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(preset.title))
-        .accessibilityValue(schedulePreset == preset ? Text(NSLocalizedString("Selected", comment: "")) : Text(NSLocalizedString("Not selected", comment: "")))
-    }
 
     var scanAssistPanel: some View {
         InsetPanel(tint: .blue) {
@@ -1347,45 +1298,6 @@ private extension MedicationFormView {
     }
 
     @ViewBuilder
-    func timeRow(for idx: Int) -> some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(String(format: NSLocalizedString("Time %lld", comment: ""), idx + 1))
-                    .appFont(.caption)
-                    .foregroundStyle(.secondary)
-
-                DatePicker(
-                    "",
-                    selection: Binding(
-                        get: { times[idx] },
-                        set: { newValue in
-                            schedulePreset = .custom
-                            times[idx] = newValue
-                        }
-                    ),
-                    displayedComponents: .hourAndMinute
-                )
-                .labelsHidden()
-            }
-            Spacer()
-            if times.count > 1 {
-                Button(role: .destructive) {
-                    schedulePreset = .custom
-                    times.remove(at: idx)
-                } label: {
-                    Image(systemName: "minus.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.red)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
-    }
 
     var photoAttachmentRow: some View {
         HStack(spacing: 12) {

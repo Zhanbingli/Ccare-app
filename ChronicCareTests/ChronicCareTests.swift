@@ -93,9 +93,10 @@ struct ChronicCareTests {
         let cal = Calendar.current
         let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 8, hour: 10, minute: 0))!
         let comps = DateComponents(hour: 8, minute: 0)
-        let med = Medication(name: "Amlodipine", dose: "5mg", timesOfDay: [comps], remindersEnabled: true)
+        let medStart = cal.date(byAdding: .day, value: -6, to: now)!
+        let med = Medication(name: "Amlodipine", dose: "5mg", startDate: medStart, timesOfDay: [comps], remindersEnabled: true)
 
-        let logs = (0..<3).compactMap { offset -> IntakeLog? in
+        let logs = (0..<6).compactMap { offset -> IntakeLog? in
             guard let scheduled = cal.date(byAdding: .day, value: -offset, to: now).flatMap({ cal.date(bySettingHour: 8, minute: 0, second: 0, of: $0) }) else { return nil }
             let recorded = scheduled.addingTimeInterval(18 * 60)
             return IntakeLog(
@@ -119,7 +120,8 @@ struct ChronicCareTests {
         let cal = Calendar.current
         let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 8, hour: 10, minute: 0))!
         let comps = DateComponents(hour: 8, minute: 0)
-        let med = Medication(name: "Metformin", dose: "500mg", timesOfDay: [comps], remindersEnabled: true)
+        let medStart = cal.date(byAdding: .day, value: -6, to: now)!
+        let med = Medication(name: "Metformin", dose: "500mg", startDate: medStart, timesOfDay: [comps], remindersEnabled: true)
 
         let logs = (0..<7).compactMap { offset -> IntakeLog? in
             guard let scheduled = cal.date(byAdding: .day, value: -offset, to: now).flatMap({ cal.date(bySettingHour: 8, minute: 0, second: 0, of: $0) }) else { return nil }
