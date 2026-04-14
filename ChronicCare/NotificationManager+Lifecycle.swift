@@ -7,10 +7,10 @@ import UserNotifications
 
 extension NotificationManager {
 
-    // MARK: - Category identifiers (file-private constants, not stored properties)
+    // MARK: - Category identifiers
 
-    fileprivate static let refillCategoryId = "MED_REFILL"
-    fileprivate static let courseCategoryId = "MED_COURSE_END"
+    static let refillCategoryId = "MED_REFILL"
+    static let courseCategoryId = "MED_COURSE_END"
 
     // MARK: - Identifier helpers
 

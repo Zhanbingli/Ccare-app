@@ -119,12 +119,22 @@ final class NotificationManager {
         let snooze30 = UNNotificationAction(identifier: Self.actionSnooze30, title: NSLocalizedString("Snooze 30m", comment: ""), options: [])
         let snooze60 = UNNotificationAction(identifier: Self.actionSnooze60, title: NSLocalizedString("Snooze 60m", comment: ""), options: [])
         let skip    = UNNotificationAction(identifier: Self.actionSkip,    title: NSLocalizedString("Skip",       comment: ""), options: [.destructive])
-        let category = UNNotificationCategory(
+        let doseCategory = UNNotificationCategory(
             identifier: Self.categoryId,
             actions: [taken, snooze10, snooze30, snooze60, skip],
             intentIdentifiers: []
         )
-        UNUserNotificationCenter.current().setNotificationCategories([category])
+        let refillCategory = UNNotificationCategory(
+            identifier: Self.refillCategoryId,
+            actions: [],
+            intentIdentifiers: []
+        )
+        let courseCategory = UNNotificationCategory(
+            identifier: Self.courseCategoryId,
+            actions: [],
+            intentIdentifiers: []
+        )
+        UNUserNotificationCenter.current().setNotificationCategories([doseCategory, refillCategory, courseCategory])
     }
 
     func ensureAuthorization() async -> Bool {
