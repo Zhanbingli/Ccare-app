@@ -156,6 +156,7 @@
 "Unit: %@" = "单位：%@";
 "Add Measurement" = "添加测量";
 "Log Measurement" = "记录测量";
+"Log New Measurement" = "记录新测量";
 "Systolic: %lld" = "收缩压：%lld";
 "Diastolic: %lld" = "舒张压：%lld";
 

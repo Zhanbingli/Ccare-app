@@ -23,6 +23,7 @@ struct LatestMeasurementCard: View {
                     InsetPanel(tint: measurement.type.tint) {
                         measurementRow(measurement)
                     }
+
                 }
             }
         } else {

@@ -136,10 +136,13 @@ struct InsightsView: View {
 
                 Spacer(minLength: 12)
 
-                Button(NSLocalizedString("Log", comment: "")) {
+                Button {
                     showAddMeasurement = true
+                } label: {
+                    Label(NSLocalizedString("Log", comment: ""), systemImage: "plus.circle.fill")
+                        .fontWeight(.semibold)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderedProminent)
                 .controlSize(.small)
             }
 
