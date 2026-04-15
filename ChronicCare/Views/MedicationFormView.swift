@@ -671,33 +671,31 @@ struct MedicationFormView: View {
             isExpanded: $showInstructionsDetails
         )
         if showInstructionsDetails {
-            InsetPanel {
-                VStack(alignment: .leading, spacing: 14) {
-                    Picker(NSLocalizedString("Food Instruction", comment: ""), selection: $foodInstruction) {
-                        Text(NSLocalizedString("None", comment: "")).tag(FoodInstruction?.none)
-                        ForEach(FoodInstruction.allCases) { f in
-                            Text(f.displayName).tag(Optional(f))
-                        }
+            VStack(alignment: .leading, spacing: 14) {
+                Picker(NSLocalizedString("Food Instruction", comment: ""), selection: $foodInstruction) {
+                    Text(NSLocalizedString("None", comment: "")).tag(FoodInstruction?.none)
+                    ForEach(FoodInstruction.allCases) { f in
+                        Text(f.displayName).tag(Optional(f))
                     }
-
-                    textInputCard(
-                        title: NSLocalizedString("Special Instructions", comment: ""),
-                        placeholder: NSLocalizedString("Take after dinner", comment: ""),
-                        text: $specialInstructions,
-                        field: .specialInstructions,
-                        axis: .vertical,
-                        lineLimit: 2...4
-                    )
-
-                    textInputCard(
-                        title: NSLocalizedString("Notes", comment: ""),
-                        placeholder: NSLocalizedString("Optional context", comment: ""),
-                        text: $notes,
-                        field: .notes,
-                        axis: .vertical,
-                        lineLimit: 2...4
-                    )
                 }
+
+                textInputCard(
+                    title: NSLocalizedString("Special Instructions", comment: ""),
+                    placeholder: NSLocalizedString("Take after dinner", comment: ""),
+                    text: $specialInstructions,
+                    field: .specialInstructions,
+                    axis: .vertical,
+                    lineLimit: 2...4
+                )
+
+                textInputCard(
+                    title: NSLocalizedString("Notes", comment: ""),
+                    placeholder: NSLocalizedString("Optional context", comment: ""),
+                    text: $notes,
+                    field: .notes,
+                    axis: .vertical,
+                    lineLimit: 2...4
+                )
             }
         }
 
@@ -707,39 +705,37 @@ struct MedicationFormView: View {
             isExpanded: $showInventoryDetails
         )
         if showInventoryDetails {
-            InsetPanel {
-                VStack(alignment: .leading, spacing: 14) {
-                    Toggle(NSLocalizedString("Track Supply", comment: ""), isOn: $trackSupply)
-                    if trackSupply {
-                        pillsRemainingField
-                        Stepper(value: $pillsPerDose, in: 1...10) {
-                            Text(String(format: NSLocalizedString("Pills per dose: %lld", comment: ""), pillsPerDose))
-                        }
-                        quickPillButtons
-                        if let estimatedSupplyDays {
-                            Text(String(format: NSLocalizedString("About %lld days of supply at your current schedule.", comment: ""), estimatedSupplyDays))
-                                .appFont(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Text(String(format: NSLocalizedString("Refill reminders start when about %lld days remain.", comment: ""), refillThresholdDays))
+            VStack(alignment: .leading, spacing: 14) {
+                Toggle(NSLocalizedString("Track Supply", comment: ""), isOn: $trackSupply)
+                if trackSupply {
+                    pillsRemainingField
+                    Stepper(value: $pillsPerDose, in: 1...10) {
+                        Text(String(format: NSLocalizedString("Pills per dose: %lld", comment: ""), pillsPerDose))
+                    }
+                    quickPillButtons
+                    if let estimatedSupplyDays {
+                        Text(String(format: NSLocalizedString("About %lld days of supply at your current schedule.", comment: ""), estimatedSupplyDays))
                             .appFont(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    Text(String(format: NSLocalizedString("Refill reminders start when about %lld days remain.", comment: ""), refillThresholdDays))
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
-                    Toggle(NSLocalizedString("Has Course End Date", comment: ""), isOn: $hasCourseEnd)
-                    if hasCourseEnd {
-                        DatePicker(NSLocalizedString("End Date", comment: ""), selection: $courseEndDate, displayedComponents: .date)
-                        validationHint(courseEndValidation)
-                        quickCourseButtons
-                        if let courseDaysRemaining {
-                            Text(String(format: NSLocalizedString("Course ends in %lld days.", comment: ""), max(courseDaysRemaining, 0)))
-                                .appFont(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Text(String(format: NSLocalizedString("Course reminders start %lld days before the end date.", comment: ""), courseReminderThresholdDays))
+                Toggle(NSLocalizedString("Has Course End Date", comment: ""), isOn: $hasCourseEnd)
+                if hasCourseEnd {
+                    DatePicker(NSLocalizedString("End Date", comment: ""), selection: $courseEndDate, displayedComponents: .date)
+                    validationHint(courseEndValidation)
+                    quickCourseButtons
+                    if let courseDaysRemaining {
+                        Text(String(format: NSLocalizedString("Course ends in %lld days.", comment: ""), max(courseDaysRemaining, 0)))
                             .appFont(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    Text(String(format: NSLocalizedString("Course reminders start %lld days before the end date.", comment: ""), courseReminderThresholdDays))
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -750,25 +746,23 @@ struct MedicationFormView: View {
             isExpanded: $showCategoryDetails
         )
         if showCategoryDetails {
-            InsetPanel {
-                VStack(alignment: .leading, spacing: 14) {
-                    Picker(NSLocalizedString("Category", comment: ""), selection: $category) {
-                        ForEach(MedicationCategory.allCases) { c in
-                            Text(c.displayName).tag(c)
-                        }
+            VStack(alignment: .leading, spacing: 14) {
+                Picker(NSLocalizedString("Category", comment: ""), selection: $category) {
+                    ForEach(MedicationCategory.allCases) { c in
+                        Text(c.displayName).tag(c)
                     }
-
-                    if category == .custom {
-                        textInputCard(
-                            title: NSLocalizedString("Custom Category", comment: ""),
-                            placeholder: NSLocalizedString("Cardiology", comment: ""),
-                            text: $customCategoryName,
-                            field: .customCategory
-                        )
-                    }
-
-                    photoAttachmentRow
                 }
+
+                if category == .custom {
+                    textInputCard(
+                        title: NSLocalizedString("Custom Category", comment: ""),
+                        placeholder: NSLocalizedString("Cardiology", comment: ""),
+                        text: $customCategoryName,
+                        field: .customCategory
+                    )
+                }
+
+                photoAttachmentRow
             }
         }
     }

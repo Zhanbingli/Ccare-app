@@ -396,16 +396,13 @@ private extension DashboardView {
                         Text("\(item.med.dose) • \(item.time.formatted(date: .omitted, time: .shortened))")
                             .appFont(.subheadline)
                             .foregroundStyle(.secondary)
-                        Text(todayProgressText(taken: takenCount, total: totalCount))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
                     }
 
                     HStack(spacing: 10) {
                         Button {
                             snoozeDose(for: item)
                         } label: {
-                            Text(NSLocalizedString("Later", comment: "Snooze button"))
+                            Text(snoozeButtonLabel(for: item))
                                 .frame(maxWidth: .infinity, minHeight: 44)
                         }
                         .buttonStyle(.bordered)
@@ -434,32 +431,42 @@ private extension DashboardView {
             }
         } else if let nextUpcoming {
             TintedCard(tint: .blue) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(NSLocalizedString("No dose due right now", comment: ""))
-                        .appFont(.headline)
-                    Text(nextUpcoming.med.name)
-                        .appFont(.title)
-                        .fontWeight(.bold)
-                    Text("\(nextUpcoming.med.dose) • \(nextUpcoming.time.formatted(date: .omitted, time: .shortened))")
-                        .appFont(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Text(todayProgressText(taken: takenCount, total: totalCount))
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(nextUpcoming.med.name)
+                            .appFont(.title)
+                            .fontWeight(.bold)
+                        Text("\(nextUpcoming.med.dose) • \(nextUpcoming.time.formatted(date: .omitted, time: .shortened))")
+                            .appFont(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text(timeUntilText(nextUpcoming.time))
+                            .appFont(.headline)
+                            .foregroundStyle(.blue)
+                            .monospacedDigit()
+                        Text(NSLocalizedString("until next", comment: ""))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         } else {
             TintedCard(tint: .green) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(NSLocalizedString("Today complete", comment: ""))
-                        .appFont(.headline)
-                    Text(NSLocalizedString("All scheduled doses are handled.", comment: ""))
-                        .appFont(.subheadline)
-                        .foregroundStyle(.secondary)
-                    if let tomorrowText = tomorrowsFirstDoseText() {
-                        Text(String(format: NSLocalizedString("Next dose: %@", comment: ""), tomorrowText))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
+                HStack(spacing: 14) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 36))
+                        .foregroundStyle(.green)
+                        .symbolRenderingMode(.hierarchical)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(NSLocalizedString("Today complete", comment: ""))
+                            .appFont(.headline)
+                        if let tomorrowText = tomorrowsFirstDoseText() {
+                            Text(String(format: NSLocalizedString("Next dose: %@", comment: ""), tomorrowText))
+                                .appFont(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
@@ -1490,6 +1497,29 @@ private extension DashboardView {
             safetyAlerts = alerts
             showSafetyAlerts = true
         }
+    }
+
+    private func snoozeButtonLabel(for item: MedSchedule) -> String {
+        let comps = Calendar.current.dateComponents([.hour, .minute], from: item.time)
+        let count = NotificationManager.shared.snoozeCount(for: item.med.id, scheduleTime: comps)
+        let result = MedicationRules.nextSnooze(for: item.med.id, currentSnoozeCount: count)
+        switch result {
+        case .snooze(let minutes):
+            return String(format: NSLocalizedString("%lld min", comment: "Snooze button label"), minutes)
+        case .exhausted:
+            return NSLocalizedString("Skip", comment: "Snooze exhausted")
+        }
+    }
+
+    private func timeUntilText(_ target: Date) -> String {
+        let interval = target.timeIntervalSince(Date())
+        guard interval > 0 else { return NSLocalizedString("now", comment: "") }
+        let hours = Int(interval) / 3600
+        let minutes = (Int(interval) % 3600) / 60
+        if hours > 0 {
+            return String(format: NSLocalizedString("%lldh %lldm", comment: ""), hours, minutes)
+        }
+        return String(format: NSLocalizedString("%lldm", comment: ""), max(minutes, 1))
     }
 
     private func snoozeButtonTint(for item: MedSchedule) -> Color {

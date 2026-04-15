@@ -125,12 +125,15 @@ struct AddMeasurementView: View {
         case systolic
         case diastolic
         case value
+        case note
     }
 
     private var contextSummary: String {
-        note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? NSLocalizedString("Optional", comment: "")
-            : NSLocalizedString("Added", comment: "")
+        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return NSLocalizedString("Optional", comment: "")
+        }
+        return trimmed.count > 30 ? String(trimmed.prefix(30)) + "..." : trimmed
     }
 
     var body: some View {
@@ -220,33 +223,45 @@ struct AddMeasurementView: View {
                     }
 
                     Card {
-                        DisclosureGroup(isExpanded: $showContextNotes) {
-                            InsetPanel {
-                                TextField(NSLocalizedString("Optional context, symptoms, or meal timing", comment: ""), text: $note, axis: .vertical)
+                        VStack(alignment: .leading, spacing: 12) {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.18)) { showContextNotes.toggle() }
+                            } label: {
+                                HStack(alignment: .center, spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(NSLocalizedString("Context Notes", comment: ""))
+                                            .appFont(.subheadline)
+                                            .fontWeight(.semibold)
+                                        Text(contextSummary)
+                                            .appFont(.footnote)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: showContextNotes ? "chevron.up" : "chevron.down")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 32, height: 32)
+                                        .contentShape(Rectangle())
+                                }
+                                .padding(.vertical, 4)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+
+                            if showContextNotes {
+                                TextField(NSLocalizedString("Symptoms, meals, activity...", comment: ""), text: $note, axis: .vertical)
+                                    .focused($focusedField, equals: .note)
                                     .lineLimit(2...4)
                                     .textFieldStyle(.plain)
-                                    .padding(12)
+                                    .appFont(.subheadline)
+                                    .submitLabel(.done)
+                                    .onSubmit { focusedField = nil }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 14)
                                     .background(
-                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
                                             .fill(Color(.secondarySystemBackground))
                                     )
-                            }
-                            .padding(.top, 10)
-                        } label: {
-                            HStack(alignment: .top, spacing: 10) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(NSLocalizedString("Add Context", comment: ""))
-                                        .appFont(.headline)
-                                    Text(note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                         ? NSLocalizedString("Optional context such as symptoms, meals, or activity.", comment: "")
-                                         : NSLocalizedString("Context notes will be saved with this reading.", comment: ""))
-                                        .appFont(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Text(contextSummary)
-                                    .appFont(.caption)
-                                    .foregroundStyle(.secondary)
                             }
                         }
                     }

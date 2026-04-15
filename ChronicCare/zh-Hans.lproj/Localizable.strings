@@ -809,6 +809,9 @@
 "Review Tools" = "回顾工具";
 "Reminder Diagnostics" = "提醒诊断";
 "Check permission, schedule times, and reminder reliability." = "检查通知权限、提醒时间和提醒可靠性。";
+"Review blood pressure, glucose, weight, and heart rate over time." = "查看血压、血糖、体重和心率的历史趋势。";
+"See which days were taken, skipped, or missed." = "查看每天的服药、跳过和漏服记录。";
+"%lld reminder issues still need attention." = "还有 %lld 个提醒问题需要关注。";
 "Dose due now" = "当前需要处理";
 "Dose overdue" = "当前已超时";
 "Snoozed dose" = "已稍后提醒";
@@ -970,3 +973,131 @@
 "Couldn't Save Medication" = "无法保存药物";
 "Review the medication details and try again." = "请检查药物信息后重试。";
 "Reminder times must be unique." = "提醒时间不能重复。";
+
+/* Missing translations — Emergency & Caregiver */
+"Add the details most often needed during clinic visits or emergencies." = "添加就诊或紧急情况中最常需要的信息。";
+"Allow Contacts access to choose a caregiver from your address book." = "允许访问通讯录以从中选择看护人。";
+"Allow Contacts access to choose an emergency contact from your address book." = "允许访问通讯录以从中选择紧急联系人。";
+"Caregivers are for routine support and missed-dose follow-up. They are separate from emergency contacts." = "看护人用于日常支持和漏服跟进，与紧急联系人不同。";
+"Caregiver Support" = "看护支持";
+"Contacts Access Needed" = "需要通讯录权限";
+"Emergency Summary" = "紧急摘要";
+"From Contacts" = "从通讯录导入";
+"Enter Manually" = "手动输入";
+"Helpful in emergencies, but lower priority than allergies and contacts." = "紧急情况下可能有用，但优先级低于过敏信息和联系人。";
+"Importing from Contacts fills name and phone. Add the relationship before saving." = "从通讯录导入可自动填写姓名和电话，保存前请补充关系。";
+"Importing from Contacts fills name and phone. You can still edit them before saving." = "从通讯录导入可自动填写姓名和电话，保存前仍可修改。";
+"List ongoing diagnoses that matter during appointments or emergencies." = "列出就诊或紧急情况中重要的现有诊断。";
+"Missed-dose alerts on" = "漏服提醒已开启";
+"Missed-dose support off" = "漏服支持已关闭";
+"Missed-dose support on" = "漏服支持已开启";
+"No allergies added yet. Separate multiple items with commas." = "暂未添加过敏信息，多项请用逗号分隔。";
+"No caregivers currently have missed-dose alerts enabled. Turn alerts on for at least one caregiver to make support useful." = "当前没有看护人开启漏服提醒。请至少为一位看护人开启以发挥作用。";
+"No emergency contact added yet." = "暂未添加紧急联系人。";
+"No medical conditions added yet." = "暂未添加病情信息。";
+"No medication currently needs caregiver follow-up." = "当前没有药物需要看护人跟进。";
+"No missed-dose support has been triggered yet." = "尚未触发漏服支持。";
+"Reach out to a caregiver and share this update if you still need support taking your medication." = "如果仍需帮助服药，请联系看护人并分享此更新。";
+"Share Status Update" = "分享状态更新";
+"Support Readiness" = "支持就绪状态";
+"Support is active" = "支持已激活";
+"Support is ready" = "支持已就绪";
+"This caregiver should be included in the current support follow-up." = "这位看护人应参与当前的支持跟进。";
+"This caregiver will be included when support is triggered." = "支持触发时会通知这位看护人。";
+"This caregiver will stay saved, but they will not be included in missed-dose support." = "这位看护人仍会保留，但不会参与漏服支持。";
+"Use emergency contacts for urgent or hospital situations. This is different from caregiver support." = "紧急联系人用于紧急或就医情况，与看护支持不同。";
+"Use these people in urgent or emergency situations, such as going to the hospital or needing immediate help." = "在紧急或需要立即帮助时联系这些人。";
+"%lld caregivers saved. %lld are ready to help with the current missed-dose support alert." = "已保存 %lld 位看护人，其中 %lld 位已开启漏服支持提醒。";
+"%lld medications now meet the missed-dose support threshold." = "当前有 %lld 种药物达到漏服支持阈值。";
+"%lld of 4 key sections completed." = "4 个关键部分已完成 %lld 个。";
+"%@ has missed doses for %lld days. Caregivers with alerts enabled should be contacted." = "%@ 已连续 %lld 天漏服，应联系已开启提醒的看护人。";
+
+/* Missing translations — Measurement validation */
+"Blood glucose seems extremely high. Please verify the value." = "血糖值似乎过高，请确认数值。";
+"Blood glucose seems too low. Please verify the value." = "血糖值似乎过低，请确认数值。";
+"Diastolic blood pressure seems too high. Please verify the value." = "舒张压似乎过高，请确认数值。";
+"Diastolic blood pressure seems too low. Normal range is 60-120 mmHg." = "舒张压似乎过低，正常范围为 60-120 mmHg。";
+"Diastolic cannot be higher than or equal to systolic pressure." = "舒张压不能高于或等于收缩压。";
+"Heart rate seems too high. Please verify the value." = "心率似乎过高，请确认数值。";
+"Heart rate seems too low. Please verify the value." = "心率似乎过低，请确认数值。";
+"Systolic blood pressure seems too high. Please verify the value." = "收缩压似乎过高，请确认数值。";
+"Systolic blood pressure seems too low. Normal range is 90-180 mmHg." = "收缩压似乎过低，正常范围为 90-180 mmHg。";
+"Weight seems extremely high. Please verify the value." = "体重似乎过高，请确认数值。";
+"Weight seems too low. Please verify the value." = "体重似乎过低，请确认数值。";
+
+/* Missing translations — Health warnings */
+"⚠️ This is a critically low blood glucose reading. Please take action if you feel unwell." = "⚠️ 血糖严重偏低，如感不适请立即采取措施。";
+"⚠️ This is a high heart rate. If you're not exercising, consider checking with your doctor." = "⚠️ 心率偏高，如非运动状态请考虑就医检查。";
+"⚠️ This is a low blood pressure reading. Please ensure you feel well." = "⚠️ 血压偏低，请确认身体状况良好。";
+"⚠️ This is a very high blood glucose reading. Consider consulting your healthcare provider." = "⚠️ 血糖非常高，建议咨询医疗服务提供者。";
+"⚠️ This is a very high blood pressure reading. Consider consulting your healthcare provider." = "⚠️ 血压非常高，建议咨询医疗服务提供者。";
+"⚠️ This is a very low heart rate. Please ensure you feel well." = "⚠️ 心率偏低，请确认身体状况良好。";
+
+/* Missing translations — Health trends & insights */
+"Consider measuring your heart rate regularly for better tracking." = "建议定期测量心率以获得更好的跟踪。";
+"It's been %d days since you last measured your weight." = "距上次测量体重已有 %d 天。";
+"It's been %d days since your last %@ measurement. Consider taking a new reading." = "距上次测量%@已有 %d 天，建议进行一次新的测量。";
+"Your blood glucose has been decreasing. Be careful of hypoglycemia." = "血糖呈下降趋势，请注意低血糖风险。";
+"Your blood glucose has been rising. Review your diet and medication adherence." = "血糖呈上升趋势，请检查饮食和用药依从性。";
+"Your blood pressure has been decreasing and may be too low." = "血压呈下降趋势，可能偏低。";
+"Your blood pressure has been increasing. Consider consulting your doctor." = "血压呈上升趋势，建议咨询医生。";
+"Your heart rate has been increasing." = "心率呈上升趋势。";
+"Your weight has been increasing steadily." = "体重持续上升。";
+"7d In‑Range" = "7天达标";
+
+/* Missing translations — Medication form & rules */
+"Medication name cannot be empty." = "药物名称不能为空。";
+"Medication name seems very short. Please verify." = "药物名称似乎过短，请确认。";
+"No schedule times set. Reminders will not work." = "未设置提醒时间，提醒将无法工作。";
+"Reminders are currently off" = "提醒当前已关闭";
+"Schedule needs setup" = "计划需要设置";
+"Needs setup" = "需要设置";
+"Set Reminder" = "设置提醒";
+"Adjust Time" = "调整时间";
+"More actions" = "更多操作";
+"Next dose at %@" = "下次服药 %@";
+"Log each dose from Today whenever you take it." = "每次服药后在「今日」中记录。";
+
+/* Missing translations — Food instructions */
+"After food" = "饭后";
+"Before food" = "饭前";
+"On empty stomach" = "空腹";
+"With food" = "随餐";
+"after meal" = "饭后";
+"before meal" = "饭前";
+"empty stomach" = "空腹";
+"w/ food" = "随餐";
+
+/* Missing translations — AI & OCR */
+"Failed to parse response: %@" = "解析响应失败：%@";
+"Generate" = "生成";
+"Health data is not available on this device." = "此设备不支持健康数据。";
+"Invalid API key. Please check your settings." = "API 密钥无效，请检查设置。";
+"Invalid response from AI service." = "AI 服务返回了无效响应。";
+"Network error: %@" = "网络错误：%@";
+"No medication text could be recognized from that image." = "无法从该图片识别药物文字。";
+"Rate limit exceeded. Please try again later." = "请求过于频繁，请稍后再试。";
+"The selected image could not be read." = "无法读取所选图片。";
+"You need to allow sending medication data to the AI provider before analysis." = "分析前需要允许向 AI 提供商发送药物数据。";
+
+/* Missing translations — Behavioral nudges */
+"You typically take %@ around %d:00, but it's scheduled for %d:00. Would you like to adjust the reminder time?" = "你通常在 %d:00 左右服用 %@，但提醒设在 %d:00。要调整提醒时间吗？";
+"You've skipped %@ %d times in the past 30 days (%d%%). Consider adjusting the reminder time or discussing with your doctor." = "过去 30 天你跳过了 %@ %d 次（%d%%），建议调整提醒时间或咨询医生。";
+"You've skipped this medication twice recently. Would you like to adjust the reminder time?" = "你最近两次跳过了这种药，要调整提醒时间吗？";
+"Your adherence to %@ is %d%% in the past week. Consistent use is important for best results." = "你过去一周对 %@ 的依从率为 %d%%，坚持服药对效果很重要。";
+
+/* Missing translations — Other */
+"ChronicCare Health Report" = "ChronicCare 健康报告";
+"Log" = "记录";
+"Refresh" = "刷新";
+"Saved" = "已保存";
+"Share Medical Summary" = "分享医疗摘要";
+"Welcome to ChronicCare" = "欢迎使用 ChronicCare";
+"Suggested next step:" = "建议下一步：";
+"Context Notes" = "备注";
+"Symptoms, meals, activity..." = "症状、饮食、活动…";
+"%lld min" = "%lld 分钟";
+"until next" = "后服药";
+"now" = "现在";
+"%lldh %lldm" = "%lld时%lld分";
+"%lldm" = "%lld分钟";

@@ -110,10 +110,8 @@ struct InsightsView: View {
     private var latestMeasurementSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                sectionLabel(
-                    title: NSLocalizedString("Latest Measurement", comment: ""),
-                    subtitle: NSLocalizedString("Keep the most recent reading visible so trends always have context.", comment: "")
-                )
+                Text(NSLocalizedString("Latest Measurement", comment: ""))
+                    .appFont(.headline)
 
                 Spacer(minLength: 12)
 
@@ -171,10 +169,8 @@ struct InsightsView: View {
 
     private var toolsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionLabel(
-                title: NSLocalizedString("Review Tools", comment: ""),
-                subtitle: NSLocalizedString("Open the detailed views only when you want to inspect history more closely.", comment: "")
-            )
+            Text(NSLocalizedString("Review Tools", comment: ""))
+                .appFont(.headline)
 
             VStack(spacing: 10) {
                 NavigationLink {
@@ -228,17 +224,6 @@ struct InsightsView: View {
             DispatchQueue.main.async {
                 notificationStatus = settings.authorizationStatus
             }
-        }
-    }
-
-    private func sectionLabel(title: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .appFont(.headline)
-            Text(subtitle)
-                .appFont(.footnote)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
