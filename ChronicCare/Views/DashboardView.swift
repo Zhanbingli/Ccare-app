@@ -502,9 +502,34 @@ private extension DashboardView {
 
             Spacer()
 
-            Text(status.displayText)
-                .appFont(.caption)
-                .foregroundStyle(status.tint)
+            if canLogDose(for: item, status: status) {
+                HStack(spacing: 6) {
+                    Button {
+                        skipDose(for: item)
+                    } label: {
+                        Text(NSLocalizedString("Skip", comment: ""))
+                            .appFont(.caption)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+                    .tint(.orange)
+
+                    Button {
+                        beginTakeFlow(for: item)
+                    } label: {
+                        Text(NSLocalizedString("Take", comment: ""))
+                            .appFont(.caption)
+                            .fontWeight(.semibold)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.mini)
+                    .tint(.green)
+                }
+            } else {
+                Text(status.displayText)
+                    .appFont(.caption)
+                    .foregroundStyle(status.tint)
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(item.med.name), \(item.med.dose), \(item.time.formatted(date: .omitted, time: .shortened)), \(status.displayText)")
