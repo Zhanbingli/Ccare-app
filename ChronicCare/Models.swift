@@ -208,7 +208,7 @@ extension Medication {
         let dosesPerDay = timesOfDay.count
         let pillsPerDay = perDose * dosesPerDay
         guard pillsPerDay > 0 else { return nil }
-        return remaining / pillsPerDay
+        return (remaining + pillsPerDay - 1) / pillsPerDay
     }
 
     var isLowSupply: Bool {

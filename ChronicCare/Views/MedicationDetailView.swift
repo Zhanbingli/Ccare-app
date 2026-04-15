@@ -35,6 +35,15 @@ struct MedicationDetailView: View {
         store.currentStreak(for: medication.id)
     }
 
+    private var monthlyTakenCount: Int {
+        let cal = Calendar.current
+        let now = Date()
+        let start = cal.date(from: cal.dateComponents([.year, .month], from: now))!
+        return store.intakeLogs.filter {
+            $0.medicationID == medication.id && $0.status == .taken && $0.date >= start
+        }.count
+    }
+
     private var scheduleText: String {
         guard medication.isAsNeeded != true else {
             return NSLocalizedString("Log doses when needed from Today.", comment: "")
@@ -383,6 +392,7 @@ struct MedicationDetailView: View {
                                 detailMetric(value: String(format: "%.0f%%", adherence7 * 100), label: NSLocalizedString("7-day", comment: ""), tint: adherence7 >= 0.8 ? .green : adherence7 >= 0.5 ? .orange : .red)
                                 detailMetric(value: String(format: "%.0f%%", adherence30 * 100), label: NSLocalizedString("30-day", comment: ""), tint: adherence30 >= 0.8 ? .green : adherence30 >= 0.5 ? .orange : .red)
                                 detailMetric(value: "\(streakCount)", label: NSLocalizedString("day streak", comment: ""), tint: .blue)
+                                detailMetric(value: "\(monthlyTakenCount)", label: NSLocalizedString("this month", comment: ""), tint: .purple)
                             }
 
                             NavigationLink {

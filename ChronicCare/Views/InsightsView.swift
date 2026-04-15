@@ -61,44 +61,25 @@ struct InsightsView: View {
     }
 
     private var overviewHeader: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(NSLocalizedString("Review Snapshot", comment: ""))
-                        .appFont(.title)
-                        .fontWeight(.bold)
-                    Text(NSLocalizedString("See adherence, measurements, and reminder health in one place.", comment: ""))
-                        .appFont(.footnote)
-                        .foregroundStyle(.secondary)
-                }
+        HStack(alignment: .top, spacing: 12) {
+            Text(NSLocalizedString("Review Snapshot", comment: ""))
+                .appFont(.title)
+                .fontWeight(.bold)
 
-                Spacer(minLength: 12)
+            Spacer(minLength: 12)
 
-                AppBadge(
-                    text: reminderStateText,
-                    tint: reminderStateTint,
-                    icon: reminderGapCount > 0 ? "exclamationmark.circle.fill" : "checkmark.circle.fill"
-                )
-            }
-
-            if reminderGapCount > 0 {
-                Text(String(format: NSLocalizedString("%lld reminder issues still need attention.", comment: ""), reminderGapCount))
-                    .appFont(.footnote)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text(NSLocalizedString("Your scheduled medications currently look covered.", comment: ""))
-                    .appFont(.footnote)
-                    .foregroundStyle(.secondary)
-            }
+            AppBadge(
+                text: reminderStateText,
+                tint: reminderStateTint,
+                icon: reminderGapCount > 0 ? "exclamationmark.circle.fill" : "checkmark.circle.fill"
+            )
         }
     }
 
     private var snapshotSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionLabel(
-                title: NSLocalizedString("Adherence & Coverage", comment: ""),
-                subtitle: NSLocalizedString("Use these numbers to spot missed doses and reminder gaps quickly.", comment: "")
-            )
+            Text(NSLocalizedString("Adherence & Coverage", comment: ""))
+                .appFont(.headline)
 
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                 snapshotTile(

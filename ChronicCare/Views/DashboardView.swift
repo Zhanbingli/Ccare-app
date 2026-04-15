@@ -16,6 +16,7 @@ struct DashboardView: View {
     @AppStorage("units.glucose") private var glucoseUnitRaw: String = GlucoseUnit.mgdL.rawValue
     @AppStorage("prefs.graceMinutes") private var graceMinutes: Int = 30
     @State private var tick = false
+    @State private var showAllPRN = false
     private let refreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     private struct MedSchedule: Identifiable {
@@ -577,13 +578,34 @@ private extension DashboardView {
                     Text(NSLocalizedString("As Needed", comment: ""))
                         .appFont(.headline)
                     Spacer()
-                    AppBadge(text: NSLocalizedString("Optional", comment: ""), tint: .secondary)
+                    AppBadge(text: "\(medications.count)", tint: .secondary)
                 }
 
-                ForEach(Array(medications.prefix(3).enumerated()), id: \.element.id) { _, med in
+                let visible = showAllPRN ? medications : Array(medications.prefix(3))
+                ForEach(visible) { med in
                     InsetPanel {
                         prnMedRow(med: med)
                     }
+                }
+
+                if medications.count > 3 {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) { showAllPRN.toggle() }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(showAllPRN
+                                 ? NSLocalizedString("Show Less", comment: "")
+                                 : String(format: NSLocalizedString("Show All %lld", comment: ""), medications.count))
+                                .appFont(.footnote)
+                                .fontWeight(.medium)
+                            Image(systemName: showAllPRN ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 10, weight: .semibold))
+                        }
+                        .foregroundStyle(Color.accentColor)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 2)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }

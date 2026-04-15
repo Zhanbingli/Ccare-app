@@ -121,6 +121,10 @@
 "7-day" = "7天";
 "30-day" = "30天";
 "day streak" = "天连续";
+"this month" = "本月服药";
+"%lldm ago" = "%lld分钟前";
+"%lldh ago" = "%lld小时前";
+"%lldd ago" = "%lld天前";
 "Adherence History" = "服药记录";
 
 /* Adherence Calendar */
@@ -678,6 +682,8 @@
 "Medication Photo" = "药物图片";
 "Notifications will be scheduled for these times." = "会按这些时间安排通知。";
 "Optional" = "可选";
+"Show Less" = "收起";
+"Show All %lld" = "显示全部 %lld 个";
 "Optional context" = "可选背景";
 "Optional Details" = "可选详情";
 "Optional label photo for visual identification." = "可选添加标签图片，便于识别。";

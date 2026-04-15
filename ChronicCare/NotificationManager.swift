@@ -568,7 +568,6 @@ final class NotificationManager {
         if let scheduledDate { info["scheduledDate"] = isoFormatter.string(from: scheduledDate) }
         content.userInfo = info
         content.threadIdentifier = medication.id.uuidString
-        content.badge = NSNumber(value: 1)
         if #available(iOS 15.0, *) { content.interruptionLevel = riskLevel == .low ? .active : .timeSensitive }
         if #available(iOS 15.0, *) { content.relevanceScore = min(baseRelevanceScore(for: riskLevel) + Double(attempt) * 0.03, 1.0) }
         return content
@@ -607,7 +606,6 @@ final class NotificationManager {
         if let scheduledDate { info["scheduledDate"] = isoFormatter.string(from: scheduledDate) }
         content.userInfo = info
         content.threadIdentifier = medication.id.uuidString
-        content.badge = NSNumber(value: 1)
         if #available(iOS 15.0, *) { content.interruptionLevel = riskLevel == .low ? .active : .timeSensitive }
         if #available(iOS 15.0, *) { content.relevanceScore = baseRelevanceScore(for: riskLevel) }
         return content
