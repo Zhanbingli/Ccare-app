@@ -105,32 +105,29 @@ struct DrugInteractionView: View {
                 .appFont(.headline)
                 .foregroundStyle(.primary)
 
-            VStack(spacing: 8) {
+            VStack(spacing: AppSpacing.xSmall) {
                 ForEach(store.medications) { med in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(med.name)
-                                .appFont(.subheadline)
-                                .foregroundStyle(.primary)
-                            Text(med.dose)
-                                .appFont(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if let categoryName = med.displayCategoryName {
-                            Text(categoryName)
-                                .appFont(.caption)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Capsule().fill(Color.accentColor.opacity(0.15)))
-                                .foregroundStyle(Color.accentColor)
+                    InsetPanel {
+                        HStack {
+                            VStack(alignment: .leading, spacing: AppSpacing.xxSmall) {
+                                Text(med.name)
+                                    .appFont(.subheadline)
+                                    .foregroundStyle(.primary)
+                                Text(med.dose)
+                                    .appFont(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if let categoryName = med.displayCategoryName {
+                                Text(categoryName)
+                                    .appFont(.caption)
+                                    .padding(.horizontal, AppSpacing.xSmall)
+                                    .padding(.vertical, AppSpacing.xxSmall)
+                                    .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+                                    .foregroundStyle(Color.accentColor)
+                            }
                         }
                     }
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color(.secondarySystemBackground))
-                    )
                 }
             }
         }
@@ -147,7 +144,7 @@ struct DrugInteractionView: View {
             .frame(maxWidth: .infinity)
             .padding()
             .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                     .fill(Color.accentColor)
             )
             .foregroundStyle(.white)
@@ -155,7 +152,7 @@ struct DrugInteractionView: View {
         .disabled(isAnalyzing || store.medications.count < 2 || !hasConsent)
         .overlay {
             if !hasConsent {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                     .strokeBorder(Color.orange.opacity(0.8), lineWidth: 1)
             } else { EmptyView() }
         }
@@ -174,53 +171,46 @@ struct DrugInteractionView: View {
     }
 
     private func errorView(message: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(NSLocalizedString("Error", comment: ""))
-                    .appFont(.subheadline)
-                    .foregroundStyle(.primary)
-                Text(message)
-                    .appFont(.caption)
-                    .foregroundStyle(.secondary)
-                if message.contains("allow sending") {
-                    Button {
-                        showSettings = true
-                    } label: {
-                        Label("Open AI Settings", systemImage: "gear")
-                            .appFont(.caption)
+        InsetPanel(tint: .orange) {
+            HStack(alignment: .top, spacing: AppSpacing.small) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: AppSpacing.tiny) {
+                    Text(NSLocalizedString("Error", comment: ""))
+                        .appFont(.subheadline)
+                        .foregroundStyle(.primary)
+                    Text(message)
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                    if message.contains("allow sending") {
+                        Button {
+                            showSettings = true
+                        } label: {
+                            Label("Open AI Settings", systemImage: "gear")
+                                .appFont(.caption)
+                        }
                     }
                 }
             }
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.orange.opacity(0.1))
-        )
     }
 
     private func analysisResultView(result: DrugInteractionResponse) -> some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: AppSpacing.large) {
             // Overall Analysis
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Image(systemName: "doc.text.fill")
-                        .foregroundStyle(.blue)
-                    Text(NSLocalizedString("Overall Analysis", comment: ""))
-                        .appFont(.headline)
+            InsetPanel(tint: .blue) {
+                VStack(alignment: .leading, spacing: AppSpacing.small) {
+                    HStack {
+                        Image(systemName: "doc.text.fill")
+                            .foregroundStyle(.blue)
+                        Text(NSLocalizedString("Overall Analysis", comment: ""))
+                            .appFont(.headline)
+                    }
+                    Text(result.analysis)
+                        .appFont(.body)
+                        .foregroundStyle(.primary)
                 }
-                Text(result.analysis)
-                    .appFont(.body)
-                    .foregroundStyle(.primary)
             }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.blue.opacity(0.1))
-            )
 
             // Interactions
             if !result.interactions.isEmpty {
@@ -248,23 +238,20 @@ struct DrugInteractionView: View {
                             .appFont(.headline)
                     }
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(Array(result.recommendations.enumerated()), id: \.offset) { index, recommendation in
-                            HStack(alignment: .top, spacing: 8) {
-                                Text("\(index + 1).")
-                                    .appFont(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                Text(recommendation)
-                                    .appFont(.subheadline)
-                                    .foregroundStyle(.primary)
+                    InsetPanel {
+                        VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
+                            ForEach(Array(result.recommendations.enumerated()), id: \.offset) { index, recommendation in
+                                HStack(alignment: .top, spacing: AppSpacing.xSmall) {
+                                    Text("\(index + 1).")
+                                        .appFont(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                    Text(recommendation)
+                                        .appFont(.subheadline)
+                                        .foregroundStyle(.primary)
+                                }
                             }
                         }
                     }
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color(.secondarySystemBackground))
-                    )
                 }
             }
         }
@@ -300,67 +287,61 @@ struct DrugInteractionView: View {
 
             // Effects
             if !interaction.effects.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.green)
-                        Text(NSLocalizedString("Therapeutic Effects", comment: ""))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    ForEach(interaction.effects, id: \.self) { effect in
-                        HStack(alignment: .top, spacing: 6) {
-                            Text("•")
-                                .foregroundStyle(.secondary)
-                            Text(effect)
+                InsetPanel(tint: .green) {
+                    VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.green)
+                            Text(NSLocalizedString("Therapeutic Effects", comment: ""))
                                 .appFont(.caption)
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(.secondary)
+                        }
+                        ForEach(interaction.effects, id: \.self) { effect in
+                            HStack(alignment: .top, spacing: AppSpacing.tiny) {
+                                Text("•")
+                                    .foregroundStyle(.secondary)
+                                Text(effect)
+                                    .appFont(.caption)
+                                    .foregroundStyle(.primary)
+                            }
                         }
                     }
                 }
-                .padding(10)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.green.opacity(0.08))
-                )
             }
 
             // Side Effects
             if !interaction.sideEffects.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                        Text(NSLocalizedString("Potential Side Effects", comment: ""))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    ForEach(interaction.sideEffects, id: \.self) { sideEffect in
-                        HStack(alignment: .top, spacing: 6) {
-                            Text("•")
-                                .foregroundStyle(.secondary)
-                            Text(sideEffect)
+                InsetPanel(tint: .orange) {
+                    VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                            Text(NSLocalizedString("Potential Side Effects", comment: ""))
                                 .appFont(.caption)
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(.secondary)
+                        }
+                        ForEach(interaction.sideEffects, id: \.self) { sideEffect in
+                            HStack(alignment: .top, spacing: AppSpacing.tiny) {
+                                Text("•")
+                                    .foregroundStyle(.secondary)
+                                Text(sideEffect)
+                                    .appFont(.caption)
+                                    .foregroundStyle(.primary)
+                            }
                         }
                     }
                 }
-                .padding(10)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.orange.opacity(0.08))
-                )
             }
         }
         .padding()
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                 .fill(Color(.secondarySystemBackground))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                 .stroke(severityColor(severity: interaction.severity).opacity(0.3), lineWidth: 2)
         )
     }
@@ -468,7 +449,7 @@ struct AISettingsView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(NSLocalizedString("Allow sending medication data for analysis", comment: ""))
                             Text(NSLocalizedString("Medication names, doses, and categories are sent to the selected provider. No health measurements are sent.", comment: ""))
-                                .font(.footnote)
+                                .appFont(.footnote)
                                 .foregroundStyle(.secondary)
                         }
                     }

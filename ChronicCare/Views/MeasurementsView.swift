@@ -256,10 +256,10 @@ struct AddMeasurementView: View {
                                     .appFont(.subheadline)
                                     .submitLabel(.done)
                                     .onSubmit { focusedField = nil }
-                                    .padding(.horizontal, 12)
+                                    .padding(.horizontal, AppSpacing.small)
                                     .padding(.vertical, 14)
                                     .background(
-                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                                             .fill(Color(.secondarySystemBackground))
                                     )
                             }
@@ -526,13 +526,13 @@ private extension AddMeasurementView {
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
+            .padding(AppSpacing.small)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: AppRadius.panel, style: .continuous)
                     .fill(selected ? Color.accentColor.opacity(0.10) : Color(.secondarySystemBackground))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: AppRadius.panel, style: .continuous)
                     .stroke(selected ? Color.accentColor.opacity(0.45) : Color.primary.opacity(0.06), lineWidth: 1)
             )
         }
@@ -566,9 +566,9 @@ private extension AddMeasurementView {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
+        .padding(AppSpacing.medium)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.panel, style: .continuous)
                 .fill(Color(.secondarySystemBackground))
         )
     }

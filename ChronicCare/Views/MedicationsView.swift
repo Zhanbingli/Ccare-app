@@ -11,8 +11,6 @@ struct MedicationsView: View {
     @State private var showAdd = false
     @State private var detailTarget: Medication? = nil
     @State private var editTarget: Medication? = nil
-    @State private var showMedicalSummary = false
-    @State private var showCaregivers = false
     @State private var showSettings = false
     @State private var showNotificationDeniedAlert = false
     @State private var deniedMedName: String? = nil
@@ -87,31 +85,6 @@ struct MedicationsView: View {
                             }
                         }
 
-                        Section(NSLocalizedString("Safety & Support", comment: "")) {
-                            Button {
-                                showMedicalSummary = true
-                            } label: {
-                                managementLinkRow(
-                                    title: NSLocalizedString("Medical Summary", comment: ""),
-                                    subtitle: NSLocalizedString("Keep doctor visit details and emergency information ready.", comment: ""),
-                                    systemImage: "person.text.rectangle",
-                                    tint: .red
-                                )
-                            }
-                            .buttonStyle(.plain)
-
-                            Button {
-                                showCaregivers = true
-                            } label: {
-                                managementLinkRow(
-                                    title: NSLocalizedString("Caregivers", comment: ""),
-                                    subtitle: NSLocalizedString("Manage trusted contacts for missed-dose support.", comment: ""),
-                                    systemImage: "person.2.fill",
-                                    tint: .blue
-                                )
-                            }
-                            .buttonStyle(.plain)
-                        }
                     }
                 }
                 .listStyle(.insetGrouped)
@@ -121,28 +94,10 @@ struct MedicationsView: View {
             .navigationTitle(NSLocalizedString("Medications", comment: ""))
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Menu {
-                        Button {
-                            showMedicalSummary = true
-                        } label: {
-                            Label(NSLocalizedString("Medical Summary", comment: ""), systemImage: "person.text.rectangle")
-                        }
-
-                        Button {
-                            showCaregivers = true
-                        } label: {
-                            Label(NSLocalizedString("Caregivers", comment: ""), systemImage: "person.2.fill")
-                        }
-
-                        Button {
-                            showSettings = true
-                        } label: {
-                            Label(NSLocalizedString("Settings", comment: ""), systemImage: "gearshape")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
+                    Button { showSettings = true } label: {
+                        Image(systemName: "gearshape")
                     }
-                    .accessibilityLabel(NSLocalizedString("More actions", comment: ""))
+                    .accessibilityLabel(NSLocalizedString("Settings", comment: ""))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showAdd = true } label: { Image(systemName: "plus") }
@@ -186,14 +141,6 @@ struct MedicationsView: View {
                         refreshNotificationStatus()
                     }
                 })
-            }
-            .sheet(isPresented: $showMedicalSummary) {
-                EmergencyCardView()
-                    .environmentObject(store)
-            }
-            .sheet(isPresented: $showCaregivers) {
-                CaregiversView()
-                    .environmentObject(store)
             }
             .sheet(isPresented: $showSettings) {
                 ProfileView()

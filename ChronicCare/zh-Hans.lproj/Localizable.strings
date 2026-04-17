@@ -1153,3 +1153,19 @@
 
 /* Accessibility */
 "Enable Reminders" = "启用提醒";
+
+/* V2 UI — RootViewV2 / ProfileDrawerV2 / WeeklyAdherenceCard */
+"Profile" = "我的";
+"My Medications" = "我的药物";
+"%d medications" = "共 %d 种药物";
+"%d contacts" = "%d 位联系人";
+"No caregivers added" = "尚未添加照护者";
+"Reminders, units, data, AI" = "提醒、单位、数据、AI";
+
+/* Weekly adherence reflection card */
+"This week %d%%" = "本周 %d%%";
+"Great consistency — keep going." = "坚持得很好，请继续保持。";
+"Solid week overall." = "本周整体不错。";
+"A few doses slipped — we'll help you catch up." = "漏了几次，我们一起调整。";
+"Some doses missed. Tap to review and adjust." = "本周漏服较多，点击查看并调整。";
+"Opens full adherence insights." = "打开完整的依从报告。";

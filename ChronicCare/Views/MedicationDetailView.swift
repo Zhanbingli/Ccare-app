@@ -429,9 +429,9 @@ struct MedicationDetailView: View {
                 .resizable()
                 .scaledToFill()
                 .frame(width: 52, height: 52)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.panel, style: .continuous))
         } else {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.panel, style: .continuous)
                 .fill(detailAccentTint.opacity(0.14))
                 .frame(width: 52, height: 52)
                 .overlay(
@@ -683,7 +683,6 @@ struct MedicationDetailView: View {
                     Button(NSLocalizedString("Edit", comment: "")) {
                         onEdit(medication)
                     }
-                    .font(.body.weight(.semibold))
                 }
             }
         }

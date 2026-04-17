@@ -1,0 +1,132 @@
+import SwiftUI
+
+/// V2 app root. Replaces ContentView's three-tab shell with a single Home
+/// (DashboardView) + a Profile drawer that houses Medications / Emergency /
+/// Caregivers / Settings. Insights is reachable only from the weekly
+/// reflection card on Home — it's feedback, not a destination.
+struct RootViewV2: View {
+    @EnvironmentObject var store: DataStore
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var showOnboarding = !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+    @State private var showProfileDrawer = false
+    @State private var showFullInsights = false
+    @State private var showMedicationSheet = false
+    @State private var deepLinkMedicationID: UUID? = nil
+
+    var body: some View {
+        if showOnboarding {
+            OnboardingView {
+                UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+                showOnboarding = false
+            }
+            .environmentObject(store)
+        } else {
+            mainContent
+        }
+    }
+
+    private var mainContent: some View {
+        ZStack(alignment: .topTrailing) {
+            AppBackground()
+            DashboardView(
+                onOpenInsights: { showFullInsights = true }
+            )
+            profileButton
+        }
+        .dynamicTypeSize(.xSmall ... .accessibility5)
+        .sheet(isPresented: $showProfileDrawer) {
+            ProfileDrawerV2()
+                .environmentObject(store)
+        }
+        .sheet(isPresented: $showFullInsights) {
+            NavigationStack {
+                InsightsView()
+                    .environmentObject(store)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button(NSLocalizedString("Done", comment: "")) {
+                                showFullInsights = false
+                            }
+                        }
+                    }
+            }
+        }
+        .sheet(isPresented: $showMedicationSheet, onDismiss: {
+            deepLinkMedicationID = nil
+        }) {
+            NavigationStack {
+                MedicationsView(deepLinkMedicationID: $deepLinkMedicationID)
+                    .environmentObject(store)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button(NSLocalizedString("Done", comment: "")) {
+                                showMedicationSheet = false
+                            }
+                        }
+                    }
+            }
+        }
+        .onChange(of: scenePhase) { newPhase in
+            guard newPhase == .active else { return }
+            let now = Date()
+            store.syncNotifications(now: now)
+            store.updateWidgetData()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("openMedicationDetail"))) { notification in
+            if let medID = notification.object as? UUID {
+                deepLinkMedicationID = medID
+                showMedicationSheet = true
+            }
+        }
+        .onOpenURL { url in
+            handleDeepLink(url)
+        }
+    }
+
+    private var profileButton: some View {
+        Button {
+            showProfileDrawer = true
+        } label: {
+            Image(systemName: "person.crop.circle")
+                .font(.system(size: 26, weight: .regular))
+                .foregroundStyle(.primary)
+                .padding(8)
+                .background(
+                    Circle().fill(.ultraThinMaterial)
+                )
+                .shadow(color: .black.opacity(0.08), radius: 6, x: 0, y: 2)
+        }
+        .accessibilityLabel(NSLocalizedString("Profile", comment: ""))
+        .padding(.top, 8)
+        .padding(.trailing, 16)
+    }
+
+    private func handleDeepLink(_ url: URL) {
+        guard url.scheme?.lowercased() == "chroniccare" else { return }
+        let host = url.host?.lowercased()
+        let pathComponents = url.pathComponents.filter { $0 != "/" }
+
+        switch host {
+        case "today":
+            showProfileDrawer = false
+            showFullInsights = false
+            showMedicationSheet = false
+        case "medication":
+            let candidate = pathComponents.first ?? url.lastPathComponent
+            if let medicationID = UUID(uuidString: candidate) {
+                deepLinkMedicationID = medicationID
+                showMedicationSheet = true
+            } else {
+                showMedicationSheet = true
+            }
+        case "insights":
+            showFullInsights = true
+        default:
+            break
+        }
+    }
+}
+
+#Preview {
+    RootViewV2().environmentObject(DataStore())
+}

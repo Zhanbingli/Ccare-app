@@ -2,6 +2,10 @@ import SwiftUI
 import UserNotifications
 
 struct DashboardView: View {
+    // V2 entry point injected from RootViewV2. When set, a weekly adherence
+    // reflection card is appended below today's actionable content.
+    var onOpenInsights: (() -> Void)? = nil
+
     @EnvironmentObject var store: DataStore
     @State private var showAddMedication = false
     @State private var reminderFixTarget: Medication? = nil
@@ -153,8 +157,6 @@ struct DashboardView: View {
             let totalCount = state.totalCount
             let currentAction = state.currentAction
             let nextUpcoming = state.nextUpcoming
-            let overdueCount = state.overdueCount
-            let remainingCount = state.remainingCount
             let prnMeds = state.prnMeds
 
             ScrollView {
@@ -170,11 +172,7 @@ struct DashboardView: View {
                             )
                         }
                     } else {
-                        todayHeader(
-                            actionableCount: state.actionableSchedules.count,
-                            takenCount: takenCount,
-                            totalCount: totalCount
-                        )
+                        todayHeader(actionableCount: state.actionableSchedules.count)
 
                         if notificationStatus == .denied {
                             reminderRepairCard()
@@ -218,7 +216,8 @@ struct DashboardView: View {
                                 if showCompletedTimeline {
                                     todayTimelineCard(
                                         schedules: schedules,
-                                        statusCache: statusCache
+                                        statusCache: statusCache,
+                                        currentActionID: currentAction?.id
                                     )
                                     .transition(.opacity.combined(with: .move(edge: .top)))
                                 }
@@ -228,15 +227,10 @@ struct DashboardView: View {
                             if !schedules.isEmpty {
                                 todayTimelineCard(
                                     schedules: schedules,
-                                    statusCache: statusCache
+                                    statusCache: statusCache,
+                                    currentActionID: currentAction?.id
                                 )
                             }
-
-                            summaryStrip(
-                                completedCount: takenCount,
-                                overdueCount: overdueCount,
-                                remainingCount: remainingCount
-                            )
                         }
 
                         if !prnMeds.isEmpty {
@@ -245,6 +239,13 @@ struct DashboardView: View {
 
                         if notificationStatus != .denied && hasReminderSetupIssues {
                             reminderRepairCard()
+                        }
+
+                        // Weekly reflection — placed last so it sits below today's
+                        // actionable content, not competing with it.
+                        if let onOpenInsights, shouldShowWeeklyReflection {
+                            WeeklyAdherenceCard(onTap: onOpenInsights)
+                                .padding(.top, 4)
                         }
                     }
                 }
@@ -412,23 +413,26 @@ private extension DashboardView {
         return items.sorted { $0.time < $1.time }
     }
 
+    /// Only show the weekly reflection card once the user has actually used the
+    /// app — no point showing "0% This week" to a brand-new user with no logs.
+    private var shouldShowWeeklyReflection: Bool {
+        let calendar = Calendar.current
+        let sevenDaysAgo = calendar.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        let recentLogs = store.intakeLogs.filter { $0.date >= sevenDaysAgo }
+        let hasScheduledMeds = store.medications.contains { $0.isAsNeeded != true }
+        return hasScheduledMeds && recentLogs.count >= 3
+    }
+
     @ViewBuilder
-    private func todayHeader(
-        actionableCount: Int,
-        takenCount: Int,
-        totalCount: Int
-    ) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
+    private func todayHeader(actionableCount: Int) -> some View {
+        HStack(alignment: .bottom, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(NSLocalizedString("Today", comment: ""))
                     .appFont(.largeTitle)
                     .fontWeight(.bold)
                     .minimumScaleFactor(0.85)
                 Text(Date(), format: .dateTime.weekday(.wide).month(.abbreviated).day())
                     .appFont(.subheadline)
-                    .foregroundStyle(.secondary)
-                Text(todayProgressText(taken: takenCount, total: totalCount))
-                    .appFont(.footnote)
                     .foregroundStyle(.secondary)
             }
 
@@ -475,34 +479,38 @@ private extension DashboardView {
                         }
                     }
 
-                    HStack(spacing: 10) {
-                        Button {
-                            snoozeDose(for: item)
-                        } label: {
-                            Text(snoozeButtonLabel(for: item))
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(snoozeButtonTint(for: item))
-
+                    VStack(spacing: 10) {
                         Button {
                             beginTakeFlow(for: item)
                         } label: {
                             Text(NSLocalizedString("Take", comment: ""))
                                 .fontWeight(.semibold)
-                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .frame(maxWidth: .infinity, minHeight: 52)
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(.green)
 
-                        Button {
-                            skipDose(for: item)
-                        } label: {
-                            Text(NSLocalizedString("Skip", comment: ""))
-                                .frame(maxWidth: .infinity, minHeight: 44)
+                        HStack(spacing: 8) {
+                            Button {
+                                snoozeDose(for: item)
+                            } label: {
+                                Text(snoozeButtonLabel(for: item))
+                                    .frame(maxWidth: .infinity, minHeight: 36)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .tint(snoozeButtonTint(for: item))
+
+                            Button {
+                                skipDose(for: item)
+                            } label: {
+                                Text(NSLocalizedString("Skip", comment: ""))
+                                    .frame(maxWidth: .infinity, minHeight: 36)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .tint(.orange)
                         }
-                        .buttonStyle(.bordered)
-                        .tint(.orange)
                     }
                 }
             }
@@ -568,7 +576,8 @@ private extension DashboardView {
 
     private func todayTimelineCard(
         schedules: [MedSchedule],
-        statusCache: [String: TodayMedStatus]
+        statusCache: [String: TodayMedStatus],
+        currentActionID: String?
     ) -> some View {
         Card {
             VStack(alignment: .leading, spacing: 12) {
@@ -577,14 +586,18 @@ private extension DashboardView {
 
                 VStack(spacing: 10) {
                     ForEach(schedules) { item in
-                        timelineRow(item: item, status: statusCache[item.id] ?? .none)
+                        timelineRow(
+                            item: item,
+                            status: statusCache[item.id] ?? .none,
+                            isCurrent: item.id == currentActionID
+                        )
                     }
                 }
             }
         }
     }
 
-    private func timelineRow(item: MedSchedule, status: TodayMedStatus) -> some View {
+    private func timelineRow(item: MedSchedule, status: TodayMedStatus, isCurrent: Bool) -> some View {
         HStack(alignment: .center, spacing: 12) {
             Image(systemName: status.iconName)
                 .font(.system(size: 18, weight: .semibold))
@@ -595,21 +608,24 @@ private extension DashboardView {
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.med.name)
                     .appFont(.subheadline)
+                    .fontWeight(isCurrent ? .semibold : .regular)
                     .foregroundStyle(.primary)
-                HStack(spacing: 4) {
-                    Text("\(item.med.dose) • \(item.time.formatted(date: .omitted, time: .shortened))")
-                    if let fi = item.med.foodInstruction {
-                        Text("· \(fi.shortLabel)")
-                            .foregroundStyle(.orange)
-                    }
-                }
-                .appFont(.caption)
-                .foregroundStyle(.secondary)
+                Text("\(item.med.dose) • \(item.time.formatted(date: .omitted, time: .shortened))")
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Spacer()
 
-            if canLogDose(for: item, status: status) {
+            if isCurrent {
+                Text(NSLocalizedString("Now", comment: "Timeline marker for the dose currently shown in hero card"))
+                    .appFont(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(status.tint)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(status.tint.opacity(0.15)))
+            } else if canLogDose(for: item, status: status) {
                 HStack(spacing: 6) {
                     Button {
                         skipDose(for: item)
@@ -638,43 +654,9 @@ private extension DashboardView {
                     .foregroundStyle(status.tint)
             }
         }
+        .opacity(status.isFinal ? 0.55 : 1.0)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(item.med.name), \(item.med.dose), \(item.time.formatted(date: .omitted, time: .shortened)), \(status.displayText)")
-    }
-
-    private func summaryStrip(
-        completedCount: Int,
-        overdueCount: Int,
-        remainingCount: Int
-    ) -> some View {
-        Card {
-            HStack(spacing: 0) {
-                summaryMetric(value: "\(completedCount)", label: NSLocalizedString("Completed", comment: ""), tint: .green)
-                summaryDivider
-                summaryMetric(value: "\(overdueCount)", label: NSLocalizedString("Overdue", comment: ""), tint: overdueCount > 0 ? .red : .secondary)
-                summaryDivider
-                summaryMetric(value: "\(remainingCount)", label: NSLocalizedString("Remaining", comment: ""), tint: .secondary)
-            }
-        }
-    }
-
-    private var summaryDivider: some View {
-        Rectangle()
-            .fill(Color.primary.opacity(0.08))
-            .frame(width: 1, height: 36)
-    }
-
-    private func summaryMetric(value: String, label: String, tint: Color) -> some View {
-        VStack(spacing: 4) {
-            Text(value)
-                .appFont(.headline)
-                .foregroundStyle(tint)
-                .monospacedDigit()
-            Text(label)
-                .appFont(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
     }
 
     private func asNeededCompactSection(medications: [Medication]) -> some View {

@@ -23,7 +23,7 @@ struct ChronicCareApp: App {
     }
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootViewV2()
                 .environmentObject(store)
                 .onAppear {
                     notifHandler.store = store

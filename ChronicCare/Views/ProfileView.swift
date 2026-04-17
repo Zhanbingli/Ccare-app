@@ -21,7 +21,6 @@ struct ProfileView: View {
     @State private var showReminderRules = false
     @State private var showHealthSection = false
     @State private var showGoalsSection = false
-    @State private var showSafetySection = false
     @AppStorage("hapticsEnabled") private var hapticsEnabled: Bool = true
     @AppStorage("units.glucose") private var glucoseUnitRaw: String = GlucoseUnit.mgdL.rawValue
     @AppStorage("prefs.graceMinutes") private var graceMinutes: Int = 30
@@ -87,30 +86,6 @@ struct ProfileView: View {
                 }
 
                 Section {
-                    DisclosureGroup(isExpanded: $showSafetySection) {
-                        NavigationLink {
-                            EmergencyInfoEditView().environmentObject(store)
-                        } label: {
-                            Label(NSLocalizedString("Edit Emergency Info", comment: ""), systemImage: "cross.case")
-                        }
-                        NavigationLink {
-                            EmergencyCardView().environmentObject(store)
-                        } label: {
-                            Label(NSLocalizedString("View Medical Summary", comment: ""), systemImage: "person.text.rectangle")
-                        }
-                        NavigationLink {
-                            CaregiversView().environmentObject(store)
-                        } label: {
-                            Label(NSLocalizedString("Manage Caregivers", comment: ""), systemImage: "person.2")
-                        }
-                    } label: {
-                        settingsSummaryRow(
-                            title: NSLocalizedString("Medical & Support", comment: ""),
-                            summary: careSummary,
-                            systemImage: "cross.case"
-                        )
-                    }
-
                     DisclosureGroup(NSLocalizedString("Apple Health", comment: ""), isExpanded: $showHealthSection) {
                         Button {
                             HealthKitManager.shared.requestAuthorization { granted, error in
@@ -132,9 +107,6 @@ struct ProfileView: View {
                             Label(NSLocalizedString("Import Last 30 Days", comment: ""), systemImage: "arrow.down.doc.fill")
                         }
                     }
-                } footer: {
-                    Text(NSLocalizedString("Keep emergency details and caregiver access up to date for missed-dose support.", comment: ""))
-                        .appFont(.caption)
                 }
 
                 Section {
@@ -535,22 +507,6 @@ struct ProfileView: View {
             return String(format: NSLocalizedString("%lld scheduled medications currently have reminders turned off.", comment: ""), scheduledWithoutRemindersCount)
         }
         return NSLocalizedString("Reminder coverage looks healthy for your scheduled medications.", comment: "")
-    }
-
-    private var careSummary: String {
-        let caregivers = store.caregivers.count
-        let hasEmergencyInfo = store.emergencyInfo != nil
-
-        if hasEmergencyInfo && caregivers > 0 {
-            return String(format: NSLocalizedString("Emergency info ready. %lld caregivers saved.", comment: ""), caregivers)
-        }
-        if hasEmergencyInfo {
-            return NSLocalizedString("Emergency info is ready.", comment: "")
-        }
-        if caregivers > 0 {
-            return String(format: NSLocalizedString("%lld caregivers saved. Add emergency info next.", comment: ""), caregivers)
-        }
-        return NSLocalizedString("Add emergency info and caregivers for missed-dose support.", comment: "")
     }
 
     private var goalsSummary: String {
