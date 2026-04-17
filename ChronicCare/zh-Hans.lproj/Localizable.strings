@@ -833,6 +833,15 @@
 "Overdue" = "已超时";
 "Remaining" = "剩余";
 "Next dose: %@" = "下一剂：%@";
+"Tomorrow: %@" = "明天：%@";
+"%lld taken, %lld skipped out of %lld" = "已服 %1$lld，跳过 %2$lld，共 %3$lld 剂";
+"All %lld doses taken" = "全部 %lld 剂已服用";
+"Latest Measurements" = "最新测量";
+"%lld days left" = "剩余 %lld 天";
+"Hide schedule" = "收起日程";
+"Show today's schedule" = "查看今日日程";
+"No recent activity" = "近期无记录";
+"No doses recorded in the last %lld days. Are reminders working?" = "过去 %lld 天没有服药记录，提醒是否正常？";
 "Later" = "稍后";
 "Three Times Daily" = "每日三次";
 "Start with the essentials. You can scan a label or type manually." = "先填写最关键的信息。你可以扫描药盒，也可以手动输入。";

@@ -106,11 +106,22 @@ struct InsightsView: View {
         }
     }
 
+    /// Returns the latest measurement for each type that has data, sorted by most recent first.
+    private var latestByType: [Measurement] {
+        var result: [MeasurementType: Measurement] = [:]
+        for m in store.measurements {
+            if result[m.type] == nil || m.date > (result[m.type]?.date ?? .distantPast) {
+                result[m.type] = m
+            }
+        }
+        return result.values.sorted { $0.date > $1.date }
+    }
+
     @ViewBuilder
     private var latestMeasurementSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(NSLocalizedString("Latest Measurement", comment: ""))
+                Text(NSLocalizedString("Latest Measurements", comment: ""))
                     .appFont(.headline)
 
                 Spacer(minLength: 12)
@@ -125,35 +136,8 @@ struct InsightsView: View {
                 .controlSize(.small)
             }
 
-            if let latest = store.measurements.first {
-                InsetPanel(tint: latest.type.tint) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(spacing: 10) {
-                            Circle()
-                                .fill(latest.type.tint)
-                                .frame(width: 8, height: 8)
-                            Text(latest.type.displayName)
-                                .appFont(.subheadline)
-                                .fontWeight(.semibold)
-                            Spacer()
-                            measurementValueText(latest)
-                        }
-
-                        HStack(spacing: 10) {
-                            Text(latest.date.formatted(date: .abbreviated, time: .shortened))
-                                .appFont(.footnote)
-                                .foregroundStyle(.secondary)
-
-                            if let note = latest.note, !note.isEmpty {
-                                Text(note)
-                                    .appFont(.footnote)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(2)
-                            }
-                        }
-                    }
-                }
-            } else {
+            let latest = latestByType
+            if latest.isEmpty {
                 InsetPanel {
                     EmptyStateView(
                         systemImage: "waveform.path.ecg",
@@ -162,6 +146,34 @@ struct InsightsView: View {
                         actionTitle: NSLocalizedString("Log Measurement", comment: ""),
                         action: { showAddMeasurement = true }
                     )
+                }
+            } else {
+                ForEach(latest) { m in
+                    InsetPanel(tint: m.type.tint) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 10) {
+                                Circle()
+                                    .fill(m.type.tint)
+                                    .frame(width: 8, height: 8)
+                                Text(m.type.displayName)
+                                    .appFont(.subheadline)
+                                    .fontWeight(.semibold)
+                                Spacer()
+                                measurementValueText(m)
+                            }
+                            HStack(spacing: 10) {
+                                Text(m.date.formatted(date: .abbreviated, time: .shortened))
+                                    .appFont(.footnote)
+                                    .foregroundStyle(.secondary)
+                                if let note = m.note, !note.isEmpty {
+                                    Text(note)
+                                        .appFont(.footnote)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

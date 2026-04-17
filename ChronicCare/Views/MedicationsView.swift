@@ -297,21 +297,32 @@ private extension MedicationsView {
         } label: {
             HStack(alignment: .center, spacing: 12) {
                 medicationThumbnail(for: med)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(med.name)
                         .appFont(.subheadline)
                         .foregroundStyle(.primary)
                     Text(medicationScheduleSummary(for: med))
                         .appFont(.caption)
                         .foregroundStyle(.secondary)
-                    Text(nextDoseSummary(for: med))
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        Text(nextDoseSummary(for: med))
+                        if let fi = med.foodInstruction {
+                            Text("· \(fi.shortLabel)")
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 8)
                 VStack(alignment: .trailing, spacing: 6) {
                     AppBadge(text: medicationStateLabel(for: med), tint: medicationStateTint(for: med))
-                    if med.isLowSupply {
+                    if med.isLowSupply, let days = med.daysOfSupplyRemaining {
+                        AppBadge(
+                            text: String(format: NSLocalizedString("%lld days left", comment: "supply badge"), days),
+                            tint: days <= 3 ? .red : .orange
+                        )
+                    } else if med.isLowSupply {
                         AppBadge(text: NSLocalizedString("Low supply", comment: ""), tint: .orange)
                     }
                 }

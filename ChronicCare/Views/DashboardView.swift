@@ -17,6 +17,7 @@ struct DashboardView: View {
     @AppStorage("prefs.graceMinutes") private var graceMinutes: Int = 30
     @State private var tick = false
     @State private var showAllPRN = false
+    @State private var showCompletedTimeline = false
     private let refreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     private struct MedSchedule: Identifiable {
@@ -179,6 +180,13 @@ struct DashboardView: View {
                             reminderRepairCard()
                         }
 
+                        let allComplete = currentAction == nil && nextUpcoming == nil && totalCount > 0
+
+                        // Inactivity warning: scheduled meds exist but no logs in 2+ days
+                        if !allComplete, let gap = daysSinceLastLog, gap >= 2 {
+                            inactivityWarningCard(daysSince: gap)
+                        }
+
                         currentStateCard(
                             currentAction: currentAction,
                             nextUpcoming: nextUpcoming,
@@ -187,18 +195,49 @@ struct DashboardView: View {
                             statusCache: statusCache
                         )
 
-                        if !schedules.isEmpty {
-                            todayTimelineCard(
-                                schedules: schedules,
-                                statusCache: statusCache
+                        if allComplete {
+                            // Calm completed state: timeline collapsed by default
+                            if !schedules.isEmpty {
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.25)) { showCompletedTimeline.toggle() }
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Text(showCompletedTimeline
+                                             ? NSLocalizedString("Hide schedule", comment: "")
+                                             : NSLocalizedString("Show today's schedule", comment: ""))
+                                            .appFont(.footnote)
+                                            .fontWeight(.medium)
+                                        Image(systemName: showCompletedTimeline ? "chevron.up" : "chevron.down")
+                                            .font(.system(size: 10, weight: .semibold))
+                                    }
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.plain)
+
+                                if showCompletedTimeline {
+                                    todayTimelineCard(
+                                        schedules: schedules,
+                                        statusCache: statusCache
+                                    )
+                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                                }
+                            }
+                        } else {
+                            // Active state: show everything
+                            if !schedules.isEmpty {
+                                todayTimelineCard(
+                                    schedules: schedules,
+                                    statusCache: statusCache
+                                )
+                            }
+
+                            summaryStrip(
+                                completedCount: takenCount,
+                                overdueCount: overdueCount,
+                                remainingCount: remainingCount
                             )
                         }
-
-                        summaryStrip(
-                            completedCount: takenCount,
-                            overdueCount: overdueCount,
-                            remainingCount: remainingCount
-                        )
 
                         if !prnMeds.isEmpty {
                             asNeededCompactSection(medications: prnMeds)
@@ -313,6 +352,38 @@ private extension DashboardView {
         notificationStatus == .denied || !untimedScheduledMeds.isEmpty || !disabledReminderMeds.isEmpty
     }
 
+    /// How many days since the last intake log for any scheduled medication. Nil if no scheduled meds.
+    private var daysSinceLastLog: Int? {
+        let scheduledMeds = store.medications.filter { $0.isAsNeeded != true && $0.remindersEnabled && !$0.timesOfDay.isEmpty }
+        guard !scheduledMeds.isEmpty else { return nil }
+        let scheduledIDs = Set(scheduledMeds.map { $0.id })
+        let latestLog = store.intakeLogs
+            .filter { scheduledIDs.contains($0.medicationID) }
+            .max(by: { $0.date < $1.date })
+        guard let latestLog else { return nil }
+        let cal = Calendar.current
+        return cal.dateComponents([.day], from: cal.startOfDay(for: latestLog.date), to: cal.startOfDay(for: Date())).day
+    }
+
+    private func inactivityWarningCard(daysSince: Int) -> some View {
+        TintedCard(tint: .red) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(.red)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(NSLocalizedString("No recent activity", comment: ""))
+                        .appFont(.headline)
+                    Text(String(format: NSLocalizedString("No doses recorded in the last %lld days. Are reminders working?", comment: ""), daysSince))
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 4)
+            }
+        }
+    }
+
     private var sevenDayCheckInCount: Int {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
@@ -396,6 +467,12 @@ private extension DashboardView {
                         Text("\(item.med.dose) • \(item.time.formatted(date: .omitted, time: .shortened))")
                             .appFont(.subheadline)
                             .foregroundStyle(.secondary)
+                        if let fi = item.med.foodInstruction {
+                            Label(fi.displayName, systemImage: "fork.knife")
+                                .appFont(.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.orange)
+                        }
                     }
 
                     HStack(spacing: 10) {
@@ -439,6 +516,11 @@ private extension DashboardView {
                         Text("\(nextUpcoming.med.dose) • \(nextUpcoming.time.formatted(date: .omitted, time: .shortened))")
                             .appFont(.subheadline)
                             .foregroundStyle(.secondary)
+                        if let fi = nextUpcoming.med.foodInstruction {
+                            Label(fi.displayName, systemImage: "fork.knife")
+                                .appFont(.caption)
+                                .foregroundStyle(.orange)
+                        }
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 4) {
@@ -454,16 +536,27 @@ private extension DashboardView {
             }
         } else {
             TintedCard(tint: .green) {
-                HStack(spacing: 14) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 36))
-                        .foregroundStyle(.green)
-                        .symbolRenderingMode(.hierarchical)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(NSLocalizedString("Today complete", comment: ""))
-                            .appFont(.headline)
-                        if let tomorrowText = tomorrowsFirstDoseText() {
-                            Text(String(format: NSLocalizedString("Next dose: %@", comment: ""), tomorrowText))
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 14) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 36))
+                            .foregroundStyle(.green)
+                            .symbolRenderingMode(.hierarchical)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(NSLocalizedString("Today complete", comment: ""))
+                                .appFont(.headline)
+                            Text(todayCompleteSummary(taken: takenCount, skipped: statusCache.values.filter { if case .skipped = $0 { return true } else { return false } }.count, total: totalCount))
+                                .appFont(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    if let tomorrowText = tomorrowsFirstDoseText() {
+                        Divider()
+                        HStack(spacing: 6) {
+                            Image(systemName: "sunrise")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                            Text(String(format: NSLocalizedString("Tomorrow: %@", comment: ""), tomorrowText))
                                 .appFont(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -499,13 +592,19 @@ private extension DashboardView {
                 .frame(width: 24)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(item.med.name)
                     .appFont(.subheadline)
                     .foregroundStyle(.primary)
-                Text("\(item.med.dose) • \(item.time.formatted(date: .omitted, time: .shortened))")
-                    .appFont(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Text("\(item.med.dose) • \(item.time.formatted(date: .omitted, time: .shortened))")
+                    if let fi = item.med.foodInstruction {
+                        Text("· \(fi.shortLabel)")
+                            .foregroundStyle(.orange)
+                    }
+                }
+                .appFont(.caption)
+                .foregroundStyle(.secondary)
             }
 
             Spacer()
@@ -1200,6 +1299,13 @@ private extension DashboardView {
             return NSLocalizedString("No fixed doses scheduled today.", comment: "")
         }
         return String(format: NSLocalizedString("%lld of %lld fixed doses handled today.", comment: ""), taken, total)
+    }
+
+    private func todayCompleteSummary(taken: Int, skipped: Int, total: Int) -> String {
+        if skipped > 0 {
+            return String(format: NSLocalizedString("%lld taken, %lld skipped out of %lld", comment: "complete summary"), taken, skipped, total)
+        }
+        return String(format: NSLocalizedString("All %lld doses taken", comment: "complete summary all taken"), total)
     }
 
     private func beginTakeFlow(for item: MedSchedule) {

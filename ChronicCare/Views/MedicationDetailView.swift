@@ -396,15 +396,6 @@ struct MedicationDetailView: View {
             ))
         }
 
-        // Food instruction
-        if let fi = medication.foodInstruction {
-            attrs.append(HeroAttribute(
-                icon: "fork.knife",
-                label: fi.displayName,
-                tint: .orange
-            ))
-        }
-
         // Special instructions
         if let si = medication.specialInstructions, !si.trimmingCharacters(in: .whitespaces).isEmpty {
             attrs.append(HeroAttribute(
