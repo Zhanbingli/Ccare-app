@@ -43,6 +43,10 @@ import UserNotifications
             NotificationManager.shared.cancelFollowUps(for: medID, timeComponents: comps, scheduledDate: scheduledDate)
         }
 
+        // Ignore actions for medications that have been deleted
+        let medExists = await MainActor.run { store?.medications.contains(where: { $0.id == medID }) ?? false }
+        guard medExists else { return }
+
         switch response.actionIdentifier {
         case NotificationManager.actionTaken:
             if let comps = scheduleComps {

@@ -118,10 +118,24 @@ struct MedicationDetailView: View {
 
     private var lastTakenText: String {
         guard let lastTakenLog else { return NSLocalizedString("None", comment: "") }
-        if Calendar.current.isDateInToday(lastTakenLog.effectiveRecordedAt) {
-            return lastTakenLog.effectiveRecordedAt.formatted(date: .omitted, time: .shortened)
+        let date = lastTakenLog.effectiveRecordedAt
+        let cal = Calendar.current
+        if cal.isDateInToday(date) {
+            return date.formatted(date: .omitted, time: .shortened)
         }
-        return lastTakenLog.effectiveRecordedAt.formatted(date: .abbreviated, time: .shortened)
+        if cal.isDateInYesterday(date) {
+            let time = date.formatted(date: .omitted, time: .shortened)
+            return String(format: NSLocalizedString("Yesterday %@", comment: "Yesterday + time"), time)
+        }
+        // Same year: omit year to save space (e.g. "Apr 15, 8:30 AM" → "4/15 8:30")
+        let fmt = DateFormatter()
+        if cal.isDate(date, equalTo: Date(), toGranularity: .year) {
+            fmt.dateFormat = DateFormatter.dateFormat(fromTemplate: "MdHm", options: 0, locale: Locale.current)
+        } else {
+            fmt.dateStyle = .short
+            fmt.timeStyle = .short
+        }
+        return fmt.string(from: date)
     }
 
     private var detailStatusLine: String {
@@ -241,6 +255,18 @@ struct MedicationDetailView: View {
         return items
     }
 
+    private var maintenanceTint: Color {
+        if medication.isLowSupply { return .orange }
+        if let state = medication.courseState() {
+            switch state {
+            case .ended, .endsToday: return .red
+            case .endingSoon: return .orange
+            case .scheduled: return .green
+            }
+        }
+        return .green
+    }
+
     private var correlatedTypes: [MeasurementType] {
         (medication.category == .unspecified ? nil : medication.category)?.correlatedMeasurementTypes ?? []
     }
@@ -284,6 +310,127 @@ struct MedicationDetailView: View {
         correlatedTypes.contains { relatedMeasurements(for: $0) != nil }
     }
 
+    // MARK: - Hero Card Data
+
+    private struct HeroSnippet {
+        let value: String
+        let label: String
+        let tint: Color
+    }
+
+    /// The supply or course countdown shown top-right in the hero card.
+    private var heroSupplySnippet: HeroSnippet? {
+        // Prioritize supply days if available
+        if let days = medication.daysOfSupplyRemaining {
+            let tint: Color = days <= 3 ? .red : days <= 7 ? .orange : .green
+            return HeroSnippet(
+                value: "\(days)",
+                label: days == 1
+                    ? NSLocalizedString("day left", comment: "supply singular")
+                    : NSLocalizedString("days left", comment: "supply plural"),
+                tint: tint
+            )
+        }
+        // Fall back to pills count
+        if let pills = medication.pillsRemaining {
+            let tint: Color = pills <= 10 ? .orange : .green
+            return HeroSnippet(
+                value: "\(pills)",
+                label: NSLocalizedString("pills", comment: "pill count label"),
+                tint: tint
+            )
+        }
+        // Fall back to course countdown
+        if let state = medication.courseState() {
+            switch state {
+            case .ended(let d):
+                return HeroSnippet(
+                    value: "+\(d)",
+                    label: NSLocalizedString("days past", comment: "course ended"),
+                    tint: .red
+                )
+            case .endsToday:
+                return HeroSnippet(
+                    value: NSLocalizedString("Today", comment: ""),
+                    label: NSLocalizedString("ends", comment: "course ends today"),
+                    tint: .orange
+                )
+            case .endingSoon(let d), .scheduled(let d):
+                let tint: Color = d <= 3 ? .orange : .blue
+                return HeroSnippet(
+                    value: "\(d)",
+                    label: d == 1
+                        ? NSLocalizedString("day left", comment: "course singular")
+                        : NSLocalizedString("days left", comment: "course plural"),
+                    tint: tint
+                )
+            }
+        }
+        return nil
+    }
+
+    private struct HeroAttribute: Hashable {
+        let icon: String
+        let label: String
+        let tint: Color
+        func hash(into hasher: inout Hasher) { hasher.combine(label) }
+        static func == (lhs: HeroAttribute, rhs: HeroAttribute) -> Bool { lhs.label == rhs.label }
+    }
+
+    /// Compact attribute rows shown in the hero card body.
+    private var heroAttributes: [HeroAttribute] {
+        var attrs: [HeroAttribute] = []
+
+        // Schedule
+        if medication.isAsNeeded == true {
+            attrs.append(HeroAttribute(
+                icon: "hand.tap",
+                label: NSLocalizedString("As needed — log when taken", comment: ""),
+                tint: .blue
+            ))
+        } else if !medication.timesOfDay.isEmpty {
+            attrs.append(HeroAttribute(
+                icon: "clock",
+                label: scheduleText,
+                tint: .blue
+            ))
+        }
+
+        // Food instruction
+        if let fi = medication.foodInstruction {
+            attrs.append(HeroAttribute(
+                icon: "fork.knife",
+                label: fi.displayName,
+                tint: .orange
+            ))
+        }
+
+        // Special instructions
+        if let si = medication.specialInstructions, !si.trimmingCharacters(in: .whitespaces).isEmpty {
+            attrs.append(HeroAttribute(
+                icon: "exclamationmark.triangle",
+                label: si,
+                tint: .yellow
+            ))
+        }
+
+        // Course date range
+        if let endDate = medication.courseEndDate {
+            let fmt = DateFormatter()
+            fmt.dateStyle = .medium
+            fmt.timeStyle = .none
+            let startStr = fmt.string(from: medication.startDate)
+            let endStr = fmt.string(from: endDate)
+            attrs.append(HeroAttribute(
+                icon: "calendar",
+                label: "\(startStr) → \(endStr)",
+                tint: .purple
+            ))
+        }
+
+        return attrs
+    }
+
     @ViewBuilder
     private var heroMedicationThumbnail: some View {
         if let path = medication.imagePath, let ui = loadMedicationImage(path: path) {
@@ -309,31 +456,54 @@ struct MedicationDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     TintedCard(tint: detailAccentTint) {
-                        VStack(alignment: .leading, spacing: 16) {
-                            HStack(alignment: .center, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 14) {
+                            // Row 1: Icon + Name/Dose (left) + Supply snapshot (right)
+                            HStack(alignment: .top, spacing: 12) {
                                 heroMedicationThumbnail
-                                VStack(alignment: .leading, spacing: 4) {
+                                VStack(alignment: .leading, spacing: 3) {
                                     Text(medication.name)
                                         .appFont(.title)
                                         .fontWeight(.bold)
+                                        .lineLimit(2)
                                     Text(medication.dose)
                                         .appFont(.headline)
                                         .foregroundStyle(.secondary)
                                 }
-                                Spacer()
+                                Spacer(minLength: 4)
+                                // Supply / course countdown on the right
+                                if let snippet = heroSupplySnippet {
+                                    VStack(alignment: .trailing, spacing: 2) {
+                                        Text(snippet.value)
+                                            .appFont(.title)
+                                            .fontWeight(.bold)
+                                            .foregroundStyle(snippet.tint)
+                                            .monospacedDigit()
+                                        Text(snippet.label)
+                                            .appFont(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
                             }
 
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(detailHeadline)
-                                    .appFont(.headline)
-                                    .fontWeight(.semibold)
-                                Text(detailSupportingLine)
-                                    .appFont(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
+                            // Row 2: Key attributes (compact info rows)
+                            if !heroAttributes.isEmpty {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    ForEach(heroAttributes, id: \.label) { attr in
+                                        HStack(spacing: 6) {
+                                            Image(systemName: attr.icon)
+                                                .font(.system(size: 12, weight: .medium))
+                                                .foregroundStyle(attr.tint)
+                                                .frame(width: 16)
+                                            Text(attr.label)
+                                                .appFont(.subheadline)
+                                                .foregroundStyle(.primary)
+                                        }
+                                    }
+                                }
                             }
 
-                            HStack(spacing: 8) {
+                            // Row 3: Tags
+                            FlowLayout(spacing: 6) {
                                 reminderBadge(reminderStateLabel, tint: reminderStateTint)
                                 reminderBadge(modeLabel, tint: modeTint)
                                 if let categoryName = medication.displayCategoryName {
@@ -492,7 +662,7 @@ struct MedicationDetailView: View {
                             VStack(alignment: .leading, spacing: 10) {
                                 Text(NSLocalizedString("Maintenance", comment: ""))
                                     .appFont(.headline)
-                                InsetPanel(tint: .orange) {
+                                InsetPanel(tint: maintenanceTint) {
                                     VStack(alignment: .leading, spacing: 10) {
                                         ForEach(maintenanceSummary, id: \.self) { item in
                                             HStack(alignment: .top, spacing: 8) {
@@ -535,11 +705,13 @@ struct MedicationDetailView: View {
                     .appFont(.headline)
                     .foregroundStyle(tint)
                     .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 Text(label)
                     .appFont(.caption)
                     .foregroundStyle(.secondary)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
         }
     }
 

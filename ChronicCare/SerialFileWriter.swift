@@ -11,8 +11,8 @@ actor SerialFileWriter {
             do {
                 try data.write(to: url, options: [.atomic, .completeFileProtection])
             } catch {
-                // Fallback when file protection blocks writes (e.g., device locked)
-                try data.write(to: url, options: [.atomic])
+                // Fall back to a still-protected class instead of dropping to no protection.
+                try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             }
             try? (url as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
         } catch {

@@ -590,8 +590,9 @@ private extension DashboardView {
 
                 let visible = showAllPRN ? medications : Array(medications.prefix(3))
                 ForEach(visible) { med in
-                    InsetPanel {
-                        prnMedRow(med: med)
+                    prnMedRow(med: med)
+                    if med.id != visible.last?.id {
+                        Divider()
                     }
                 }
 
@@ -668,7 +669,7 @@ private extension DashboardView {
         )
         NotificationManager.shared.cancelDoseNotifications(for: item.med.id, timeComponents: comps, scheduledDate: item.time, now: item.time)
         store.syncNotifications()
-        Haptics.impact(.light)
+        Haptics.notification(.warning)
     }
 
     private func snoozeDose(for item: MedSchedule) {
@@ -692,7 +693,7 @@ private extension DashboardView {
                 scheduledDate: item.time
             )
             NotificationManager.shared.updateBadge(store: store)
-            Haptics.impact(.light)
+            Haptics.impact(.soft)
         case .exhausted:
             skipDose(for: item)
         }
@@ -1323,42 +1324,49 @@ private extension DashboardView {
             $0.medicationID == med.id && $0.date >= dayStart && $0.date < dayEnd && $0.status == .taken
         }.count
 
-        return HStack(alignment: .center, spacing: 12) {
+        return HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(med.name).appFont(.body)
-                Text(med.dose).appFont(.caption).foregroundStyle(.secondary)
+                Text(med.name)
+                    .appFont(.body)
+                    .lineLimit(1)
+                Text(med.dose)
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
+            .layoutPriority(1)
 
             Spacer(minLength: 4)
 
-            HStack(spacing: 10) {
-                if todayCount > 0 {
-                    Text(String(format: NSLocalizedString("Taken %lld×", comment: ""), todayCount))
-                        .appFont(.caption)
-                        .foregroundStyle(.green)
-                }
-
-                Button {
-                    let now = Date()
-                    let comps = cal.dateComponents([.hour, .minute], from: now)
-                    store.recordTakenDose(
-                        medicationID: med.id,
-                        scheduleTime: comps,
-                        scheduledDate: now,
-                        scheduleKeyOverride: "prn_\(now.timeIntervalSince1970)"
-                    )
-                    Haptics.success()
-                } label: {
-                    Text(NSLocalizedString("Take Now", comment: ""))
-                        .appFont(.caption)
-                        .fontWeight(.semibold)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.blue)
-                .controlSize(.small)
+            if todayCount > 0 {
+                Text(String(format: NSLocalizedString("Taken %lld×", comment: ""), todayCount))
+                    .appFont(.caption)
+                    .foregroundStyle(.green)
+                    .lineLimit(1)
+                    .fixedSize()
             }
+
+            Button {
+                let now = Date()
+                let comps = cal.dateComponents([.hour, .minute], from: now)
+                store.recordTakenDose(
+                    medicationID: med.id,
+                    scheduleTime: comps,
+                    scheduledDate: now,
+                    scheduleKeyOverride: "prn_\(now.timeIntervalSince1970)"
+                )
+                Haptics.success()
+            } label: {
+                Text(NSLocalizedString("Take Now", comment: ""))
+                    .appFont(.caption)
+                    .fontWeight(.semibold)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.blue)
+            .controlSize(.small)
+            .fixedSize()
         }
         .contentShape(Rectangle())
     }

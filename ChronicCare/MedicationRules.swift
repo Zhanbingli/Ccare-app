@@ -37,7 +37,8 @@ final class MedicationRuleStore: ObservableObject {
     private let fileURL: URL
 
     private init() {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
         self.fileURL = docs.appendingPathComponent("medication_rules.json")
         load()
     }

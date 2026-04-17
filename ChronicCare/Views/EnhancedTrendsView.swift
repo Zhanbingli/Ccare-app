@@ -28,33 +28,20 @@ struct EnhancedTrendsView: View {
             .sorted(by: { $0.date < $1.date })
     }
 
-    private struct BPDaily: Identifiable {
+    private struct BPPoint: Identifiable {
+        let id: UUID
         let date: Date
         let systolic: Double
         let diastolic: Double?
-        var id: Date { date }
     }
 
-    private var bpDaily: [BPDaily] {
+    /// Returns every individual blood pressure measurement as a chart point,
+    /// preserving all readings even when multiple are recorded on the same day.
+    private var bpPoints: [BPPoint] {
         guard selectedType == .bloodPressure else { return [] }
-        let cal = Calendar.current
-        let groups = Dictionary(grouping: filtered) { m in cal.startOfDay(for: m.date) }
-        func median(_ arr: [Double]) -> Double? {
-            guard !arr.isEmpty else { return nil }
-            let s = arr.sorted()
-            let n = s.count
-            if n % 2 == 1 { return s[n/2] }
-            return (s[n/2 - 1] + s[n/2]) / 2
+        return filtered.map { m in
+            BPPoint(id: m.id, date: m.date, systolic: m.value, diastolic: m.diastolic)
         }
-        let items = groups.keys.sorted().compactMap { day -> BPDaily? in
-            guard let list = groups[day] else { return nil }
-            let systolics = list.map { $0.value }
-            let diastolics = list.compactMap { $0.diastolic }
-            guard let sMed = median(systolics) else { return nil }
-            let dMed = median(diastolics)
-            return BPDaily(date: day, systolic: sMed, diastolic: dMed)
-        }
-        return items
     }
 
     private var xAxisValues: [Date] {
@@ -316,11 +303,11 @@ struct EnhancedTrendsView: View {
     private var bloodPressureChart: some View {
         let start = Calendar.current.date(byAdding: .day, value: -rangeDays, to: Date())!
         let end = Date()
-        let daily = bpDaily
+        let points = bpPoints
         let thresholds = store.bpThresholds()
-        let systolicMax = daily.map { $0.systolic }.max() ?? thresholds.systolicHigh
+        let systolicMax = points.map { $0.systolic }.max() ?? thresholds.systolicHigh
         let upperBound = max(systolicMax, thresholds.systolicHigh) + 10
-        let lowerCandidate = min(daily.compactMap { $0.diastolic }.min() ?? thresholds.diastolicHigh, thresholds.diastolicHigh)
+        let lowerCandidate = min(points.compactMap { $0.diastolic }.min() ?? thresholds.diastolicHigh, thresholds.diastolicHigh)
         let lowerBound = max(40, lowerCandidate - 10)
 
         return Chart {
@@ -339,14 +326,11 @@ struct EnhancedTrendsView: View {
                 .lineStyle(.init(dash: [4, 4]))
                 .foregroundStyle(.red.opacity(0.6))
 
-            ForEach(daily.compactMap { d -> (Date, Double, Double)? in
-                if let dia = d.diastolic { return (d.date, dia, d.systolic) }
-                return nil
-            }, id: \.0) { item in
+            ForEach(points.filter { $0.diastolic != nil }) { p in
                 AreaMark(
-                    x: .value("Date", item.0),
-                    yStart: .value("Dia", item.1),
-                    yEnd: .value("Sys", item.2)
+                    x: .value("Date", p.date),
+                    yStart: .value("Dia", p.diastolic!),
+                    yEnd: .value("Sys", p.systolic)
                 )
                 .foregroundStyle(
                     LinearGradient(
@@ -357,37 +341,33 @@ struct EnhancedTrendsView: View {
                 )
             }
 
-            ForEach(daily) { d in
+            ForEach(points) { p in
                 LineMark(
-                    x: .value("Date", d.date),
-                    y: .value("Systolic", d.systolic)
+                    x: .value("Date", p.date),
+                    y: .value("Systolic", p.systolic)
                 )
                 .interpolationMethod(.catmullRom)
                 .foregroundStyle(by: .value("Series", NSLocalizedString("Systolic", comment: "")))
-                .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round))
+                .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
             }
 
-            ForEach(daily.compactMap { d -> (Date, Double)? in
-                guard let dia = d.diastolic else { return nil }
-                return (d.date, dia)
-            }, id: \.0) { item in
+            ForEach(points.filter { $0.diastolic != nil }) { p in
                 LineMark(
-                    x: .value("Date", item.0),
-                    y: .value("Diastolic", item.1)
+                    x: .value("Date", p.date),
+                    y: .value("Diastolic", p.diastolic!)
                 )
                 .interpolationMethod(.catmullRom)
                 .foregroundStyle(by: .value("Series", NSLocalizedString("Diastolic", comment: "")))
-                .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round))
+                .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
             }
 
-            ForEach(daily) { d in
-                let cal = Calendar.current
-                let isSelected = selectedDataPoint.map { cal.isDate($0.date, inSameDayAs: d.date) } ?? false
+            ForEach(points) { p in
+                let isSelected = selectedDataPoint.map { $0.id == p.id } ?? false
                 PointMark(
-                    x: .value("Date", d.date),
-                    y: .value("Systolic", d.systolic)
+                    x: .value("Date", p.date),
+                    y: .value("Systolic", p.systolic)
                 )
-                .symbolSize(isSelected ? 120 : 60)
+                .symbolSize(isSelected ? 120 : 50)
                 .foregroundStyle(.indigo)
             }
 

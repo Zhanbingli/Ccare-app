@@ -1,20 +1,25 @@
 import Foundation
 import Security
+import os
 
 private enum KeychainHelper {
     static func set(_ value: String, service: String, account: String) {
-        let data = value.data(using: .utf8) ?? Data()
+        guard let data = value.data(using: .utf8) else { return }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
-        SecItemDelete(query as CFDictionary)
+        let deleteStatus = SecItemDelete(query as CFDictionary)
+        guard deleteStatus == errSecSuccess || deleteStatus == errSecItemNotFound else { return }
         let insert: [String: Any] = query.merging([
             kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         ], uniquingKeysWith: { _, new in new })
-        SecItemAdd(insert as CFDictionary, nil)
+        let addStatus = SecItemAdd(insert as CFDictionary, nil)
+        if addStatus != errSecSuccess {
+            os_log(.error, "Keychain save failed: %d", addStatus)
+        }
     }
 
     static func get(service: String, account: String) -> String? {

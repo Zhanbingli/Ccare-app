@@ -1,0 +1,22 @@
+/* Widget Status */
+"Overdue" = "已过时";
+"Due Soon" = "即将服药";
+"Next Dose" = "下一剂药";
+"All Caught Up" = "全部完成";
+
+/* Widget Content */
+"All done today" = "今日全部完成";
+"%lld of %lld taken" = "已服 %1$lld / %2$lld";
+"Today" = "今日";
+"No more doses today" = "今日无更多剂量";
+"No other doses scheduled" = "无其他排定剂量";
+
+/* Widget Inline */
+"Dose overdue" = "剂量已过时";
+"Next %@" = "下次 %@";
+"All caught up" = "全部完成";
+"No scheduled dose" = "无排定剂量";
+"Open ChronicCare to set up" = "打开 ChronicCare 设置用药";
+
+/* Widget Configuration */
+"Shows your next upcoming medication dose." = "显示您下一次需要服用的药物。";

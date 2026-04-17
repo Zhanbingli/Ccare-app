@@ -21,7 +21,7 @@ enum PDFGenerator {
         let orangeAttrs: [NSAttributedString.Key: Any] = [.font: UIFont.boldSystemFont(ofSize: 11), .foregroundColor: UIColor.systemOrange]
         let redAttrs: [NSAttributedString.Key: Any] = [.font: UIFont.boldSystemFont(ofSize: 11), .foregroundColor: UIColor.systemRed]
 
-        try renderer.writePDF(to: url) { ctx in
+        let data = renderer.pdfData { ctx in
             var y: CGFloat = 0
 
             func ensureSpace(_ needed: CGFloat) {
@@ -326,6 +326,8 @@ enum PDFGenerator {
             let footer = NSLocalizedString("This report is for informational purposes only. Consult your healthcare provider for medical advice.", comment: "")
             footer.draw(at: CGPoint(x: margin, y: y), withAttributes: smallAttrs)
         }
+        try data.write(to: url, options: [.atomic, .completeFileProtection])
+        try? (url as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
         return url
     }
 }

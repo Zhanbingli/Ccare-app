@@ -6,7 +6,20 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		582057262F8FB79300750F8A /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 582057252F8FB79300750F8A /* WidgetKit.framework */; };
+		582057282F8FB79300750F8A /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 582057272F8FB79300750F8A /* SwiftUI.framework */; };
+		582057372F8FB79400750F8A /* CcareWidgitExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 582057232F8FB79300750F8A /* CcareWidgitExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
+		582057352F8FB79400750F8A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 589BEEE72E6334BB0085E32D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 582057222F8FB79300750F8A;
+			remoteInfo = CcareWidgitExtension;
+		};
 		589BEEFD2E6334BC0085E32D /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 589BEEE72E6334BB0085E32D /* Project object */;
@@ -23,15 +36,61 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		582057382F8FB79400750F8A /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				582057372F8FB79400750F8A /* CcareWidgitExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		582057232F8FB79300750F8A /* CcareWidgitExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CcareWidgitExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		582057252F8FB79300750F8A /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		582057272F8FB79300750F8A /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		5820574D2F8FC21D00750F8A /* CcareWidgitExtensionDebug.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CcareWidgitExtensionDebug.entitlements; sourceTree = "<group>"; };
 		589BEEEF2E6334BB0085E32D /* ChronicCare.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ChronicCare.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		589BEEFC2E6334BC0085E32D /* ChronicCareTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ChronicCareTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		589BEF062E6334BC0085E32D /* ChronicCareUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ChronicCareUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		5820573B2F8FB79400750F8A /* Exceptions for "CcareWidgit" folder in "CcareWidgitExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 582057222F8FB79300750F8A /* CcareWidgitExtension */;
+		};
+		5820573E2F8FBA5B00750F8A /* Exceptions for "ChronicCare" folder in "CcareWidgitExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Shared/WidgetDataProvider.swift,
+			);
+			target = 582057222F8FB79300750F8A /* CcareWidgitExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		582057292F8FB79300750F8A /* CcareWidgit */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				5820573B2F8FB79400750F8A /* Exceptions for "CcareWidgit" folder in "CcareWidgitExtension" target */,
+			);
+			path = CcareWidgit;
+			sourceTree = "<group>";
+		};
 		589BEEF12E6334BB0085E32D /* ChronicCare */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				5820573E2F8FBA5B00750F8A /* Exceptions for "ChronicCare" folder in "CcareWidgitExtension" target */,
+			);
 			path = ChronicCare;
 			sourceTree = "<group>";
 		};
@@ -48,6 +107,15 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		582057202F8FB79300750F8A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				582057282F8FB79300750F8A /* SwiftUI.framework in Frameworks */,
+				582057262F8FB79300750F8A /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		589BEEEC2E6334BB0085E32D /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -72,12 +140,24 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		582057242F8FB79300750F8A /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				582057252F8FB79300750F8A /* WidgetKit.framework */,
+				582057272F8FB79300750F8A /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		589BEEE62E6334BB0085E32D = {
 			isa = PBXGroup;
 			children = (
+				5820574D2F8FC21D00750F8A /* CcareWidgitExtensionDebug.entitlements */,
 				589BEEF12E6334BB0085E32D /* ChronicCare */,
 				589BEEFF2E6334BC0085E32D /* ChronicCareTests */,
 				589BEF092E6334BC0085E32D /* ChronicCareUITests */,
+				582057292F8FB79300750F8A /* CcareWidgit */,
+				582057242F8FB79300750F8A /* Frameworks */,
 				589BEEF02E6334BB0085E32D /* Products */,
 			);
 			sourceTree = "<group>";
@@ -88,6 +168,7 @@
 				589BEEEF2E6334BB0085E32D /* ChronicCare.app */,
 				589BEEFC2E6334BC0085E32D /* ChronicCareTests.xctest */,
 				589BEF062E6334BC0085E32D /* ChronicCareUITests.xctest */,
+				582057232F8FB79300750F8A /* CcareWidgitExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -95,6 +176,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		582057222F8FB79300750F8A /* CcareWidgitExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5820573C2F8FB79400750F8A /* Build configuration list for PBXNativeTarget "CcareWidgitExtension" */;
+			buildPhases = (
+				5820571F2F8FB79300750F8A /* Sources */,
+				582057202F8FB79300750F8A /* Frameworks */,
+				582057212F8FB79300750F8A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				582057292F8FB79300750F8A /* CcareWidgit */,
+			);
+			name = CcareWidgitExtension;
+			packageProductDependencies = (
+			);
+			productName = CcareWidgitExtension;
+			productReference = 582057232F8FB79300750F8A /* CcareWidgitExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		589BEEEE2E6334BB0085E32D /* ChronicCare */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 589BEF102E6334BC0085E32D /* Build configuration list for PBXNativeTarget "ChronicCare" */;
@@ -102,10 +205,12 @@
 				589BEEEB2E6334BB0085E32D /* Sources */,
 				589BEEEC2E6334BB0085E32D /* Frameworks */,
 				589BEEED2E6334BB0085E32D /* Resources */,
+				582057382F8FB79400750F8A /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				582057362F8FB79400750F8A /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				589BEEF12E6334BB0085E32D /* ChronicCare */,
@@ -173,6 +278,9 @@
 				LastSwiftUpdateCheck = 1630;
 				LastUpgradeCheck = 1630;
 				TargetAttributes = {
+					582057222F8FB79300750F8A = {
+						CreatedOnToolsVersion = 16.3;
+					};
 					589BEEEE2E6334BB0085E32D = {
 						CreatedOnToolsVersion = 16.3;
 					};
@@ -204,11 +312,19 @@
 				589BEEEE2E6334BB0085E32D /* ChronicCare */,
 				589BEEFB2E6334BC0085E32D /* ChronicCareTests */,
 				589BEF052E6334BC0085E32D /* ChronicCareUITests */,
+				582057222F8FB79300750F8A /* CcareWidgitExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		582057212F8FB79300750F8A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		589BEEED2E6334BB0085E32D /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -233,6 +349,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		5820571F2F8FB79300750F8A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		589BEEEB2E6334BB0085E32D /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -257,6 +380,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		582057362F8FB79400750F8A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 582057222F8FB79300750F8A /* CcareWidgitExtension */;
+			targetProxy = 582057352F8FB79400750F8A /* PBXContainerItemProxy */;
+		};
 		589BEEFE2E6334BC0085E32D /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 589BEEEE2E6334BB0085E32D /* ChronicCare */;
@@ -270,6 +398,64 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		582057392F8FB79400750F8A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = CcareWidgitExtensionDebug.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 497VA9CYH7;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = CcareWidgit/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = CcareWidgit;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = lizhanbing.Ccare.CcareWidgit;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		5820573A2F8FB79400750F8A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = CcareWidgitExtensionDebug.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 497VA9CYH7;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = CcareWidgit/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = CcareWidgit;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = lizhanbing.Ccare.CcareWidgit;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		589BEF0E2E6334BC0085E32D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -403,6 +589,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = ChronicCare;
+				INFOPLIST_KEY_CFBundleURLTypes = "{\n    CFBundleTypeRole = Editor;\n    CFBundleURLName = \"lizhanbing.Ccare\";\n    CFBundleURLSchemes =     (\n        chroniccare\n    );\n}";
 				INFOPLIST_KEY_NSCameraUsageDescription = "ChronicCare uses the camera to scan medication labels and fill in medication details.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "ChronicCare uses Health to read your health data (blood pressure, blood glucose, heart rate, weight) for trends and insights.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "ChronicCare writes measurements you add to Apple Health for safe storage and cross‑app use.";
@@ -436,6 +623,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = ChronicCare;
+				INFOPLIST_KEY_CFBundleURLTypes = "{\n    CFBundleTypeRole = Editor;\n    CFBundleURLName = \"lizhanbing.Ccare\";\n    CFBundleURLSchemes =     (\n        chroniccare\n    );\n}";
 				INFOPLIST_KEY_NSCameraUsageDescription = "ChronicCare uses the camera to scan medication labels and fill in medication details.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "ChronicCare uses Health to read your health data (blood pressure, blood glucose, heart rate, weight) for trends and insights.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "ChronicCare writes measurements you add to Apple Health for safe storage and cross‑app use.";
@@ -532,6 +720,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		5820573C2F8FB79400750F8A /* Build configuration list for PBXNativeTarget "CcareWidgitExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				582057392F8FB79400750F8A /* Debug */,
+				5820573A2F8FB79400750F8A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		589BEEEA2E6334BB0085E32D /* Build configuration list for PBXProject "ChronicCare" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

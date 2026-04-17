@@ -74,27 +74,13 @@ struct TintedCard<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: AppRadius.hero, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                tint.opacity(colorScheme == .dark ? 0.26 : 0.20),
-                                tint.opacity(colorScheme == .dark ? 0.12 : 0.09),
-                                cardBase.opacity(colorScheme == .dark ? 0.88 : 0.72)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(tint.opacity(colorScheme == .dark ? 0.10 : 0.06))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: AppRadius.hero, style: .continuous)
-                    .stroke(tint.opacity(colorScheme == .dark ? 0.26 : 0.20), lineWidth: 1.2)
+                    .stroke(tint.opacity(colorScheme == .dark ? 0.18 : 0.12), lineWidth: 0.8)
             )
-            .shadow(color: tint.opacity(colorScheme == .dark ? 0.18 : 0.16), radius: 14, x: 0, y: 8)
-    }
-
-    private var cardBase: Color {
-        colorScheme == .dark ? Color.black : Color.white
+            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.16 : 0.06), radius: 8, x: 0, y: 4)
     }
 }
 
@@ -252,5 +238,49 @@ struct RoundedCornersShape: Shape {
 extension View {
     func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
         clipShape(RoundedCornersShape(corners: corners, radius: radius))
+    }
+}
+
+// MARK: - FlowLayout
+
+/// A layout that wraps children to the next line when horizontal space runs out.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+
+        for sub in subviews {
+            let size = sub.sizeThatFits(.unspecified)
+            if x + size.width > maxWidth, x > 0 {
+                y += rowHeight + spacing
+                x = 0
+                rowHeight = 0
+            }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        return CGSize(width: maxWidth, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+
+        for sub in subviews {
+            let size = sub.sizeThatFits(.unspecified)
+            if x + size.width > bounds.maxX, x > bounds.minX {
+                y += rowHeight + spacing
+                x = bounds.minX
+                rowHeight = 0
+            }
+            sub.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
     }
 }

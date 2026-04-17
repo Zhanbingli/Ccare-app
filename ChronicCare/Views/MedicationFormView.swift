@@ -50,6 +50,7 @@ struct MedicationFormView: View {
     @State private var showCategoryDetails = false
     @State private var showAddOptionalDetails = false
     @State private var showSaveError = false
+    @State private var showDeleteConfirm = false
     @State private var saveErrorMessage: String?
     @FocusState private var focusedField: EntryField?
 
@@ -94,21 +95,21 @@ struct MedicationFormView: View {
             }
         }
 
-        var title: LocalizedStringKey {
+        var title: String {
             switch self {
-            case .onceDaily: return "Once Daily"
-            case .twiceDaily: return "Twice Daily"
-            case .threeTimesDaily: return "Three Times Daily"
-            case .custom: return "Custom"
+            case .onceDaily: return NSLocalizedString("Once Daily", comment: "Schedule preset title")
+            case .twiceDaily: return NSLocalizedString("Twice Daily", comment: "Schedule preset title")
+            case .threeTimesDaily: return NSLocalizedString("Three Times Daily", comment: "Schedule preset title")
+            case .custom: return NSLocalizedString("Custom", comment: "Schedule preset title")
             }
         }
 
-        var subtitle: LocalizedStringKey {
+        var subtitle: String {
             switch self {
-            case .onceDaily: return "1 reminder"
-            case .twiceDaily: return "2 reminders"
-            case .threeTimesDaily: return "3 reminders"
-            case .custom: return "Edit times manually"
+            case .onceDaily: return NSLocalizedString("1 reminder", comment: "Schedule preset subtitle")
+            case .twiceDaily: return NSLocalizedString("2 reminders", comment: "Schedule preset subtitle")
+            case .threeTimesDaily: return NSLocalizedString("3 reminders", comment: "Schedule preset subtitle")
+            case .custom: return NSLocalizedString("Edit times manually", comment: "Schedule preset subtitle")
             }
         }
 
@@ -489,6 +490,7 @@ struct MedicationFormView: View {
                                 Spacer()
                                 Toggle("", isOn: $remindersEnabled)
                                     .labelsHidden()
+                                    .accessibilityLabel(NSLocalizedString("Enable Reminders", comment: "Accessibility"))
                             }
                             if !remindersEnabled {
                                 Text(NSLocalizedString("Times saved, but notifications won't fire.", comment: ""))
@@ -525,6 +527,7 @@ struct MedicationFormView: View {
                                 }
                             ))
                             .labelsHidden()
+                            .accessibilityLabel(NSLocalizedString("As Needed Only", comment: "Accessibility"))
                         }
                     }
                 }
@@ -795,14 +798,22 @@ struct MedicationFormView: View {
     private var deleteSection: some View {
         Card {
             Button(role: .destructive) {
-                onDelete?()
-                dismiss()
+                showDeleteConfirm = true
             } label: {
                 Text(NSLocalizedString("Delete Medication", comment: ""))
                     .appFont(.subheadline)
                     .foregroundStyle(.red)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
+            }
+            .alert(NSLocalizedString("Delete Medication", comment: ""), isPresented: $showDeleteConfirm) {
+                Button(NSLocalizedString("Delete", comment: ""), role: .destructive) {
+                    onDelete?()
+                    dismiss()
+                }
+                Button(NSLocalizedString("Cancel", comment: ""), role: .cancel) { }
+            } message: {
+                Text(String(format: NSLocalizedString("Are you sure you want to delete \"%@\"? This cannot be undone.", comment: ""), name))
             }
         }
     }
@@ -1413,10 +1424,11 @@ private extension MedicationFormView {
             Text(title).appFont(.label).fontWeight(.semibold)
         }
         .foregroundStyle(Color.accentColor)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, minHeight: 44)
         .padding(.vertical, 9)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.accentColor.opacity(0.08)))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.accentColor.opacity(0.14), lineWidth: 0.8))
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder

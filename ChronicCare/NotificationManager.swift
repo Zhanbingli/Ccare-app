@@ -217,12 +217,40 @@ final class NotificationManager {
             let followUpBudget = self.followUpBudget(for: medications)
             let primaryBudget = self.primaryBudget(for: medications, followUpBudget: followUpBudget)
             let selectedPrimary = Array(primaryCandidates.prefix(primaryBudget))
-            selectedPrimary.forEach { self.schedulePrimaryReminder(for: $0, center: center) }
 
-            let followUpCandidates = self.buildFollowUpCandidates(from: selectedPrimary, now: now)
-                .sorted { $0.fireDate < $1.fireDate }
-            followUpCandidates.prefix(followUpBudget).forEach {
-                self.scheduleFollowUpReminder(for: $0.candidate, attempt: $0.attempt, minutes: $0.minutes, fireDate: $0.fireDate, center: center)
+            let selectedFollowUps = Array(
+                self.buildFollowUpCandidates(from: selectedPrimary, now: now)
+                    .sorted { $0.fireDate < $1.fireDate }
+                    .prefix(followUpBudget)
+            )
+
+            // Merge primary and follow-up by fire date so badge numbers increment chronologically
+            enum ScheduleItem {
+                case primary(ScheduledDoseCandidate)
+                case followUp(candidate: ScheduledDoseCandidate, attempt: Int, minutes: Int, fireDate: Date)
+
+                var fireDate: Date {
+                    switch self {
+                    case .primary(let c): return c.fireDate
+                    case .followUp(_, _, _, let d): return d
+                    }
+                }
+            }
+
+            var allItems: [ScheduleItem] = selectedPrimary.map { .primary($0) }
+            allItems += selectedFollowUps.map { .followUp(candidate: $0.candidate, attempt: $0.attempt, minutes: $0.minutes, fireDate: $0.fireDate) }
+            allItems.sort { $0.fireDate < $1.fireDate }
+
+            // Reset badge counter so each scheduling cycle starts fresh
+            self.nextBadgeNumber = 1
+
+            for item in allItems {
+                switch item {
+                case .primary(let c):
+                    self.schedulePrimaryReminder(for: c, center: center)
+                case .followUp(let c, let attempt, let minutes, let fireDate):
+                    self.scheduleFollowUpReminder(for: c, attempt: attempt, minutes: minutes, fireDate: fireDate, center: center)
+                }
             }
         }
     }
@@ -253,8 +281,8 @@ final class NotificationManager {
         var uniqueCandidates: [String: ScheduledDoseCandidate] = [:]
 
         medications.forEach { medication in
-            let strategy = AdaptiveReminderEngine.strategy(for: medication, intakeLogs: intakeLogs, now: now)
             medication.timesOfDay.forEach { timeComponents in
+                let strategy = AdaptiveReminderEngine.strategy(for: medication, intakeLogs: intakeLogs, now: now, scheduleTime: timeComponents)
                 upcomingFireDates(
                     for: timeComponents,
                     horizonDays: primarySchedulingHorizonDays,
@@ -289,6 +317,11 @@ final class NotificationManager {
         return Array(uniqueCandidates.values)
     }
 
+    /// Tracks the badge number to assign to each scheduled notification.
+    /// Reset at the start of each rescheduleDoseReminders cycle, then incremented
+    /// for each primary and follow-up notification in chronological order.
+    private var nextBadgeNumber = 1
+
     private func schedulePrimaryReminder(for candidate: ScheduledDoseCandidate, center: UNUserNotificationCenter) {
         let calendar = Calendar.current
         let comps = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: candidate.fireDate)
@@ -299,6 +332,8 @@ final class NotificationManager {
             scheduledDate: candidate.doseDate,
             riskLevel: candidate.strategy.riskLevel
         )
+        content.badge = NSNumber(value: nextBadgeNumber)
+        nextBadgeNumber += 1
         let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
         center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger)) { error in
             if let error = error { logger.error("Notification schedule error: \(error.localizedDescription)") }
@@ -337,6 +372,8 @@ final class NotificationManager {
             attempt: attempt,
             riskLevel: candidate.strategy.riskLevel
         )
+        fuContent.badge = NSNumber(value: nextBadgeNumber)
+        nextBadgeNumber += 1
         let fuComps = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
         let fuTrigger = UNCalendarNotificationTrigger(dateMatching: fuComps, repeats: false)
         center.add(UNNotificationRequest(identifier: fuId, content: fuContent, trigger: fuTrigger), withCompletionHandler: nil)
@@ -461,17 +498,18 @@ final class NotificationManager {
     func cancelAll(for medication: Medication) {
         let center = UNUserNotificationCenter.current()
         let prefix = medication.id.uuidString
-        center.getPendingNotificationRequests { list in
-            let ids = list.map { $0.identifier }.filter {
+        Task {
+            let pending = await center.pendingNotificationRequests()
+            let pendingIDs = pending.map { $0.identifier }.filter {
                 $0.hasPrefix(prefix) || $0.hasPrefix("snooze_\(prefix)") || $0.contains(prefix)
             }
-            center.removePendingNotificationRequests(withIdentifiers: ids)
-        }
-        center.getDeliveredNotifications { notes in
-            let ids = notes.map { $0.request.identifier }.filter {
+            center.removePendingNotificationRequests(withIdentifiers: pendingIDs)
+
+            let delivered = await center.deliveredNotifications()
+            let deliveredIDs = delivered.map { $0.request.identifier }.filter {
                 $0.hasPrefix(prefix) || $0.hasPrefix("snooze_\(prefix)") || $0.contains(prefix)
             }
-            if !ids.isEmpty { center.removeDeliveredNotifications(withIdentifiers: ids) }
+            if !deliveredIDs.isEmpty { center.removeDeliveredNotifications(withIdentifiers: deliveredIDs) }
         }
     }
 
@@ -625,7 +663,7 @@ final class NotificationManager {
         Task {
             let snapshot: ([Medication], [IntakeLog]) = await MainActor.run { (store.medications, store.intakeLogs) }
             let grace = UserDefaults.standard.object(forKey: "prefs.graceMinutes") as? Int ?? 30
-            let activeSnoozes = await pendingSnoozeIdentifiers()
+            let activeSnoozes = await activeSnoozeIdentifiers()
             let count = Self.computeOutstandingCount(
                 medications: snapshot.0,
                 intakeLogs: snapshot.1,
@@ -638,13 +676,20 @@ final class NotificationManager {
         }
     }
 
-    private func pendingSnoozeIdentifiers() async -> Set<String> {
-        await withCheckedContinuation { continuation in
-            UNUserNotificationCenter.current().getPendingNotificationRequests { list in
-                let ids = list.map { $0.identifier }.filter { $0.hasPrefix("snooze_") }
-                continuation.resume(returning: Set(ids))
+    private func activeSnoozeIdentifiers() async -> Set<String> {
+        let center = UNUserNotificationCenter.current()
+        let pending = await withCheckedContinuation { continuation in
+            center.getPendingNotificationRequests { list in
+                continuation.resume(returning: list.map { $0.identifier })
             }
         }
+        let delivered = await withCheckedContinuation { continuation in
+            center.getDeliveredNotifications { notes in
+                continuation.resume(returning: notes.map { $0.request.identifier })
+            }
+        }
+        let all = (pending + delivered).filter { $0.hasPrefix("snooze_") }
+        return Set(all)
     }
 
     static func computeOutstandingCount(
@@ -665,8 +710,8 @@ final class NotificationManager {
             for (h, m) in times {
                 guard let sched = cal.date(bySettingHour: h, minute: m, second: 0, of: now) else { continue }
                 guard med.isDoseActive(on: sched) else { continue }
-                // Only count when overdue after grace period
-                if now < sched.addingTimeInterval(TimeInterval(graceMinutes * 60)) { continue }
+                // Count as outstanding once the scheduled time has arrived
+                if now < sched { continue }
                 let key = String(format: "%02d:%02d", h, m)
                 let allowNil = times.count <= 1
                 let logs = intakeLogs

@@ -575,6 +575,14 @@
 "Log measurements like blood pressure or glucose to see whether this medication lines up with recent trends." = "记录血压、血糖等测量值后，就能看到这款药是否与近期趋势相符。";
 "Log this medication from Today whenever you actually take it." = "每次实际服用这款药时，请从 Today 页面记录。";
 "Maintenance" = "维护状态";
+
+/* Hero card supply/course snippets */
+"day left" = "天剩余";
+"days left" = "天剩余";
+"days past" = "天已过";
+"pills" = "片";
+"ends" = "结束";
+"As needed — log when taken" = "按需用药 — 服药时记录";
 "Manage medications, review trends, and keep your latest readings close." = "管理药物、查看趋势，并快速看到最新测量。";
 "Manual Logging" = "手动记录";
 "Medication Detail" = "药物详情";
@@ -725,6 +733,7 @@
 "Today 8 PM" = "今天晚上 8 点";
 "Unit" = "单位";
 "Yesterday" = "昨天";
+"Yesterday %@" = "昨天 %@";
 
 /* ProfileView */
 "Backup & Export" = "备份与导出";
@@ -1101,3 +1110,37 @@
 "now" = "现在";
 "%lldh %lldm" = "%lld时%lld分";
 "%lldm" = "%lld分钟";
+
+/* Widget */
+"Next Dose" = "下一剂药";
+"All done" = "全部完成";
+"All doses done" = "今日药物已全部服用";
+"All done today" = "今日全部完成";
+"Shows your next upcoming medication dose." = "显示您下一次需要服用的药物。";
+"Overdue" = "已过时";
+"Due Soon" = "即将服药";
+"All Caught Up" = "全部完成";
+"%lld of %lld taken" = "已服 %1$lld / %2$lld";
+"Today" = "今日";
+"No more doses today" = "今日无更多剂量";
+"No other doses scheduled" = "无其他排定剂量";
+"Dose overdue" = "剂量已过时";
+"Next %@" = "下次 %@";
+"All caught up" = "全部完成";
+"No scheduled dose" = "无排定剂量";
+"Open ChronicCare to set up" = "打开 ChronicCare 设置用药";
+
+/* Schedule Presets */
+"Once Daily" = "每日一次";
+"Twice Daily" = "每日两次";
+"Three Times Daily" = "每日三次";
+"1 reminder" = "1 个提醒";
+"2 reminders" = "2 个提醒";
+"3 reminders" = "3 个提醒";
+"Edit times manually" = "手动编辑时间";
+
+/* Delete Confirmation */
+"Are you sure you want to delete \"%@\"? This cannot be undone." = "确定要删除「%@」吗？此操作无法撤销。";
+
+/* Accessibility */
+"Enable Reminders" = "启用提醒";

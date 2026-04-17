@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import WidgetKit
 import os
 
 private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ChronicCare", category: "DataStore")
@@ -22,7 +23,8 @@ final class DataStore: ObservableObject {
     private let goalsDefaults = UserDefaults.standard
 
     init() {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
         self.measurementsURL = docs.appendingPathComponent("measurements.json")
         self.medicationsURL = docs.appendingPathComponent("medications.json")
         self.intakeLogsURL = docs.appendingPathComponent("intake_logs.json")
@@ -48,6 +50,13 @@ final class DataStore: ObservableObject {
             .dropFirst()
             .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.saveIntakeLogs() }
+            .store(in: &cancellables)
+
+        // Update widget whenever medications or intake logs change
+        Publishers.CombineLatest($medications, $intakeLogs)
+            .dropFirst()
+            .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
+            .sink { [weak self] _ in self?.updateWidgetData() }
             .store(in: &cancellables)
 
         $caregivers
@@ -87,6 +96,22 @@ final class DataStore: ObservableObject {
     func updateMedication(_ item: Medication) -> String? {
         if let error = validateMedication(item) { return error }
         if let idx = medications.firstIndex(where: { $0.id == item.id }) {
+            let oldTimes = Set(medications[idx].timesOfDay.compactMap { comps -> String? in
+                guard let h = comps.hour, let m = comps.minute else { return nil }
+                return String(format: "%02d:%02d", h, m)
+            })
+            let newTimes = Set(item.timesOfDay.compactMap { comps -> String? in
+                guard let h = comps.hour, let m = comps.minute else { return nil }
+                return String(format: "%02d:%02d", h, m)
+            })
+            // Reset snooze counts for removed schedule times
+            for removed in oldTimes.subtracting(newTimes) {
+                let parts = removed.split(separator: ":")
+                if parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1]) {
+                    var comps = DateComponents(); comps.hour = h; comps.minute = m
+                    NotificationManager.shared.resetSnoozeCount(for: item.id, scheduleTime: comps)
+                }
+            }
             medications[idx] = item
         }
         return nil
@@ -191,6 +216,83 @@ final class DataStore: ObservableObject {
         NotificationManager.shared.scheduleRefillReminder(for: medications[idx])
     }
 
+    // MARK: - Widget
+
+    func updateWidgetData() {
+        let now = Date()
+        let cal = Calendar.current
+        let todayStart = cal.startOfDay(for: now)
+        guard let todayEnd = cal.date(byAdding: .day, value: 1, to: todayStart) else { return }
+
+        let scheduled = medications.filter { $0.remindersEnabled && $0.isAsNeeded != true }
+        var allDoses: [WidgetDoseEntry] = []
+        var takenCount = 0
+        var totalCount = 0
+
+        for med in scheduled {
+            for comps in med.timesOfDay {
+                guard let h = comps.hour, let m = comps.minute,
+                      let schedDate = cal.date(bySettingHour: h, minute: m, second: 0, of: now),
+                      med.isDoseActive(on: schedDate) else { continue }
+
+                totalCount += 1
+
+                let key = String(format: "%02d:%02d", h, m)
+                let log = intakeLogs.first { log in
+                    log.medicationID == med.id
+                        && log.date >= todayStart
+                        && log.date < todayEnd
+                        && log.scheduleKey == key
+                }
+
+                if log?.status == .taken {
+                    takenCount += 1
+                    continue
+                }
+                if log?.status == .skipped { continue }
+
+                allDoses.append(WidgetDoseEntry(
+                    medicationName: med.name,
+                    dose: med.dose,
+                    scheduledTime: schedDate,
+                    medicationID: med.id
+                ))
+            }
+        }
+
+        allDoses.sort { $0.scheduledTime < $1.scheduledTime }
+
+        // If no remaining doses today, look at tomorrow
+        if allDoses.isEmpty {
+            if let tomorrow = cal.date(byAdding: .day, value: 1, to: todayStart) {
+                for med in scheduled {
+                    for comps in med.timesOfDay {
+                        guard let h = comps.hour, let m = comps.minute,
+                              let schedDate = cal.date(bySettingHour: h, minute: m, second: 0, of: tomorrow),
+                              med.isDoseActive(on: schedDate) else { continue }
+                        allDoses.append(WidgetDoseEntry(
+                            medicationName: med.name,
+                            dose: med.dose,
+                            scheduledTime: schedDate,
+                            medicationID: med.id
+                        ))
+                    }
+                }
+                allDoses.sort { $0.scheduledTime < $1.scheduledTime }
+            }
+        }
+
+        let data = WidgetData(
+            nextDose: allDoses.first,
+            upcomingDoses: Array(allDoses.prefix(5)),
+            todayTaken: takenCount,
+            todayTotal: totalCount,
+            lastUpdated: now
+        )
+        WidgetDataProvider.write(data)
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
     /// Sync all notification schedules and update the badge in one call.
     func syncNotifications(now: Date = Date()) {
         NotificationManager.shared.syncAll(medications: medications, intakeLogs: intakeLogs, now: now)
@@ -261,6 +363,7 @@ final class DataStore: ObservableObject {
             self.emergencyInfo = try JSONDecoder().decode(EmergencyInfo.self, from: data)
         } catch { /* first launch or no data */ }
         self.caregivers = loadResilient(from: caregiversURL, label: "caregivers")
+        updateWidgetData()
     }
 
     /// Decode an array resiliently: skip individual bad records instead of losing all data.

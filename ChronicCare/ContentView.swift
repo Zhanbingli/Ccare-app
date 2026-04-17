@@ -46,12 +46,40 @@ struct ContentView: View {
             guard newPhase == .active else { return }
             let now = Date()
             store.syncNotifications(now: now)
+            store.updateWidgetData()
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("openMedicationDetail"))) { notification in
             selectedTab = 1
             if let medID = notification.object as? UUID {
                 deepLinkMedicationID = medID
             }
+        }
+        .onOpenURL { url in
+            handleDeepLink(url)
+        }
+    }
+
+    private func handleDeepLink(_ url: URL) {
+        guard url.scheme?.lowercased() == "chroniccare" else { return }
+
+        let host = url.host?.lowercased()
+        let pathComponents = url.pathComponents.filter { $0 != "/" }
+
+        switch host {
+        case "today":
+            selectedTab = 0
+        case "medication":
+            let candidate = pathComponents.first ?? url.lastPathComponent
+            guard let medicationID = UUID(uuidString: candidate) else {
+                selectedTab = 1
+                return
+            }
+            selectedTab = 1
+            deepLinkMedicationID = medicationID
+        case "insights":
+            selectedTab = 2
+        default:
+            selectedTab = 0
         }
     }
 }

@@ -608,7 +608,8 @@ struct EmergencyCardView: View {
             }
             Spacer()
             let sanitizedPhone = contact.phone.filter { $0.isNumber || $0 == "+" }
-            if let callURL = URL(string: "tel:\(sanitizedPhone)") {
+            if let encoded = sanitizedPhone.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed),
+               let callURL = URL(string: "tel:\(encoded)") {
                 Link(destination: callURL) {
                     Label(contact.phone, systemImage: "phone.fill")
                         .appFont(.subheadline)

@@ -28,14 +28,38 @@ enum AdaptiveReminderEngine {
         case taken(delayMinutes: Int)
         case snoozed
         case missed
+        case skipped
+    }
+
+    // MARK: - Time Period Classification
+
+    private enum TimePeriod {
+        case morning   // 05:00 - 11:59
+        case afternoon // 12:00 - 17:59
+        case evening   // 18:00 - 04:59
+
+        init(hour: Int) {
+            switch hour {
+            case 5..<12: self = .morning
+            case 12..<18: self = .afternoon
+            default: self = .evening
+            }
+        }
     }
 
     static func strategy(
         for medication: Medication,
         intakeLogs: [IntakeLog],
-        now: Date = Date()
+        now: Date = Date(),
+        scheduleTime: DateComponents? = nil
     ) -> AdaptiveReminderStrategy {
-        let profile = profile(for: medication, intakeLogs: intakeLogs, now: now)
+        let profile: AdherenceProfile
+        if let h = scheduleTime?.hour {
+            // Use time-period-specific profile when a specific dose time is provided
+            profile = periodProfile(for: medication, intakeLogs: intakeLogs, period: TimePeriod(hour: h), now: now)
+        } else {
+            profile = self.profile(for: medication, intakeLogs: intakeLogs, now: now)
+        }
 
         guard profile.sampleCount >= minimumAdaptiveSampleCount else {
             return AdaptiveReminderStrategy(
@@ -56,20 +80,32 @@ enum AdaptiveReminderEngine {
             leadMinutes = 0
         }
 
+        // High risk
         if profile.missRate >= 0.35 {
             return AdaptiveReminderStrategy(leadMinutes: max(leadMinutes, 15), followUpIntervals: [10, 20, 45], riskLevel: .high)
         }
 
+        // Medium risk
         if profile.missRate >= 0.2 || profile.snoozeRate >= 0.3 {
             return AdaptiveReminderStrategy(leadMinutes: max(leadMinutes, 10), followUpIntervals: [10, 25, 50], riskLevel: .medium)
         }
 
-        if profile.perfectDayStreak >= 7 && profile.missRate <= 0.1 {
-            return AdaptiveReminderStrategy(leadMinutes: 0, followUpIntervals: [20], riskLevel: .low)
+        // Low risk — gradual reward based on streak length
+        if profile.missRate <= 0.1 {
+            if profile.perfectDayStreak >= 14 {
+                // 14+ day streak: minimal follow-up
+                return AdaptiveReminderStrategy(leadMinutes: 0, followUpIntervals: [30], riskLevel: .low)
+            }
+            if profile.perfectDayStreak >= 7 {
+                // 7-13 day streak: reduced but not minimal
+                return AdaptiveReminderStrategy(leadMinutes: 0, followUpIntervals: [15, 45], riskLevel: .low)
+            }
         }
 
         return AdaptiveReminderStrategy(leadMinutes: leadMinutes, followUpIntervals: [10, 30, 60], riskLevel: .medium)
     }
+
+    // MARK: - Overall Profile
 
     static func profile(
         for medication: Medication,
@@ -85,19 +121,61 @@ enum AdaptiveReminderEngine {
         let startDay = cal.date(byAdding: .day, value: -13, to: today) ?? today
         let effectiveStartDay = max(startDay, cal.startOfDay(for: medication.startDate))
         let outcomesByDay = outcomes(for: medication, intakeLogs: intakeLogs, startDay: effectiveStartDay, endDate: now)
+        return buildProfile(from: outcomesByDay, today: today)
+    }
+
+    // MARK: - Time-Period-Specific Profile
+
+    private static func periodProfile(
+        for medication: Medication,
+        intakeLogs: [IntakeLog],
+        period: TimePeriod,
+        now: Date = Date()
+    ) -> AdherenceProfile {
+        guard medication.isAsNeeded != true else {
+            return AdherenceProfile(sampleCount: 0, meanDelayMinutes: 0, missRate: 0, snoozeRate: 0, onTimeRate: 0, perfectDayStreak: 0)
+        }
+
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: now)
+        let startDay = cal.date(byAdding: .day, value: -13, to: today) ?? today
+        let effectiveStartDay = max(startDay, cal.startOfDay(for: medication.startDate))
+
+        // Filter medication times to only those in the given period
+        let periodTimes = medication.timesOfDay.filter { comps in
+            guard let h = comps.hour else { return false }
+            return TimePeriod(hour: h) == period
+        }
+        guard !periodTimes.isEmpty else {
+            return AdherenceProfile(sampleCount: 0, meanDelayMinutes: 0, missRate: 0, snoozeRate: 0, onTimeRate: 0, perfectDayStreak: 0)
+        }
+
+        let outcomesByDay = outcomes(for: medication, intakeLogs: intakeLogs, startDay: effectiveStartDay, endDate: now, filterTimes: periodTimes)
+        return buildProfile(from: outcomesByDay, today: today)
+    }
+
+    // MARK: - Build Profile from Outcomes
+
+    private static func buildProfile(from outcomesByDay: [Date: [DoseOutcome]], today: Date) -> AdherenceProfile {
         let flatOutcomes = outcomesByDay.keys.sorted().flatMap { outcomesByDay[$0] ?? [] }
         let delays = flatOutcomes.compactMap { outcome -> Int? in
             if case .taken(let delayMinutes) = outcome { return delayMinutes }
             return nil
         }
-        let dueCount = flatOutcomes.count
-        let missCount = flatOutcomes.reduce(into: 0) { count, outcome in
+
+        // Count only actionable outcomes (exclude skipped from denominator)
+        let actionableOutcomes = flatOutcomes.filter {
+            if case .skipped = $0 { return false }
+            return true
+        }
+        let dueCount = actionableOutcomes.count
+        let missCount = actionableOutcomes.reduce(into: 0) { count, outcome in
             if case .missed = outcome { count += 1 }
         }
-        let snoozeCount = flatOutcomes.reduce(into: 0) { count, outcome in
+        let snoozeCount = actionableOutcomes.reduce(into: 0) { count, outcome in
             if case .snoozed = outcome { count += 1 }
         }
-        let onTimeCount = flatOutcomes.reduce(into: 0) { count, outcome in
+        let onTimeCount = actionableOutcomes.reduce(into: 0) { count, outcome in
             if case .taken(let delayMinutes) = outcome, delayMinutes <= 5 { count += 1 }
         }
 
@@ -111,24 +189,30 @@ enum AdaptiveReminderEngine {
         )
     }
 
+    // MARK: - Outcome Computation
+
     private static func outcomes(
         for medication: Medication,
         intakeLogs: [IntakeLog],
         startDay: Date,
-        endDate: Date
+        endDate: Date,
+        filterTimes: [DateComponents]? = nil
     ) -> [Date: [DoseOutcome]] {
         let cal = Calendar.current
         let medicationLogs = intakeLogs.filter { $0.medicationID == medication.id }
-        let times = medication.timesOfDay.sorted { ($0.hour ?? 0, $0.minute ?? 0) < ($1.hour ?? 0, $1.minute ?? 0) }
+        let times = (filterTimes ?? medication.timesOfDay)
+            .sorted { ($0.hour ?? 0, $0.minute ?? 0) < ($1.hour ?? 0, $1.minute ?? 0) }
         guard !times.isEmpty else { return [:] }
 
         var result: [Date: [DoseOutcome]] = [:]
         var day = startDay
         let endDay = cal.startOfDay(for: endDate)
+        let todayStart = cal.startOfDay(for: endDate)
 
         while day <= endDay {
             let dayStart = cal.startOfDay(for: day)
             let dayEnd = cal.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart
+            let isPastDay = dayStart < todayStart
             var dayOutcomes: [DoseOutcome] = []
 
             for comps in times {
@@ -154,9 +238,10 @@ enum AdaptiveReminderEngine {
                     let delay = max(-30, Int(actual.timeIntervalSince(scheduledDoseDate) / 60))
                     outcome = .taken(delayMinutes: delay)
                 case .snoozed:
-                    outcome = .snoozed
+                    // Snoozed with no final resolution on a past day counts as missed
+                    outcome = isPastDay ? .missed : .snoozed
                 case .skipped:
-                    outcome = .missed
+                    outcome = .skipped
                 case .none:
                     outcome = .missed
                 }
@@ -182,11 +267,14 @@ enum AdaptiveReminderEngine {
         }
 
         while let dayOutcomes = outcomesByDay[day], !dayOutcomes.isEmpty {
-            let allTaken = dayOutcomes.allSatisfy {
-                if case .taken = $0 { return true }
-                return false
+            // Perfect day: all doses taken or intentionally skipped (not missed)
+            let allHandled = dayOutcomes.allSatisfy {
+                switch $0 {
+                case .taken, .skipped: return true
+                default: return false
+                }
             }
-            if !allTaken { break }
+            if !allHandled { break }
             streak += 1
             guard let previous = cal.date(byAdding: .day, value: -1, to: day) else { break }
             day = previous

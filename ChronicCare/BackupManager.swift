@@ -12,6 +12,23 @@ struct AppBackup: Codable {
 }
 
 enum BackupManager {
+    private static let protectedWriteOptions: Data.WritingOptions = [.atomic, .completeFileProtection]
+
+    private static func prepareExportURL(prefix: String, ext: String) -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(prefix)_\(Int(Date().timeIntervalSince1970)).\(ext)")
+    }
+
+    private static func writeProtectedData(_ data: Data, to url: URL) throws {
+        try data.write(to: url, options: protectedWriteOptions)
+        try? (url as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
+    }
+
+    private static func writeProtectedString(_ string: String, to url: URL) throws {
+        let data = Data(string.utf8)
+        try writeProtectedData(data, to: url)
+    }
+
     @MainActor
     static func makeBackup(store: DataStore) throws -> URL {
         let medicationImagesByPath = Dictionary(
@@ -32,8 +49,8 @@ enum BackupManager {
             medicationImagesByPath: medicationImagesByPath.isEmpty ? nil : medicationImagesByPath
         )
         let data = try JSONEncoder().encode(backup)
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("ChronicCare_Backup_\(Int(Date().timeIntervalSince1970)).json")
-        try data.write(to: url, options: .atomic)
+        let url = prepareExportURL(prefix: "ChronicCare_Backup", ext: "json")
+        try writeProtectedData(data, to: url)
         return url
     }
 
@@ -87,8 +104,8 @@ enum BackupManager {
             csv += "\(dateStr),\(name),\(dose),\(status),\(key)\n"
         }
 
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("ChronicCare_Intake_\(Int(Date().timeIntervalSince1970)).csv")
-        try csv.write(to: url, atomically: true, encoding: .utf8)
+        let url = prepareExportURL(prefix: "ChronicCare_Intake", ext: "csv")
+        try writeProtectedString(csv, to: url)
         return url
     }
 
@@ -117,8 +134,8 @@ enum BackupManager {
             csv += "\(dateStr),\(typeName),\(value),\(dia),\(unit)\n"
         }
 
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("ChronicCare_Measurements_\(Int(Date().timeIntervalSince1970)).csv")
-        try csv.write(to: url, atomically: true, encoding: .utf8)
+        let url = prepareExportURL(prefix: "ChronicCare_Measurements", ext: "csv")
+        try writeProtectedString(csv, to: url)
         return url
     }
 }

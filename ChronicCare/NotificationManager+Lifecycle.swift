@@ -144,6 +144,8 @@ extension NotificationManager {
         if now >= endOfCourseWindow {
             setStoredCourseCatchUpToken(nil, for: medication.id)
             removeLifecycleNotifications(identifier: id)
+            // Cancel any pending dose/follow-up reminders for an ended course
+            cancelAll(for: medication)
             return
         }
 

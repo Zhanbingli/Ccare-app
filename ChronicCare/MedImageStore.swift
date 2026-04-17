@@ -1,8 +1,12 @@
 import Foundation
 import UIKit
+import os
+
+private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "ChronicCare", category: "MedImageStore")
 
 func medImagesDir() -> URL {
-    let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+    let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        ?? FileManager.default.temporaryDirectory
     let dir = docs.appendingPathComponent("med_images", conformingTo: .directory)
     if !FileManager.default.fileExists(atPath: dir.path) {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -19,27 +23,31 @@ func storeMedicationImage(_ image: UIImage, id: UUID) -> String? {
         try? (url as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
         return "med_images/\(id.uuidString).jpg"
     } catch {
+        logger.error("Failed to store medication image: \(error.localizedDescription)")
         return nil
     }
 }
 
 func loadMedicationImage(path: String?) -> UIImage? {
     guard let path = path else { return nil }
-    let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+    let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        ?? FileManager.default.temporaryDirectory
     let url = docs.appendingPathComponent(path)
     return UIImage(contentsOfFile: url.path)
 }
 
 func loadMedicationImageData(path: String?) -> Data? {
     guard let path = path else { return nil }
-    let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+    let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        ?? FileManager.default.temporaryDirectory
     let url = docs.appendingPathComponent(path)
     return try? Data(contentsOf: url)
 }
 
 @discardableResult
 func restoreMedicationImageData(_ data: Data, path: String) -> Bool {
-    let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+    let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        ?? FileManager.default.temporaryDirectory
     let url = docs.appendingPathComponent(path)
     let dir = url.deletingLastPathComponent()
     if !FileManager.default.fileExists(atPath: dir.path) {
@@ -61,7 +69,8 @@ func restoreMedicationImageData(_ data: Data, path: String) -> Bool {
 
 func deleteMedicationImage(path: String?) {
     guard let path = path else { return }
-    let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+    let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        ?? FileManager.default.temporaryDirectory
     let url = docs.appendingPathComponent(path)
     try? FileManager.default.removeItem(at: url)
 }
