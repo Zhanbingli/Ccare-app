@@ -10,6 +10,7 @@ struct RootViewV2: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var showOnboarding = !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
     @State private var showProfileDrawer = false
+    @State private var showLogSheet = false
     @State private var showAdherenceCalendar = false
     @State private var showMedicationSheet = false
     @State private var deepLinkMedicationID: UUID? = nil
@@ -36,8 +37,20 @@ struct RootViewV2: View {
         }
         .dynamicTypeSize(.xSmall ... .accessibility5)
         .sheet(isPresented: $showProfileDrawer) {
-            ProfileDrawerV2()
-                .environmentObject(store)
+            ProfileDrawerV2(onLogMeasurement: {
+                showProfileDrawer = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    showLogSheet = true
+                }
+            })
+            .environmentObject(store)
+        }
+        .sheet(isPresented: $showLogSheet) {
+            AddMeasurementView { measurement in
+                store.addMeasurement(measurement)
+                Haptics.success()
+            }
+            .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $showAdherenceCalendar) {
             NavigationStack {
@@ -85,21 +98,32 @@ struct RootViewV2: View {
     }
 
     private var profileButton: some View {
-        Button {
+        circularActionButton(
+            systemName: "person.crop.circle",
+            accessibilityLabel: NSLocalizedString("Profile", comment: "")
+        ) {
             showProfileDrawer = true
-        } label: {
-            Image(systemName: "person.crop.circle")
-                .font(.system(size: 26, weight: .regular))
+        }
+        .padding(.top, 8)
+        .padding(.trailing, 16)
+    }
+
+    private func circularActionButton(
+        systemName: String,
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(.primary)
-                .padding(8)
+                .frame(width: 42, height: 42)
                 .background(
                     Circle().fill(.ultraThinMaterial)
                 )
                 .shadow(color: .black.opacity(0.08), radius: 6, x: 0, y: 2)
         }
-        .accessibilityLabel(NSLocalizedString("Profile", comment: ""))
-        .padding(.top, 8)
-        .padding(.trailing, 16)
+        .accessibilityLabel(accessibilityLabel)
     }
 
     private func handleDeepLink(_ url: URL) {

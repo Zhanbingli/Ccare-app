@@ -692,9 +692,8 @@ struct MedicationDetailView: View {
         InsetPanel(tint: tint) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(value)
-                    .appFont(.headline)
+                    .appFontNumeric(.headline)
                     .foregroundStyle(tint)
-                    .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Text(label)

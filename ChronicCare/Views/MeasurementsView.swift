@@ -114,6 +114,8 @@ struct AddMeasurementView: View {
     @State private var valueInput: String = ""
     @State private var note: String = ""
     @State private var date: Date = Date()
+    @State private var timeManuallySet: Bool = false
+    @State private var showTimeEditor: Bool = false
     @State private var glucoseUnit: GlucoseUnit = UnitPreferences.glucoseUnit
     @State private var validationMessage: String?
     @State private var showValidationAlert = false
@@ -136,149 +138,21 @@ struct AddMeasurementView: View {
         return trimmed.count > 30 ? String(trimmed.prefix(30)) + "..." : trimmed
     }
 
+    private var timeDescription: String {
+        if !timeManuallySet {
+            return NSLocalizedString("Now", comment: "")
+        }
+        return date.formatted(date: .abbreviated, time: .shortened)
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Card {
-                        VStack(alignment: .leading, spacing: 16) {
-                            measurementSectionHeader(
-                                step: "1",
-                                title: NSLocalizedString("Measurement", comment: ""),
-                                detail: NSLocalizedString("Pick what you measured, then enter the reading below.", comment: "")
-                            )
-
-                            InsetPanel {
-                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                                    ForEach(MeasurementType.allCases) { measurementType in
-                                        measurementTypeButton(for: measurementType)
-                                    }
-                                }
-                            }
-
-                            if type == .bloodPressure {
-                                InsetPanel {
-                                    bloodPressureEntryLayout
-                                }
-                            } else {
-                                InsetPanel {
-                                    measurementInputCard(
-                                        title: NSLocalizedString("Value", comment: ""),
-                                        text: $valueInput,
-                                        placeholder: suggestedPlaceholder,
-                                        unit: displayedUnitLabel,
-                                        field: .value,
-                                        keyboard: type == .bloodGlucose ? .decimalPad : .decimalPad
-                                    )
-                                }
-
-                                if type == .bloodGlucose {
-                                    InsetPanel {
-                                        VStack(alignment: .leading, spacing: 10) {
-                                            Text(NSLocalizedString("Unit", comment: ""))
-                                                .appFont(.caption)
-                                                .foregroundStyle(.secondary)
-                                            Picker(NSLocalizedString("Unit", comment: ""), selection: $glucoseUnit) {
-                                                ForEach(GlucoseUnit.allCases) { unit in
-                                                    Text(unit.rawValue).tag(unit)
-                                                }
-                                            }
-                                            .pickerStyle(.segmented)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Card {
-                        VStack(alignment: .leading, spacing: 16) {
-                            measurementSectionHeader(
-                                step: "2",
-                                title: NSLocalizedString("Time", comment: ""),
-                                detail: NSLocalizedString("Capture when the reading was taken so trends stay meaningful.", comment: "")
-                            )
-
-                            InsetPanel {
-                                HStack(spacing: 8) {
-                                    quickDateButton(title: NSLocalizedString("Now", comment: "")) {
-                                        date = Date()
-                                    }
-                                    quickDateButton(title: NSLocalizedString("1h Ago", comment: "")) {
-                                        date = Date().addingTimeInterval(-3600)
-                                    }
-                                    quickDateButton(title: NSLocalizedString("Today 8 PM", comment: "")) {
-                                        let cal = Calendar.current
-                                        let candidate = cal.date(bySettingHour: 20, minute: 0, second: 0, of: Date()) ?? Date()
-                                        date = min(candidate, Date())
-                                    }
-                                }
-                            }
-
-                            InsetPanel {
-                                DatePicker(NSLocalizedString("Date", comment: ""), selection: $date, in: ...Date())
-                                    .datePickerStyle(.compact)
-                            }
-                        }
-                    }
-
-                    Card {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.18)) { showContextNotes.toggle() }
-                            } label: {
-                                HStack(alignment: .center, spacing: 12) {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(NSLocalizedString("Context Notes", comment: ""))
-                                            .appFont(.subheadline)
-                                            .fontWeight(.semibold)
-                                        Text(contextSummary)
-                                            .appFont(.footnote)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                    Image(systemName: showContextNotes ? "chevron.up" : "chevron.down")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundStyle(.secondary)
-                                        .frame(width: 32, height: 32)
-                                        .contentShape(Rectangle())
-                                }
-                                .padding(.vertical, 4)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-
-                            if showContextNotes {
-                                TextField(NSLocalizedString("Symptoms, meals, activity...", comment: ""), text: $note, axis: .vertical)
-                                    .focused($focusedField, equals: .note)
-                                    .lineLimit(2...4)
-                                    .textFieldStyle(.plain)
-                                    .appFont(.subheadline)
-                                    .submitLabel(.done)
-                                    .onSubmit { focusedField = nil }
-                                    .padding(.horizontal, AppSpacing.small)
-                                    .padding(.vertical, 14)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
-                                            .fill(Color(.secondarySystemBackground))
-                                    )
-                            }
-                        }
-                    }
-
-                    if let message = validationMessage {
-                        Card {
-                            HStack(alignment: .top, spacing: 12) {
-                                Image(systemName: validationIsWarning ? "exclamationmark.triangle.fill" : "info.circle.fill")
-                                    .foregroundStyle(validationIsWarning ? .orange : .blue)
-                                    .font(.system(size: 20))
-                                Text(message)
-                                    .appFont(.caption)
-                                    .foregroundStyle(.primary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    }
+                    measurementCard
+                    timeCard
+                    notesCard
+                    validationBanner
                 }
                 .padding(16)
             }
@@ -333,6 +207,156 @@ struct AddMeasurementView: View {
             .onChange(of: systolicInput) { _ in validateInput() }
             .onChange(of: diastolicInput) { _ in validateInput() }
             .onChange(of: valueInput) { _ in validateInput() }
+        }
+    }
+
+    private var measurementCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 14) {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    ForEach(MeasurementType.allCases) { measurementType in
+                        measurementTypeButton(for: measurementType)
+                    }
+                }
+
+                if type == .bloodPressure {
+                    bloodPressureEntryLayout
+                } else {
+                    measurementInputCard(
+                        title: NSLocalizedString("Value", comment: ""),
+                        text: $valueInput,
+                        placeholder: suggestedPlaceholder,
+                        unit: displayedUnitLabel,
+                        field: .value,
+                        keyboard: .decimalPad
+                    )
+
+                    if type == .bloodGlucose {
+                        Picker(NSLocalizedString("Unit", comment: ""), selection: $glucoseUnit) {
+                            ForEach(GlucoseUnit.allCases) { unit in
+                                Text(unit.rawValue).tag(unit)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                }
+            }
+        }
+    }
+
+    private var timeCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) { showTimeEditor.toggle() }
+                } label: {
+                    HStack(alignment: .center, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(NSLocalizedString("Time", comment: ""))
+                                .appFont(.subheadline)
+                                .fontWeight(.semibold)
+                            Text(timeDescription)
+                                .appFont(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: showTimeEditor ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
+                    }
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if showTimeEditor {
+                    HStack(spacing: 8) {
+                        quickDateButton(title: NSLocalizedString("Now", comment: "")) {
+                            date = Date()
+                            timeManuallySet = true
+                        }
+                        quickDateButton(title: NSLocalizedString("1h Ago", comment: "")) {
+                            date = Date().addingTimeInterval(-3600)
+                            timeManuallySet = true
+                        }
+                        quickDateButton(title: NSLocalizedString("Today 8 PM", comment: "")) {
+                            let cal = Calendar.current
+                            let candidate = cal.date(bySettingHour: 20, minute: 0, second: 0, of: Date()) ?? Date()
+                            date = min(candidate, Date())
+                            timeManuallySet = true
+                        }
+                    }
+
+                    DatePicker(NSLocalizedString("Date", comment: ""), selection: $date, in: ...Date())
+                        .datePickerStyle(.compact)
+                        .onChange(of: date) { _ in timeManuallySet = true }
+                }
+            }
+        }
+    }
+
+    private var notesCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) { showContextNotes.toggle() }
+                } label: {
+                    HStack(alignment: .center, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(NSLocalizedString("Context Notes", comment: ""))
+                                .appFont(.subheadline)
+                                .fontWeight(.semibold)
+                            Text(contextSummary)
+                                .appFont(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: showContextNotes ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
+                    }
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if showContextNotes {
+                    TextField(NSLocalizedString("Symptoms, meals, activity...", comment: ""), text: $note, axis: .vertical)
+                        .focused($focusedField, equals: .note)
+                        .lineLimit(2...4)
+                        .textFieldStyle(.plain)
+                        .appFont(.subheadline)
+                        .submitLabel(.done)
+                        .onSubmit { focusedField = nil }
+                        .padding(.horizontal, AppSpacing.small)
+                        .padding(.vertical, 14)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                                .fill(Color(.secondarySystemBackground))
+                        )
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var validationBanner: some View {
+        if let message = validationMessage {
+            Card {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: validationIsWarning ? "exclamationmark.triangle.fill" : "info.circle.fill")
+                        .foregroundStyle(validationIsWarning ? .orange : .blue)
+                        .font(.system(size: 20))
+                    Text(message)
+                        .appFont(.caption)
+                        .foregroundStyle(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
     }
 

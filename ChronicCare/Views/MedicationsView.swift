@@ -226,6 +226,10 @@ private extension MedicationsView {
         }
     }
 
+    /// Single condensed row per medication. The surrounding section header
+    /// already conveys state (Active / Paused / As Needed / Needs Setup), so
+    /// the row stays to two lines: name + one concise context line. A supply
+    /// warning badge surfaces on the right only when it's actionable.
     @ViewBuilder
     private func medicationManagementRow(for med: Medication) -> some View {
         Button {
@@ -237,100 +241,42 @@ private extension MedicationsView {
                     Text(med.name)
                         .appFont(.subheadline)
                         .foregroundStyle(.primary)
-                    Text(medicationScheduleSummary(for: med))
+                    Text(rowSubtitle(for: med))
                         .appFont(.caption)
                         .foregroundStyle(.secondary)
-                    Text(nextDoseSummary(for: med))
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
                 Spacer(minLength: 8)
-                VStack(alignment: .trailing, spacing: 6) {
-                    AppBadge(text: medicationStateLabel(for: med), tint: medicationStateTint(for: med))
-                    if med.isLowSupply, let days = med.daysOfSupplyRemaining {
-                        AppBadge(
-                            text: String(format: NSLocalizedString("%lld days left", comment: "supply badge"), days),
-                            tint: days <= 3 ? .red : .orange
-                        )
-                    } else if med.isLowSupply {
-                        AppBadge(text: NSLocalizedString("Low supply", comment: ""), tint: .orange)
-                    }
-                }
+                supplyBadge(for: med)
             }
         }
         .buttonStyle(.plain)
     }
 
-    private func managementLinkRow(title: String, subtitle: String, systemImage: String, tint: Color) -> some View {
-        HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-                .fill(tint.opacity(0.14))
-                .frame(width: 38, height: 38)
-                .overlay(
-                    Image(systemName: systemImage)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(tint)
-                )
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .appFont(.subheadline)
-                    .foregroundStyle(.primary)
-                Text(subtitle)
-                    .appFont(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer()
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.tertiary)
+    @ViewBuilder
+    private func supplyBadge(for med: Medication) -> some View {
+        if med.isLowSupply, let days = med.daysOfSupplyRemaining {
+            AppBadge(
+                text: String(format: NSLocalizedString("%lld days left", comment: "supply badge"), days),
+                tint: days <= 3 ? .red : .orange
+            )
+        } else if med.isLowSupply {
+            AppBadge(text: NSLocalizedString("Low supply", comment: ""), tint: .orange)
         }
     }
 
-    private func medicationScheduleSummary(for med: Medication) -> String {
+    private func rowSubtitle(for med: Medication) -> String {
         if med.isAsNeeded == true {
-            return "\(med.dose) • \(NSLocalizedString("Take only when needed", comment: ""))"
+            return med.dose
         }
         if med.timesOfDay.isEmpty {
-            return "\(med.dose) • \(NSLocalizedString("No schedule set", comment: ""))"
-        }
-        return "\(med.dose) • \(timesJoined(for: med))"
-    }
-
-    private func nextDoseSummary(for med: Medication) -> String {
-        if med.isAsNeeded == true {
-            return NSLocalizedString("Logged manually from Today", comment: "")
+            return String(format: NSLocalizedString("%@ · Tap to set times", comment: ""), med.dose)
         }
         if !med.remindersEnabled {
-            return NSLocalizedString("Reminders are paused", comment: "")
+            return "\(med.dose) · \(timesJoined(for: med))"
         }
-        if med.timesOfDay.isEmpty {
-            return NSLocalizedString("Add times to start reminders", comment: "")
-        }
-        return String(format: NSLocalizedString("Next: %@", comment: ""), nextDoseText(for: med))
-    }
-
-    private func medicationStateLabel(for med: Medication) -> String {
-        if med.isAsNeeded == true {
-            return NSLocalizedString("As needed", comment: "")
-        }
-        if med.timesOfDay.isEmpty {
-            return NSLocalizedString("Needs setup", comment: "")
-        }
-        if !med.remindersEnabled {
-            return NSLocalizedString("Paused", comment: "")
-        }
-        return NSLocalizedString("Active", comment: "")
-    }
-
-    private func medicationStateTint(for med: Medication) -> Color {
-        if med.isAsNeeded == true {
-            return .blue
-        }
-        if med.timesOfDay.isEmpty || !med.remindersEnabled {
-            return .orange
-        }
-        return .green
+        return String(format: NSLocalizedString("%@ · Next %@", comment: ""), med.dose, nextDoseText(for: med))
     }
 
     private func timesJoined(for med: Medication) -> String {
@@ -367,211 +313,6 @@ private extension MedicationsView {
     }
 
     @ViewBuilder
-    private func medicationCard(for med: Medication) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Row 1: thumbnail + name/dose + status/toggle
-            HStack(alignment: .center, spacing: 10) {
-                medicationThumbnail(for: med)
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(med.name)
-                            .appFont(.headline)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.85)
-                        if med.isAsNeeded != true && !med.remindersEnabled {
-                            Text(NSLocalizedString("Paused", comment: ""))
-                                .appFont(.caption)
-                                .foregroundStyle(.orange)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Capsule().fill(Color.orange.opacity(0.12)))
-                        }
-                        if med.isAsNeeded == true {
-                            Text(NSLocalizedString("PRN", comment: ""))
-                                .appFont(.caption)
-                                .foregroundStyle(.blue)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Capsule().fill(Color.blue.opacity(0.12)))
-                        }
-                    }
-                    // Dose + times inline
-                    HStack(spacing: 4) {
-                        Text(med.dose)
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                        if !med.timesOfDay.isEmpty {
-                            Text("·").foregroundStyle(.secondary)
-                            timesText(for: med)
-                        }
-                    }
-                }
-                Spacer(minLength: 4)
-                if med.isAsNeeded != true {
-                    reminderToggle(for: med)
-                }
-            }
-
-            // Row 2: supply + status + quick-take (all inline)
-            HStack(spacing: 8) {
-                if let remaining = med.pillsRemaining {
-                    compactSupplyLabel(remaining: remaining, med: med)
-                }
-                compactCourseLabel(for: med)
-                if let (status, date) = latestTodayAction(for: med) {
-                    inlineStatusLabel(status: status, date: date)
-                }
-                Spacer(minLength: 0)
-                if med.isAsNeeded != true && med.remindersEnabled {
-                    compactQuickTakeButton(for: med)
-                }
-            }
-        }
-        .padding(AppSpacing.small)
-        .background(
-            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
-        .contentShape(Rectangle())
-        .onTapGesture { detailTarget = med }
-        .padding(.vertical, 2)
-    }
-
-    @ViewBuilder
-    private func compactSupplyLabel(remaining: Int, med: Medication) -> some View {
-        let isLow = med.isLowSupply
-        HStack(spacing: 4) {
-            if isLow {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.red)
-            }
-            if remaining == 0 {
-                Text(NSLocalizedString("Out of pills", comment: ""))
-                    .appFont(.caption)
-                    .foregroundStyle(.red)
-            } else if let days = med.daysOfSupplyRemaining, days > 0 {
-                Text(String(format: NSLocalizedString("%lld pills · %lld d left", comment: "pills and days short"), remaining, days))
-                    .appFont(.caption)
-                    .foregroundStyle(isLow ? .red : .secondary)
-            } else {
-                Text(String(format: NSLocalizedString("%lld pills", comment: ""), remaining))
-                    .appFont(.caption)
-                    .foregroundStyle(isLow ? .red : .secondary)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func compactCourseLabel(for med: Medication) -> some View {
-        let threshold = UserDefaults.standard.object(forKey: "prefs.courseEndThresholdDays") as? Int ?? 3
-        if let courseState = med.courseState(thresholdDays: threshold) {
-            switch courseState {
-            case .endingSoon(let daysRemaining):
-                HStack(spacing: 4) {
-                    Image(systemName: "calendar.badge.exclamationmark")
-                        .font(.system(size: 13))
-                    Text(String(format: NSLocalizedString("Ends in %lld d", comment: ""), daysRemaining))
-                        .appFont(.caption)
-                }
-                .foregroundStyle(.orange)
-            case .endsToday:
-                HStack(spacing: 4) {
-                    Image(systemName: "calendar.badge.exclamationmark")
-                        .font(.system(size: 13))
-                    Text(NSLocalizedString("Ends today", comment: ""))
-                        .appFont(.caption)
-                }
-                .foregroundStyle(.orange)
-            case .ended:
-                HStack(spacing: 4) {
-                    Image(systemName: "calendar.badge.exclamationmark")
-                        .font(.system(size: 13))
-                    Text(NSLocalizedString("Course ended", comment: ""))
-                        .appFont(.caption)
-                }
-                .foregroundStyle(.red)
-            default:
-                EmptyView()
-            }
-        }
-    }
-
-    private func inlineStatusLabel(status: IntakeStatus, date: Date) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: latestStatusIcon(status))
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(statusTint(for: status))
-            Text(statusPrefix(for: status))
-                .appFont(.caption)
-                .foregroundStyle(statusTint(for: status))
-        }
-    }
-
-    @ViewBuilder
-    private func compactQuickTakeButton(for med: Medication) -> some View {
-        if let dose = nextUntakenDose(for: med) {
-            Button {
-                // Rule: duplicate taken guard
-                let dupCheck = MedicationRules.checkDuplicateTaken(
-                    medicationID: med.id,
-                    scheduleTime: dose.comps,
-                    intakeLogs: store.intakeLogs
-                )
-                if case .blocked = dupCheck {
-                    Haptics.notification(.warning)
-                    return
-                }
-                store.recordTakenDose(
-                    medicationID: med.id,
-                    scheduleTime: dose.comps,
-                    scheduledDate: dose.scheduledDate
-                )
-                NotificationManager.shared.suppressToday(for: med.id, timeComponents: dose.comps)
-                NotificationManager.shared.cancelDoseNotifications(for: med.id, timeComponents: dose.comps, scheduledDate: dose.scheduledDate, now: dose.scheduledDate)
-                store.syncNotifications()
-                Haptics.success()
-            } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 13, weight: .bold))
-                    Text(dose.timeStr)
-                        .appFont(.caption)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.green)
-            .controlSize(.small)
-        }
-    }
-
-    private func nextUntakenDose(for med: Medication) -> (comps: DateComponents, scheduledDate: Date, timeStr: String)? {
-        let cal = Calendar.current
-        let now = Date()
-        let dayStart = cal.startOfDay(for: now)
-        guard let dayEnd = cal.date(byAdding: .day, value: 1, to: dayStart) else { return nil }
-        let todayLogs = store.intakeLogs.filter { $0.medicationID == med.id && $0.date >= dayStart && $0.date < dayEnd }
-        let sorted = med.timesOfDay.sorted { ($0.hour ?? 0) * 60 + ($0.minute ?? 0) < ($1.hour ?? 0) * 60 + ($1.minute ?? 0) }
-        for comps in sorted {
-            let key = String(format: "%02d:%02d", comps.hour ?? 0, comps.minute ?? 0)
-            let resolved = todayLogs.contains { $0.scheduleKey == key && ($0.status == .taken || $0.status == .skipped) }
-            guard !resolved,
-                  let scheduledDate = cal.date(bySettingHour: comps.hour ?? 0, minute: comps.minute ?? 0, second: 0, of: now),
-                  med.isDoseActive(on: scheduledDate),
-                  scheduledDate <= now else { continue }
-            if !resolved {
-                let formatter = DateFormatter()
-                formatter.timeStyle = .short
-                let timeStr = formatter.string(from: scheduledDate)
-                return (comps, scheduledDate, timeStr)
-            }
-        }
-        return nil
-    }
-
-    @ViewBuilder
     private func medicationThumbnail(for med: Medication) -> some View {
         if let path = med.imagePath, let ui = loadMedicationImage(path: path) {
             Image(uiImage: ui)
@@ -593,103 +334,6 @@ private extension MedicationsView {
         }
     }
 
-    private func timesText(for med: Medication) -> some View {
-        let formatter: DateFormatter = {
-            let f = DateFormatter()
-            f.timeStyle = .short
-            return f
-        }()
-        let cal = Calendar.current
-        let times = med.timesOfDay.compactMap { comps -> String? in
-            guard let h = comps.hour, let m = comps.minute,
-                  let date = cal.date(bySettingHour: h, minute: m, second: 0, of: Date()) else { return nil }
-            return formatter.string(from: date)
-        }
-        return Text(times.joined(separator: ", "))
-            .appFont(.caption)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.85)
-    }
-
-    private func reminderToggle(for med: Medication) -> some View {
-        Toggle(isOn: Binding(
-            get: { med.remindersEnabled },
-            set: { newVal in
-                Task {
-                    if newVal {
-                        let granted = await NotificationManager.shared.ensureAuthorization()
-                        await MainActor.run {
-                            guard granted else {
-                                deniedMedName = med.name
-                                showNotificationDeniedAlert = true
-                                var reverted = med
-                                reverted.remindersEnabled = false
-                                store.updateMedication(reverted)
-                                refreshNotificationStatus()
-                                return
-                            }
-                            var updated = med
-                            updated.remindersEnabled = true
-                            store.updateMedication(updated)
-                            store.syncNotifications()
-                            Haptics.impact(.light)
-                            refreshNotificationStatus()
-                        }
-                    } else {
-                        await MainActor.run {
-                            var updated = med
-                            updated.remindersEnabled = false
-                            store.updateMedication(updated)
-                            store.syncNotifications()
-                            Haptics.impact(.light)
-                            refreshNotificationStatus()
-                        }
-                    }
-                }
-            }
-        )) {
-            Text(NSLocalizedString("Remind", comment: ""))
-        }
-        .labelsHidden()
-    }
-
-
-    private func latestStatusIcon(_ status: IntakeStatus) -> String {
-        switch status {
-        case .taken: return "checkmark.circle.fill"
-        case .skipped: return "xmark.circle.fill"
-        case .snoozed: return "zzz"
-        }
-    }
-
-    private func statusTint(for status: IntakeStatus) -> Color {
-        switch status {
-        case .taken: return .green
-        case .skipped: return .orange
-        case .snoozed: return .blue
-        }
-    }
-
-    private func statusPrefix(for status: IntakeStatus) -> LocalizedStringKey {
-        switch status {
-        case .taken: return "Taken"
-        case .skipped: return "Skipped"
-        case .snoozed: return "Snoozed"
-        }
-    }
-
-
-    private func latestTodayAction(for med: Medication) -> (IntakeStatus, Date)? {
-        let cal = Calendar.current
-        let start = cal.startOfDay(for: Date())
-        let end = cal.date(byAdding: .day, value: 1, to: start)!
-        let logs = store.intakeLogs
-            .filter { $0.medicationID == med.id && $0.date >= start && $0.date < end }
-            .sorted { $0.date > $1.date }
-        guard let last = logs.first else { return nil }
-        return (last.status, last.date)
-    }
 }
 
 private extension MedicationsView {
@@ -699,17 +343,5 @@ private extension MedicationsView {
                 self.notificationStatus = settings.authorizationStatus
             }
         }
-    }
-
-    func delete(at offsets: IndexSet) {
-        let ids = offsets.map { filteredMedications[$0].id }
-        let items = store.medications.filter { ids.contains($0.id) }
-        items.forEach {
-            NotificationManager.shared.cancelAll(for: $0)
-            deleteMedicationImage(path: $0.imagePath)
-        }
-        let toRemove = IndexSet(store.medications.enumerated().compactMap { ids.contains($0.element.id) ? $0.offset : nil })
-        store.removeMedication(at: toRemove)
-        store.syncNotifications()
     }
 }

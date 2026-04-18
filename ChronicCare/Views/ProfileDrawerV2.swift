@@ -4,10 +4,38 @@ struct ProfileDrawerV2: View {
     @EnvironmentObject var store: DataStore
     @Environment(\.dismiss) private var dismiss
     @State private var medicationDeepLink: UUID? = .none
+    var onLogMeasurement: () -> Void = {}
 
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    Button(action: onLogMeasurement) {
+                        HStack(spacing: AppSpacing.medium) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(Color.accentColor.opacity(0.15))
+                                    .frame(width: 34, height: 34)
+                                Image(systemName: "plus")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(Color.accentColor)
+                            }
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(NSLocalizedString("Log Measurement", comment: ""))
+                                    .appFont(.body)
+                                    .foregroundStyle(.primary)
+                                Text(NSLocalizedString("Blood pressure, glucose, weight, heart rate", comment: ""))
+                                    .appFont(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                        }
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 Section {
                     navRow(
                         icon: "pills.fill",
@@ -16,6 +44,18 @@ struct ProfileDrawerV2: View {
                         subtitle: medicationSubtitle
                     ) {
                         MedicationsView(deepLinkMedicationID: $medicationDeepLink)
+                    }
+                }
+
+                Section(NSLocalizedString("Review", comment: "")) {
+                    navRow(
+                        icon: "chart.line.uptrend.xyaxis",
+                        tint: .blue,
+                        title: NSLocalizedString("Trends", comment: ""),
+                        subtitle: trendsSubtitle
+                    ) {
+                        EnhancedTrendsView()
+                            .environmentObject(store)
                     }
                 }
 
@@ -78,6 +118,13 @@ struct ProfileDrawerV2: View {
         let count = store.caregivers.count
         if count == 0 { return NSLocalizedString("No caregivers added", comment: "") }
         return String(format: NSLocalizedString("%d caregivers", comment: ""), count)
+    }
+
+    private var trendsSubtitle: String {
+        if store.measurements.isEmpty {
+            return NSLocalizedString("No measurements yet", comment: "")
+        }
+        return String(format: NSLocalizedString("%d measurements", comment: ""), store.measurements.count)
     }
 
     @ViewBuilder

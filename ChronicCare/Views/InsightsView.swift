@@ -14,20 +14,10 @@ struct InsightsView: View {
         store.adherencePercent(days: 30)
     }
 
-    private var scheduledMedicationCount: Int {
-        store.medications.filter { $0.isAsNeeded != true }.count
-    }
-
     private var reminderGapCount: Int {
         store.medications.filter {
             $0.isAsNeeded != true && ($0.timesOfDay.isEmpty || !$0.remindersEnabled)
         }.count + (notificationStatus == .denied ? 1 : 0)
-    }
-
-    private var reminderStateText: String {
-        reminderGapCount > 0
-            ? NSLocalizedString("Needs Review", comment: "")
-            : NSLocalizedString("Healthy", comment: "")
     }
 
     private var reminderStateTint: Color {
@@ -38,8 +28,7 @@ struct InsightsView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
-                    overviewHeader
-                    snapshotSection
+                    adherenceSection
                     latestMeasurementSection
                     toolsSection
                 }
@@ -60,47 +49,25 @@ struct InsightsView: View {
         }
     }
 
-    private var overviewHeader: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text(NSLocalizedString("Review Snapshot", comment: ""))
-                .appFont(.title)
-                .fontWeight(.bold)
-
-            Spacer(minLength: 12)
-
-            AppBadge(
-                text: reminderStateText,
-                tint: reminderStateTint,
-                icon: reminderGapCount > 0 ? "exclamationmark.circle.fill" : "checkmark.circle.fill"
-            )
-        }
-    }
-
-    private var snapshotSection: some View {
+    /// The only question Insights needs to answer at a glance: how am I doing?
+    /// Two adherence tiles cover short-term momentum and the longer arc.
+    /// Reminder-gap status is surfaced as a badge on the Diagnostics tool row
+    /// below instead of a redundant tile here.
+    private var adherenceSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(NSLocalizedString("Adherence & Coverage", comment: ""))
+            Text(NSLocalizedString("Adherence", comment: ""))
                 .appFont(.headline)
 
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                 snapshotTile(
                     value: String(format: "%.0f%%", adherence7 * 100),
-                    label: NSLocalizedString("7-day adherence", comment: ""),
+                    label: NSLocalizedString("7-day", comment: ""),
                     tint: adherence7 >= 0.8 ? .green : adherence7 >= 0.5 ? .orange : .red
                 )
                 snapshotTile(
                     value: String(format: "%.0f%%", adherence30 * 100),
-                    label: NSLocalizedString("30-day adherence", comment: ""),
+                    label: NSLocalizedString("30-day", comment: ""),
                     tint: adherence30 >= 0.8 ? .green : adherence30 >= 0.5 ? .orange : .red
-                )
-                snapshotTile(
-                    value: "\(scheduledMedicationCount)",
-                    label: NSLocalizedString("Scheduled meds", comment: ""),
-                    tint: .blue
-                )
-                snapshotTile(
-                    value: "\(max(reminderGapCount, 0))",
-                    label: NSLocalizedString("Reminder gaps", comment: ""),
-                    tint: reminderStateTint
                 )
             }
         }
@@ -244,10 +211,9 @@ struct InsightsView: View {
         InsetPanel(tint: tint) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(value)
-                    .appFont(.largeTitle)
+                    .appFontNumeric(.largeTitle)
                     .fontWeight(.bold)
                     .foregroundStyle(tint)
-                    .monospacedDigit()
                     .minimumScaleFactor(0.8)
                 Text(label)
                     .appFont(.footnote)
@@ -313,7 +279,7 @@ struct InsightsView: View {
                 Text("\(String(format: "%.1f", measurement.value)) \(measurement.type.unit)")
             }
         }
-        .appFont(.subheadline)
+        .appFontNumeric(.subheadline)
         .fontWeight(.medium)
     }
 }

@@ -223,7 +223,7 @@ struct ReminderDiagnosticsView: View {
         InsetPanel(tint: tint) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(value)
-                    .appFont(.headline)
+                    .appFontNumeric(.headline)
                     .foregroundStyle(tint)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)

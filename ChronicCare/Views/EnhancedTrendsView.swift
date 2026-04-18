@@ -118,9 +118,7 @@ struct EnhancedTrendsView: View {
     private func kpiCell(label: String, value: String, unit: String) -> some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(.system(.title3, design: .rounded))
-                .fontWeight(.bold)
-                .monospacedDigit()
+                .appFontNumeric(.title)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
             Text(label)

@@ -45,10 +45,7 @@ struct MedicationFormView: View {
     @State private var showOCRCamera = false
     @State private var showCameraUnavailableAlert = false
     @State private var showPRNConfirmation = false
-    @State private var showInstructionsDetails = false
-    @State private var showInventoryDetails = false
-    @State private var showCategoryDetails = false
-    @State private var showAddOptionalDetails = false
+    @State private var showMoreDetails = false
     @State private var showSaveError = false
     @State private var showDeleteConfirm = false
     @State private var saveErrorMessage: String?
@@ -92,24 +89,6 @@ struct MedicationFormView: View {
             case .twiceDaily: return NSLocalizedString("2×/day", comment: "Twice daily short")
             case .threeTimesDaily: return NSLocalizedString("3×/day", comment: "Three times daily short")
             case .custom: return NSLocalizedString("Custom", comment: "Custom schedule short")
-            }
-        }
-
-        var title: String {
-            switch self {
-            case .onceDaily: return NSLocalizedString("Once Daily", comment: "Schedule preset title")
-            case .twiceDaily: return NSLocalizedString("Twice Daily", comment: "Schedule preset title")
-            case .threeTimesDaily: return NSLocalizedString("Three Times Daily", comment: "Schedule preset title")
-            case .custom: return NSLocalizedString("Custom", comment: "Schedule preset title")
-            }
-        }
-
-        var subtitle: String {
-            switch self {
-            case .onceDaily: return NSLocalizedString("1 reminder", comment: "Schedule preset subtitle")
-            case .twiceDaily: return NSLocalizedString("2 reminders", comment: "Schedule preset subtitle")
-            case .threeTimesDaily: return NSLocalizedString("3 reminders", comment: "Schedule preset subtitle")
-            case .custom: return NSLocalizedString("Edit times manually", comment: "Schedule preset subtitle")
             }
         }
 
@@ -168,37 +147,39 @@ struct MedicationFormView: View {
         )
     }
 
-
-    private var instructionsSummary: String {
-        if let foodInstruction { return foodInstruction.displayName }
-        if !specialInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return NSLocalizedString("Custom instructions added", comment: "")
-        }
-        if !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return NSLocalizedString("Notes added", comment: "")
-        }
-        return NSLocalizedString("None", comment: "")
+    private var hasOptionalData: Bool {
+        foodInstruction != nil
+            || !specialInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || trackSupply
+            || hasCourseEnd
+            || category != .unspecified
+            || hasPhoto
     }
 
-    private var inventorySummary: String {
+    private var moreDetailsSummary: String {
+        var parts: [String] = []
+        if let foodInstruction { parts.append(foodInstruction.displayName) }
+        if !specialInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            parts.append(NSLocalizedString("Instructions", comment: ""))
+        }
         if trackSupply, let estimatedSupplyDays {
-            return String(format: NSLocalizedString("%lld-day supply", comment: ""), estimatedSupplyDays)
+            parts.append(String(format: NSLocalizedString("%lld-day supply", comment: ""), estimatedSupplyDays))
         }
         if hasCourseEnd, let courseDaysRemaining {
-            return String(format: NSLocalizedString("Ends in %lld days", comment: ""), max(courseDaysRemaining, 0))
+            parts.append(String(format: NSLocalizedString("Ends in %lld days", comment: ""), max(courseDaysRemaining, 0)))
         }
-        return NSLocalizedString("Not tracking", comment: "")
-    }
-
-    private var categorySummary: String {
         if category == .custom {
             let trimmed = customCategoryName.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty { return trimmed }
+            if !trimmed.isEmpty { parts.append(trimmed) }
         } else if category != .unspecified {
-            return category.displayName
+            parts.append(category.displayName)
         }
-        if hasPhoto { return NSLocalizedString("Photo added", comment: "") }
-        return NSLocalizedString("Optional", comment: "")
+        if hasPhoto { parts.append(NSLocalizedString("Photo", comment: "")) }
+        if parts.isEmpty {
+            return NSLocalizedString("Add instructions, supply, category, or a photo.", comment: "")
+        }
+        return parts.joined(separator: " · ")
     }
 
     private var hasPhoto: Bool {
@@ -216,51 +197,23 @@ struct MedicationFormView: View {
             : NSLocalizedString("Add Medication", comment: "")
     }
 
-    private var optionalDetailsCompletedCount: Int {
-        var count = 0
-        if instructionsSummary != NSLocalizedString("None", comment: "") { count += 1 }
-        if inventorySummary != NSLocalizedString("Not tracking", comment: "") { count += 1 }
-        if categorySummary != NSLocalizedString("Optional", comment: "") { count += 1 }
-        return count
-    }
-
-    private var addOptionalDetailsSummaryText: String {
-        if optionalDetailsCompletedCount == 0 {
-            return NSLocalizedString("You can save now and add instructions, supply, category, or a photo later.", comment: "")
-        }
-        return String(format: NSLocalizedString("%lld optional sections filled in.", comment: ""), optionalDetailsCompletedCount)
-    }
-
-    @ViewBuilder
-    private var formSections: some View {
-        VStack(alignment: .leading, spacing: isEditing ? 16 : 24) {
-            medicationSection
-            if isEditing {
-                intakeModeSection
-                if !isAsNeeded { scheduleSection }
-                optionalDetailsSection
-                if onDelete != nil { deleteSection }
-            } else {
-                combinedScheduleSection
-                addOptionalDetailsEntrySection
-            }
-        }
-        .padding(.horizontal, isEditing ? 16 : 20)
-        .padding(.top, 12)
-        .padding(.bottom, 28)
-    }
-
-    private var editorScrollView: some View {
-        ScrollView(.vertical) {
-            formSections
-        }
-    }
-
     // MARK: - Body
 
     var body: some View {
         NavigationStack {
-            editorScrollView
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: 16) {
+                    medicationSection
+                    scheduleSection
+                    moreDetailsSection
+                    if isEditing && onDelete != nil {
+                        deleteSection
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 28)
+            }
             .navigationTitle(navigationTitleText)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { bodyToolbar }
@@ -282,9 +235,6 @@ struct MedicationFormView: View {
             }
             .sheet(item: $ocrSuggestion) { suggestion in
                 medicationOCRReviewSheet(for: suggestion)
-            }
-            .sheet(isPresented: $showAddOptionalDetails) {
-                addOptionalDetailsSheet
             }
             .fullScreenCover(isPresented: $showOCRCamera) {
                 CameraCaptureView { image in runOCR(from: image) }
@@ -344,15 +294,10 @@ struct MedicationFormView: View {
     // MARK: - Sections
 
     private var medicationSection: some View {
-        sectionWrapper {
-            VStack(alignment: .leading, spacing: 16) {
-                sectionHeader(
-                    step: "1",
-                    title: NSLocalizedString("Medication", comment: ""),
-                    detail: isEditing
-                        ? NSLocalizedString("Update the saved details below if this medication changes.", comment: "")
-                        : NSLocalizedString("Start with the essentials. You can scan a label or type manually.", comment: "")
-                )
+        Card {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(NSLocalizedString("Medication", comment: ""))
+                    .appFont(.headline)
 
                 if !isEditing { scanAssistPanel }
 
@@ -380,16 +325,11 @@ struct MedicationFormView: View {
         }
     }
 
-    private var intakeModeSection: some View {
-        sectionWrapper {
+    private var scheduleSection: some View {
+        Card {
             VStack(alignment: .leading, spacing: 14) {
-                sectionHeader(
-                    step: "2",
-                    title: NSLocalizedString("How is it taken?", comment: ""),
-                    detail: isEditing
-                        ? NSLocalizedString("Keep this medication on a fixed schedule or switch it to as-needed logging.", comment: "")
-                        : NSLocalizedString("Choose whether this medication follows a fixed schedule or is logged only when needed.", comment: "")
-                )
+                Text(NSLocalizedString("Schedule", comment: ""))
+                    .appFont(.headline)
 
                 Picker("", selection: intakeModeSelection) {
                     Text(NSLocalizedString("Scheduled", comment: "")).tag(IntakeMode.scheduled)
@@ -398,400 +338,214 @@ struct MedicationFormView: View {
                 .pickerStyle(.segmented)
 
                 if isAsNeeded {
-                    InsetPanel(tint: .blue) {
-                        Text(NSLocalizedString("As-needed medications skip fixed reminder times. Log each dose from Today only when you actually take it.", comment: ""))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                    Text(NSLocalizedString("As-needed medications skip fixed reminder times. Log each dose from Today only when you actually take it.", comment: ""))
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 } else {
-                    InsetPanel {
-                        Text(NSLocalizedString("Choose a frequency first, then confirm the times below.", comment: ""))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
+                    Picker(NSLocalizedString("Frequency", comment: ""), selection: $schedulePreset) {
+                        ForEach(SchedulePreset.allCases) { preset in
+                            Text(preset.shortLabel).tag(preset)
+                        }
                     }
-                }
-            }
-        }
-    }
+                    .pickerStyle(.segmented)
 
-    /// Combined schedule section for new-entry mode: frequency + times + as-needed toggle in one panel.
-    private var combinedScheduleSection: some View {
-        sectionWrapper {
-            VStack(alignment: .leading, spacing: 16) {
-                sectionHeader(
-                    step: "2",
-                    title: NSLocalizedString("Schedule", comment: ""),
-                    detail: NSLocalizedString("Pick a frequency, then adjust the times.", comment: "")
-                )
-
-                InsetPanel {
-                    VStack(alignment: .leading, spacing: 14) {
-                        if !isAsNeeded {
-                            // Frequency picker
-                            Picker(NSLocalizedString("Frequency", comment: ""), selection: $schedulePreset) {
-                                ForEach(SchedulePreset.allCases) { preset in
-                                    Text(preset.shortLabel).tag(preset)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-
-                            Divider()
-
-                            // Inline time pickers
-                            ForEach(Array(times.indices), id: \.self) { idx in
-                                HStack {
-                                    Text(times.count == 1
-                                         ? NSLocalizedString("Time", comment: "Single reminder time label")
-                                         : String(format: NSLocalizedString("Time %lld", comment: ""), idx + 1))
-                                        .appFont(.subheadline)
-                                    Spacer()
-                                    DatePicker(
-                                        "",
-                                        selection: Binding(
-                                            get: { times[idx] },
-                                            set: { newValue in
-                                                schedulePreset = .custom
-                                                times[idx] = newValue
-                                            }
-                                        ),
-                                        displayedComponents: .hourAndMinute
-                                    )
-                                    .labelsHidden()
-                                    if schedulePreset == .custom && times.count > 1 {
-                                        Button(role: .destructive) {
-                                            times.remove(at: idx)
-                                        } label: {
-                                            Image(systemName: "minus.circle.fill")
-                                                .foregroundStyle(.red)
-                                        }
-                                        .buttonStyle(.plain)
+                    ForEach(Array(times.indices), id: \.self) { idx in
+                        HStack {
+                            Text(times.count == 1
+                                 ? NSLocalizedString("Time", comment: "Single reminder time label")
+                                 : String(format: NSLocalizedString("Time %lld", comment: ""), idx + 1))
+                                .appFont(.subheadline)
+                            Spacer()
+                            DatePicker(
+                                "",
+                                selection: Binding(
+                                    get: { times[idx] },
+                                    set: { newValue in
+                                        schedulePreset = .custom
+                                        times[idx] = newValue
                                     }
-                                }
-                            }
-
-                            validationHint(scheduleValidation)
-
-                            if schedulePreset == .custom {
-                                Button {
-                                    times.append(defaultCustomTime(after: times.last))
+                                ),
+                                displayedComponents: .hourAndMinute
+                            )
+                            .labelsHidden()
+                            if schedulePreset == .custom && times.count > 1 {
+                                Button(role: .destructive) {
+                                    times.remove(at: idx)
                                 } label: {
-                                    secondaryActionLabel(NSLocalizedString("Add Time", comment: ""), systemImage: "plus.circle.fill")
+                                    Image(systemName: "minus.circle.fill")
+                                        .foregroundStyle(.red)
                                 }
                                 .buttonStyle(.plain)
                             }
-
-                            Divider()
-
-                            // Reminders toggle
-                            HStack {
-                                Text(NSLocalizedString("Reminders", comment: ""))
-                                    .appFont(.subheadline)
-                                Spacer()
-                                Toggle("", isOn: $remindersEnabled)
-                                    .labelsHidden()
-                                    .accessibilityLabel(NSLocalizedString("Enable Reminders", comment: "Accessibility"))
-                            }
-                            if !remindersEnabled {
-                                Text(NSLocalizedString("Times saved, but notifications won't fire.", comment: ""))
-                                    .appFont(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        } else {
-                            Text(NSLocalizedString("As-needed medications skip fixed reminder times. Log each dose from Today only when you actually take it.", comment: ""))
-                                .appFont(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-
-                        Divider()
-
-                        // As-needed toggle at bottom
-                        HStack {
-                            Text(NSLocalizedString("As Needed Only", comment: ""))
-                                .appFont(.subheadline)
-                            Spacer()
-                            Toggle("", isOn: Binding(
-                                get: { isAsNeeded },
-                                set: { newValue in
-                                    if newValue {
-                                        requestSwitchToPRN()
-                                    } else {
-                                        isAsNeeded = false
-                                        if times.isEmpty {
-                                            schedulePreset = .onceDaily
-                                            updateSchedulePreset(.onceDaily)
-                                        }
-                                        remindersEnabled = true
-                                    }
-                                }
-                            ))
-                            .labelsHidden()
-                            .accessibilityLabel(NSLocalizedString("As Needed Only", comment: "Accessibility"))
                         }
                     }
-                }
-            }
-        }
-    }
 
-    private var scheduleSection: some View {
-        sectionWrapper {
-            VStack(alignment: .leading, spacing: 16) {
-                sectionHeader(
-                    step: "3",
-                    title: NSLocalizedString("Schedule", comment: ""),
-                    detail: NSLocalizedString("Pick a frequency, then adjust the times.", comment: "")
-                )
+                    validationHint(scheduleValidation)
 
-                InsetPanel {
-                    VStack(alignment: .leading, spacing: 14) {
-                        // Frequency picker
-                        Picker(NSLocalizedString("Frequency", comment: ""), selection: $schedulePreset) {
-                            ForEach(SchedulePreset.allCases) { preset in
-                                Text(preset.shortLabel).tag(preset)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-
-                        Divider()
-
-                        // Inline time pickers
-                        ForEach(Array(times.indices), id: \.self) { idx in
-                            HStack {
-                                Text(times.count == 1
-                                     ? NSLocalizedString("Time", comment: "Single reminder time label")
-                                     : String(format: NSLocalizedString("Time %lld", comment: ""), idx + 1))
-                                    .appFont(.subheadline)
-                                Spacer()
-                                DatePicker(
-                                    "",
-                                    selection: Binding(
-                                        get: { times[idx] },
-                                        set: { newValue in
-                                            schedulePreset = .custom
-                                            times[idx] = newValue
-                                        }
-                                    ),
-                                    displayedComponents: .hourAndMinute
-                                )
-                                .labelsHidden()
-                                if schedulePreset == .custom && times.count > 1 {
-                                    Button(role: .destructive) {
-                                        times.remove(at: idx)
-                                    } label: {
-                                        Image(systemName: "minus.circle.fill")
-                                            .foregroundStyle(.red)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
-
-                        validationHint(scheduleValidation)
-
-                        if schedulePreset == .custom {
-                            Button {
-                                times.append(defaultCustomTime(after: times.last))
-                            } label: {
-                                secondaryActionLabel(NSLocalizedString("Add Time", comment: ""), systemImage: "plus.circle.fill")
-                            }
-                            .buttonStyle(.plain)
-                        }
-
-                        Divider()
-
-                        // Reminders toggle
-                        HStack {
-                            Text(NSLocalizedString("Reminders", comment: ""))
-                                .appFont(.subheadline)
-                            Spacer()
-                            Toggle("", isOn: $remindersEnabled)
-                                .labelsHidden()
-                        }
-                        if !remindersEnabled {
-                            Text(NSLocalizedString("Times saved, but notifications won't fire.", comment: ""))
-                                .appFont(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private var optionalDetailsSection: some View {
-        sectionWrapper(showDivider: false) {
-            VStack(alignment: .leading, spacing: 16) {
-                sectionHeader(
-                    step: "4",
-                    title: NSLocalizedString("Optional Details", comment: ""),
-                    detail: NSLocalizedString("Add instructions, supply tracking, category, or a photo only if they help later.", comment: "")
-                )
-
-                optionalDetailsControls
-            }
-        }
-    }
-
-    private var addOptionalDetailsEntrySection: some View {
-        sectionWrapper(showDivider: false) {
-            VStack(alignment: .leading, spacing: 16) {
-                sectionHeader(
-                    step: "3",
-                    title: NSLocalizedString("More Details", comment: ""),
-                    detail: NSLocalizedString("Keep the first pass short. Add instructions, supply tracking, category, or a photo only if they matter right now.", comment: "")
-                )
-
-                InsetPanel {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text(addOptionalDetailsSummaryText)
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        compactOptionalRow(title: NSLocalizedString("Instructions", comment: ""), summary: instructionsSummary)
-                        compactOptionalRow(title: NSLocalizedString("Inventory & Course", comment: ""), summary: inventorySummary)
-                        compactOptionalRow(title: NSLocalizedString("Category & Photo", comment: ""), summary: categorySummary)
-
+                    if schedulePreset == .custom {
                         Button {
-                            showAddOptionalDetails = true
+                            times.append(defaultCustomTime(after: times.last))
                         } label: {
-                            secondaryActionLabel(NSLocalizedString("Add More Details", comment: ""), systemImage: "slider.horizontal.3")
+                            secondaryActionLabel(NSLocalizedString("Add Time", comment: ""), systemImage: "plus.circle.fill")
                         }
                         .buttonStyle(.plain)
                     }
+
+                    Divider()
+
+                    HStack {
+                        Text(NSLocalizedString("Reminders", comment: ""))
+                            .appFont(.subheadline)
+                        Spacer()
+                        Toggle("", isOn: $remindersEnabled)
+                            .labelsHidden()
+                            .accessibilityLabel(NSLocalizedString("Enable Reminders", comment: "Accessibility"))
+                    }
+                    if !remindersEnabled {
+                        Text(NSLocalizedString("Times saved, but notifications won't fire.", comment: ""))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Single collapsible section for everything non-essential. Keeps the core
+    /// add/edit path short; power-user fields (photo, category, instructions,
+    /// supply, course end) live behind one chevron.
+    private var moreDetailsSection: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 14) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) { showMoreDetails.toggle() }
+                } label: {
+                    HStack(alignment: .center, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(NSLocalizedString("More Details", comment: ""))
+                                .appFont(.headline)
+                            Text(moreDetailsSummary)
+                                .appFont(.footnote)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .multilineTextAlignment(.leading)
+                        }
+                        Spacer()
+                        Image(systemName: showMoreDetails ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if showMoreDetails {
+                    Divider()
+                    moreDetailsContent
                 }
             }
         }
     }
 
     @ViewBuilder
-    private var optionalDetailsControls: some View {
-        optionalSectionButton(
-            title: NSLocalizedString("Instructions", comment: ""),
-            summary: instructionsSummary,
-            isExpanded: $showInstructionsDetails
-        )
-        if showInstructionsDetails {
-            VStack(alignment: .leading, spacing: 14) {
-                Picker(NSLocalizedString("Food Instruction", comment: ""), selection: $foodInstruction) {
-                    Text(NSLocalizedString("None", comment: "")).tag(FoodInstruction?.none)
-                    ForEach(FoodInstruction.allCases) { f in
-                        Text(f.displayName).tag(Optional(f))
-                    }
-                }
-
-                textInputCard(
-                    title: NSLocalizedString("Special Instructions", comment: ""),
-                    placeholder: NSLocalizedString("Take after dinner", comment: ""),
-                    text: $specialInstructions,
-                    field: .specialInstructions,
-                    axis: .vertical,
-                    lineLimit: 2...4
-                )
-
-                textInputCard(
-                    title: NSLocalizedString("Notes", comment: ""),
-                    placeholder: NSLocalizedString("Optional context", comment: ""),
-                    text: $notes,
-                    field: .notes,
-                    axis: .vertical,
-                    lineLimit: 2...4
-                )
-            }
+    private var moreDetailsContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            instructionsBlock
+            inventoryBlock
+            categoryPhotoBlock
         }
+    }
 
-        optionalSectionButton(
-            title: NSLocalizedString("Inventory & Course", comment: ""),
-            summary: inventorySummary,
-            isExpanded: $showInventoryDetails
-        )
-        if showInventoryDetails {
-            VStack(alignment: .leading, spacing: 14) {
-                Toggle(NSLocalizedString("Track Supply", comment: ""), isOn: $trackSupply)
-                if trackSupply {
-                    pillsRemainingField
-                    Stepper(value: $pillsPerDose, in: 1...10) {
-                        Text(String(format: NSLocalizedString("Pills per dose: %lld", comment: ""), pillsPerDose))
-                    }
-                    quickPillButtons
-                    if let estimatedSupplyDays {
-                        Text(String(format: NSLocalizedString("About %lld days of supply at your current schedule.", comment: ""), estimatedSupplyDays))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Text(String(format: NSLocalizedString("Refill reminders start when about %lld days remain.", comment: ""), refillThresholdDays))
+    private var instructionsBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(NSLocalizedString("Instructions", comment: ""))
+                .appFont(.subheadline)
+                .fontWeight(.semibold)
+            Picker(NSLocalizedString("Food Instruction", comment: ""), selection: $foodInstruction) {
+                Text(NSLocalizedString("None", comment: "")).tag(FoodInstruction?.none)
+                ForEach(FoodInstruction.allCases) { f in
+                    Text(f.displayName).tag(Optional(f))
+                }
+            }
+            textInputCard(
+                title: NSLocalizedString("Special Instructions", comment: ""),
+                placeholder: NSLocalizedString("Take after dinner", comment: ""),
+                text: $specialInstructions,
+                field: .specialInstructions,
+                axis: .vertical,
+                lineLimit: 2...4
+            )
+            textInputCard(
+                title: NSLocalizedString("Notes", comment: ""),
+                placeholder: NSLocalizedString("Optional context", comment: ""),
+                text: $notes,
+                field: .notes,
+                axis: .vertical,
+                lineLimit: 2...4
+            )
+        }
+    }
+
+    private var inventoryBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(NSLocalizedString("Inventory & Course", comment: ""))
+                .appFont(.subheadline)
+                .fontWeight(.semibold)
+            Toggle(NSLocalizedString("Track Supply", comment: ""), isOn: $trackSupply)
+            if trackSupply {
+                pillsRemainingField
+                Stepper(value: $pillsPerDose, in: 1...10) {
+                    Text(String(format: NSLocalizedString("Pills per dose: %lld", comment: ""), pillsPerDose))
+                }
+                quickPillButtons
+                if let estimatedSupplyDays {
+                    Text(String(format: NSLocalizedString("About %lld days of supply at your current schedule.", comment: ""), estimatedSupplyDays))
                         .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
+                Text(String(format: NSLocalizedString("Refill reminders start when about %lld days remain.", comment: ""), refillThresholdDays))
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
-                Toggle(NSLocalizedString("Has Course End Date", comment: ""), isOn: $hasCourseEnd)
-                if hasCourseEnd {
-                    DatePicker(NSLocalizedString("End Date", comment: ""), selection: $courseEndDate, displayedComponents: .date)
-                    validationHint(courseEndValidation)
-                    quickCourseButtons
-                    if let courseDaysRemaining {
-                        Text(String(format: NSLocalizedString("Course ends in %lld days.", comment: ""), max(courseDaysRemaining, 0)))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Text(String(format: NSLocalizedString("Course reminders start %lld days before the end date.", comment: ""), courseReminderThresholdDays))
+            Toggle(NSLocalizedString("Has Course End Date", comment: ""), isOn: $hasCourseEnd)
+            if hasCourseEnd {
+                DatePicker(NSLocalizedString("End Date", comment: ""), selection: $courseEndDate, displayedComponents: .date)
+                validationHint(courseEndValidation)
+                quickCourseButtons
+                if let courseDaysRemaining {
+                    Text(String(format: NSLocalizedString("Course ends in %lld days.", comment: ""), max(courseDaysRemaining, 0)))
                         .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
-            }
-        }
-
-        optionalSectionButton(
-            title: NSLocalizedString("Category & Photo", comment: ""),
-            summary: categorySummary,
-            isExpanded: $showCategoryDetails
-        )
-        if showCategoryDetails {
-            VStack(alignment: .leading, spacing: 14) {
-                Picker(NSLocalizedString("Category", comment: ""), selection: $category) {
-                    ForEach(MedicationCategory.allCases) { c in
-                        Text(c.displayName).tag(c)
-                    }
-                }
-
-                if category == .custom {
-                    textInputCard(
-                        title: NSLocalizedString("Custom Category", comment: ""),
-                        placeholder: NSLocalizedString("Cardiology", comment: ""),
-                        text: $customCategoryName,
-                        field: .customCategory
-                    )
-                }
-
-                photoAttachmentRow
+                Text(String(format: NSLocalizedString("Course reminders start %lld days before the end date.", comment: ""), courseReminderThresholdDays))
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
-    private var addOptionalDetailsSheet: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    sectionHeader(
-                        step: "4",
-                        title: NSLocalizedString("Optional Details", comment: ""),
-                        detail: NSLocalizedString("These fields help with context and maintenance, but they are not required to save the medication.", comment: "")
-                    )
-                    optionalDetailsControls
-                }
-                .padding(20)
-            }
-            .navigationTitle(NSLocalizedString("More Details", comment: ""))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(NSLocalizedString("Done", comment: "")) {
-                        showAddOptionalDetails = false
-                    }
+    private var categoryPhotoBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(NSLocalizedString("Category & Photo", comment: ""))
+                .appFont(.subheadline)
+                .fontWeight(.semibold)
+            Picker(NSLocalizedString("Category", comment: ""), selection: $category) {
+                ForEach(MedicationCategory.allCases) { c in
+                    Text(c.displayName).tag(c)
                 }
             }
+            if category == .custom {
+                textInputCard(
+                    title: NSLocalizedString("Custom Category", comment: ""),
+                    placeholder: NSLocalizedString("Cardiology", comment: ""),
+                    text: $customCategoryName,
+                    field: .customCategory
+                )
+            }
+            photoAttachmentRow
         }
     }
 
@@ -838,7 +592,6 @@ struct MedicationFormView: View {
                             .fill(Color(.secondarySystemBackground))
                     )
                     .onChange(of: pillsRemainingText) { newValue in
-                        // Strip non-numeric characters
                         let filtered = newValue.filter { $0.isNumber }
                         if filtered != newValue { pillsRemainingText = filtered }
                     }
@@ -856,7 +609,7 @@ struct MedicationFormView: View {
 
     private var quickPillButtons: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(isEditing ? NSLocalizedString("Quick fill", comment: "") : NSLocalizedString("Quick fill", comment: ""))
+            Text(NSLocalizedString("Quick fill", comment: ""))
                 .appFont(.caption)
                 .foregroundStyle(.secondary)
             HStack(spacing: 8) {
@@ -967,18 +720,13 @@ struct MedicationFormView: View {
             hasCourseEnd = med.courseEndDate != nil
             courseEndDate = med.courseEndDate ?? Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
             specialInstructions = med.specialInstructions ?? ""
-        }
-        if editing != nil {
             schedulePreset = inferredSchedulePreset(from: times)
+            showMoreDetails = hasOptionalData
         } else {
-            // New entry: default to once daily with pre-filled time
             schedulePreset = .onceDaily
             updateSchedulePreset(.onceDaily)
+            focusedField = .name
         }
-        showInstructionsDetails = foodInstruction != nil || !specialInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        showInventoryDetails = trackSupply || hasCourseEnd
-        showCategoryDetails = category != .unspecified || hasPhoto
-        focusedField = .name
     }
 
     // MARK: - Save
@@ -1102,12 +850,11 @@ struct MedicationFormView: View {
            let detectedNotes = suggestion.notes,
            !detectedNotes.isEmpty {
             notes = detectedNotes
-            showInstructionsDetails = true
+            showMoreDetails = true
         }
         ocrSuggestion = nil
-        // Auto-advance focus past filled fields
         if !name.isEmpty && !dose.isEmpty {
-            focusedField = nil // dismiss keyboard, let user proceed to schedule
+            focusedField = nil
         } else if name.isEmpty {
             focusedField = .name
         } else {
@@ -1245,77 +992,6 @@ private extension String {
 
 private extension MedicationFormView {
 
-    func sectionWrapper<Content: View>(showDivider: Bool = true, @ViewBuilder content: () -> Content) -> some View {
-        if isEditing {
-            AnyView(Card { content() })
-        } else {
-            AnyView(
-                VStack(alignment: .leading, spacing: 0) {
-                    content().padding(.vertical, 2)
-                    if showDivider {
-                        Divider().padding(.top, 20)
-                    }
-                }
-            )
-        }
-    }
-
-    func sectionHeader(step: String, title: String, detail: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text(step)
-                .appFont(.caption)
-                .fontWeight(.bold)
-                .foregroundStyle(Color.accentColor)
-                .frame(width: 22, height: 22)
-                .background(Circle().fill(Color.accentColor.opacity(0.12)))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).appFont(.headline)
-                Text(detail)
-                    .appFont(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    func optionalSectionButton(title: String, summary: String, isExpanded: Binding<Bool>) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.18)) { isExpanded.wrappedValue.toggle() }
-        } label: {
-            HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title).appFont(.subheadline).fontWeight(.semibold)
-                    Text(summary).appFont(.footnote).foregroundStyle(.secondary)
-                }
-                Spacer()
-                Image(systemName: isExpanded.wrappedValue ? "chevron.up" : "chevron.down")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 32, height: 32)
-                    .contentShape(Rectangle())
-                    .accessibilityHidden(true)
-            }
-            .padding(.vertical, 4)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    func compactOptionalRow(title: String, summary: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(title)
-                .appFont(.subheadline)
-                .foregroundStyle(.primary)
-            Spacer(minLength: 12)
-            Text(summary)
-                .appFont(.footnote)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.trailing)
-        }
-    }
-
-
     var scanAssistPanel: some View {
         InsetPanel(tint: .blue) {
             HStack(alignment: .center, spacing: 12) {
@@ -1432,7 +1108,6 @@ private extension MedicationFormView {
     }
 
     @ViewBuilder
-
     var photoAttachmentRow: some View {
         HStack(spacing: 12) {
             photoPreview

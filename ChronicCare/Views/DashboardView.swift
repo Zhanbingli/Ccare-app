@@ -173,7 +173,11 @@ struct DashboardView: View {
                             )
                         }
                     } else {
-                        todayHeader(actionableCount: state.actionableSchedules.count)
+                        if let onOpenCalendar {
+                            WeekSparkline(onTap: onOpenCalendar)
+                                .padding(.top, 4)
+                                .padding(.trailing, 48)
+                        }
 
                         if notificationStatus == .denied {
                             reminderRepairCard()
@@ -181,21 +185,17 @@ struct DashboardView: View {
 
                         let allComplete = currentAction == nil && nextUpcoming == nil && totalCount > 0
 
-                        // Inactivity warning: scheduled meds exist but no logs in 2+ days
                         if !allComplete, let gap = daysSinceLastLog, gap >= 2 {
                             inactivityWarningCard(daysSince: gap)
                         }
 
-                        currentStateCard(
-                            currentAction: currentAction,
-                            nextUpcoming: nextUpcoming,
-                            takenCount: takenCount,
-                            totalCount: totalCount,
-                            statusCache: statusCache
-                        )
-
                         if allComplete {
-                            // Calm completed state: timeline collapsed by default
+                            todayCompleteHero(
+                                takenCount: takenCount,
+                                skippedCount: state.skippedCount,
+                                totalCount: totalCount
+                            )
+
                             if !schedules.isEmpty {
                                 Button {
                                     withAnimation(.easeInOut(duration: 0.25)) { showCompletedTimeline.toggle() }
@@ -215,38 +215,30 @@ struct DashboardView: View {
                                 .buttonStyle(.plain)
 
                                 if showCompletedTimeline {
-                                    todayTimelineCard(
+                                    todayUnifiedList(
                                         schedules: schedules,
                                         statusCache: statusCache,
-                                        currentActionID: currentAction?.id
+                                        currentActionID: nil,
+                                        nextUpcomingID: nextUpcoming?.id
                                     )
                                     .transition(.opacity)
                                 }
                             }
-                        } else {
-                            // Active state: show everything
-                            if !schedules.isEmpty {
-                                todayTimelineCard(
-                                    schedules: schedules,
-                                    statusCache: statusCache,
-                                    currentActionID: currentAction?.id
-                                )
-                            }
+                        } else if !schedules.isEmpty {
+                            todayUnifiedList(
+                                schedules: schedules,
+                                statusCache: statusCache,
+                                currentActionID: currentAction?.id,
+                                nextUpcomingID: nextUpcoming?.id
+                            )
                         }
 
                         if !prnMeds.isEmpty {
-                            asNeededCompactSection(medications: prnMeds)
+                            asNeededInlineSection(medications: prnMeds)
                         }
 
                         if notificationStatus != .denied && hasReminderSetupIssues {
                             reminderRepairCard()
-                        }
-
-                        // Weekly reflection — placed last so it sits below today's
-                        // actionable content, not competing with it.
-                        if let onOpenCalendar, shouldShowWeeklyReflection {
-                            WeeklyAdherenceCard(onTap: onOpenCalendar)
-                                .padding(.top, 4)
                         }
                     }
                 }
@@ -386,17 +378,6 @@ private extension DashboardView {
         }
     }
 
-    private var sevenDayCheckInCount: Int {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        guard let start = calendar.date(byAdding: .day, value: -6, to: today) else { return 0 }
-        let dayStarts = Set(store.intakeLogs.compactMap { log -> Date? in
-            guard log.status == .taken, log.date >= start else { return nil }
-            return calendar.startOfDay(for: log.date)
-        })
-        return min(dayStarts.count, 7)
-    }
-
     private func todaySchedules() -> [MedSchedule] {
         let cal = Calendar.current
         let now = Date()
@@ -414,279 +395,219 @@ private extension DashboardView {
         return items.sorted { $0.time < $1.time }
     }
 
-    /// Only show the weekly reflection card once the user has actually used the
-    /// app — no point showing "0% This week" to a brand-new user with no logs.
-    private var shouldShowWeeklyReflection: Bool {
-        let calendar = Calendar.current
-        let sevenDaysAgo = calendar.date(byAdding: .day, value: -7, to: Date()) ?? Date()
-        let recentLogs = store.intakeLogs.filter { $0.date >= sevenDaysAgo }
-        let hasScheduledMeds = store.medications.contains { $0.isAsNeeded != true }
-        return hasScheduledMeds && recentLogs.count >= 3
-    }
-
-    @ViewBuilder
-    private func todayHeader(actionableCount: Int) -> some View {
-        HStack(alignment: .bottom, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(NSLocalizedString("Today", comment: ""))
-                    .appFont(.largeTitle)
-                    .fontWeight(.bold)
-                    .minimumScaleFactor(0.85)
-                Text(Date(), format: .dateTime.weekday(.wide).month(.abbreviated).day())
-                    .appFont(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 12)
-
-            if actionableCount > 0 {
-                AppBadge(
-                    text: "\(actionableCount)",
-                    tint: actionableCount > 1 ? .orange : .green,
-                    icon: "checklist"
-                )
-            }
-        }
-        .padding(.top, 8)
-    }
-
-    @ViewBuilder
-    private func currentStateCard(
-        currentAction: MedSchedule?,
-        nextUpcoming: MedSchedule?,
-        takenCount: Int,
-        totalCount: Int,
-        statusCache: [String: TodayMedStatus]
-    ) -> some View {
-        if let item = currentAction {
-            let status = statusCache[item.id] ?? .none
-            TintedCard(tint: heroTint(for: status)) {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .top, spacing: AppSpacing.medium) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(actionStatusHeadline(for: status))
-                                .appFont(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(item.med.name)
-                                .appFont(.largeTitle)
-                                .fontWeight(.bold)
-                            Text("\(item.med.dose) • \(item.time.formatted(date: .omitted, time: .shortened))")
-                                .appFont(.subheadline)
-                                .foregroundStyle(.secondary)
-                            if let fi = item.med.foodInstruction {
-                                Label(fi.displayName, systemImage: "fork.knife")
-                                    .appFont(.caption)
-                                    .fontWeight(.medium)
-                                    .foregroundStyle(.blue)
-                            }
-                        }
-
-                        Spacer(minLength: 0)
-
-                        if let path = item.med.imagePath, let ui = loadMedicationImage(path: path) {
-                            Image(uiImage: ui)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 64, height: 64)
-                                .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
-                                        .stroke(Color.white.opacity(0.35), lineWidth: 0.5)
-                                )
-                                .accessibilityLabel(String(format: NSLocalizedString("%@ photo", comment: "Medication thumbnail accessibility"), item.med.name))
-                        }
-                    }
-
-                    VStack(spacing: 10) {
-                        Button {
-                            beginTakeFlow(for: item)
-                        } label: {
-                            Text(NSLocalizedString("Take", comment: ""))
-                                .fontWeight(.semibold)
-                                .frame(maxWidth: .infinity, minHeight: 52)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.green)
-
-                        HStack(spacing: 8) {
-                            Button {
-                                snoozeDose(for: item)
-                            } label: {
-                                Text(snoozeButtonLabel(for: item))
-                                    .frame(maxWidth: .infinity, minHeight: 44)
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                            .tint(snoozeButtonTint(for: item))
-
-                            Button {
-                                skipDose(for: item)
-                            } label: {
-                                Text(NSLocalizedString("Skip", comment: ""))
-                                    .frame(maxWidth: .infinity, minHeight: 44)
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                            .tint(.orange)
-                        }
+    private func todayCompleteHero(takenCount: Int, skippedCount: Int, totalCount: Int) -> some View {
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 14) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 36))
+                        .foregroundStyle(.green)
+                        .symbolRenderingMode(.hierarchical)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(NSLocalizedString("Today complete", comment: ""))
+                            .appFont(.headline)
+                        Text(todayCompleteSummary(taken: takenCount, skipped: skippedCount, total: totalCount))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
-            }
-        } else if let nextUpcoming {
-            TintedCard(tint: .blue) {
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(nextUpcoming.med.name)
-                            .appFont(.title)
-                            .fontWeight(.bold)
-                        Text("\(nextUpcoming.med.dose) • \(nextUpcoming.time.formatted(date: .omitted, time: .shortened))")
-                            .appFont(.subheadline)
+                if let tomorrowText = tomorrowsFirstDoseText() {
+                    Divider()
+                    HStack(spacing: 6) {
+                        Image(systemName: "sunrise")
+                            .font(.system(size: 12))
                             .foregroundStyle(.secondary)
-                        if let fi = nextUpcoming.med.foodInstruction {
-                            Label(fi.displayName, systemImage: "fork.knife")
-                                .appFont(.caption)
-                                .foregroundStyle(.blue)
-                        }
-                    }
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text(timeUntilText(nextUpcoming.time))
-                            .appFont(.headline)
-                            .foregroundStyle(.blue)
-                            .monospacedDigit()
-                        Text(NSLocalizedString("until next", comment: ""))
+                        Text(String(format: NSLocalizedString("Tomorrow: %@", comment: ""), tomorrowText))
                             .appFont(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
             }
-        } else {
-            TintedCard(tint: .green) {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 14) {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 36))
-                            .foregroundStyle(.green)
-                            .symbolRenderingMode(.hierarchical)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(NSLocalizedString("Today complete", comment: ""))
-                                .appFont(.headline)
-                            Text(todayCompleteSummary(taken: takenCount, skipped: statusCache.values.filter { if case .skipped = $0 { return true } else { return false } }.count, total: totalCount))
-                                .appFont(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    if let tomorrowText = tomorrowsFirstDoseText() {
-                        Divider()
-                        HStack(spacing: 6) {
-                            Image(systemName: "sunrise")
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                            Text(String(format: NSLocalizedString("Tomorrow: %@", comment: ""), tomorrowText))
-                                .appFont(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
         }
     }
 
-    private func todayTimelineCard(
+    /// Unified time-sorted list for Today. Pending rows surface inline at the
+    /// top; the first pending dose (if any) is emphasized with a left accent
+    /// bar and inline Take/Skip/Snooze controls. Completed doses collapse to
+    /// dimmed strike-through rows so the day reads as a single narrative.
+    private func todayUnifiedList(
         schedules: [MedSchedule],
         statusCache: [String: TodayMedStatus],
-        currentActionID: String?
+        currentActionID: String?,
+        nextUpcomingID: String?
     ) -> some View {
         Card {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(NSLocalizedString("Today's Schedule", comment: ""))
+            VStack(alignment: .leading, spacing: 14) {
+                Text(NSLocalizedString("Today", comment: "Unified schedule section title"))
                     .appFont(.headline)
 
                 VStack(spacing: 10) {
-                    ForEach(schedules) { item in
-                        timelineRow(
-                            item: item,
-                            status: statusCache[item.id] ?? .none,
-                            isCurrent: item.id == currentActionID
-                        )
+                    ForEach(Array(schedules.enumerated()), id: \.element.id) { index, item in
+                        let status = statusCache[item.id] ?? .none
+                        let isCurrent = item.id == currentActionID
+                        let isNextUpcoming = item.id == nextUpcomingID
+
+                        if isCurrent {
+                            emphasizedPendingRow(item: item, status: status)
+                        } else {
+                            compactUnifiedRow(item: item, status: status, isNextUpcoming: isNextUpcoming)
+                        }
+
+                        if index < schedules.count - 1 {
+                            Divider()
+                        }
                     }
                 }
             }
         }
     }
 
-    private func timelineRow(item: MedSchedule, status: TodayMedStatus, isCurrent: Bool) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: status.iconName)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(status.tint)
-                .frame(width: 24)
-                .accessibilityHidden(true)
+    private func emphasizedPendingRow(item: MedSchedule, status: TodayMedStatus) -> some View {
+        let accent = statusBadgeTint(for: status)
+        return HStack(alignment: .top, spacing: 12) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(accent)
+                .frame(width: 4)
+                .frame(maxHeight: .infinity)
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(item.med.name)
-                    .appFont(.subheadline)
-                    .fontWeight(isCurrent ? .semibold : .regular)
-                    .foregroundStyle(.primary)
-                Text("\(item.med.dose) • \(item.time.formatted(date: .omitted, time: .shortened))")
-                    .appFont(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            if isCurrent {
-                Text(NSLocalizedString("Now", comment: "Timeline marker for the dose currently shown in hero card"))
-                    .appFont(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(status.tint)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(status.tint.opacity(0.15)))
-            } else if canLogDose(for: item, status: status) {
-                HStack(spacing: 6) {
-                    Button {
-                        skipDose(for: item)
-                    } label: {
-                        Text(NSLocalizedString("Skip", comment: ""))
-                            .appFont(.footnote)
-                            .frame(minWidth: 44, minHeight: 44)
+            VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    if let label = actionStatusLabel(for: status) {
+                        Text(label.uppercased())
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(accent)
+                            .tracking(0.5)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .tint(.orange)
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(item.med.name)
+                                .appFont(.headline)
+                                .fontWeight(.semibold)
+                            Text("\(item.med.dose) · \(item.time.formatted(date: .omitted, time: .shortened))")
+                                .appFont(.caption)
+                                .foregroundStyle(.secondary)
+                            if let fi = item.med.foodInstruction {
+                                Label(fi.displayName, systemImage: "fork.knife")
+                                    .appFont(.caption)
+                                    .foregroundStyle(.blue)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                        if let path = item.med.imagePath, let ui = loadMedicationImage(path: path) {
+                            Image(uiImage: ui)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 52, height: 52)
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .accessibilityLabel(String(format: NSLocalizedString("%@ photo", comment: "Medication thumbnail accessibility"), item.med.name))
+                        }
+                    }
+                }
 
+                VStack(spacing: 8) {
                     Button {
                         beginTakeFlow(for: item)
                     } label: {
                         Text(NSLocalizedString("Take", comment: ""))
-                            .appFont(.footnote)
                             .fontWeight(.semibold)
-                            .frame(minWidth: 44, minHeight: 44)
+                            .frame(maxWidth: .infinity, minHeight: 48)
                     }
                     .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
                     .tint(.green)
+
+                    HStack(spacing: 8) {
+                        Button {
+                            snoozeDose(for: item)
+                        } label: {
+                            Text(snoozeButtonLabel(for: item))
+                                .frame(maxWidth: .infinity, minHeight: 40)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .tint(snoozeButtonTint(for: item))
+
+                        Button {
+                            skipDose(for: item)
+                        } label: {
+                            Text(NSLocalizedString("Skip", comment: ""))
+                                .frame(maxWidth: .infinity, minHeight: 40)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .tint(.secondary)
+                    }
                 }
-            } else {
+            }
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func compactUnifiedRow(
+        item: MedSchedule,
+        status: TodayMedStatus,
+        isNextUpcoming: Bool
+    ) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            Button {
+                if canLogDose(for: item, status: status) {
+                    beginTakeFlow(for: item)
+                }
+            } label: {
+                statusDot(for: status)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .disabled(!canLogDose(for: item, status: status))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.med.name)
+                    .appFont(.body)
+                    .strikethrough(status.isFinal, color: .secondary)
+                    .foregroundStyle(status.isFinal ? .secondary : .primary)
+                Text("\(item.med.dose) · \(item.time.formatted(date: .omitted, time: .shortened))")
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 4)
+
+            if status.isFinal {
                 Text(status.displayText)
                     .appFont(.caption)
-                    .foregroundStyle(status.tint)
+                    .foregroundStyle(.secondary)
+            } else if isNextUpcoming {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(timeUntilText(item.time))
+                        .appFont(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.blue)
+                        .monospacedDigit()
+                    Text(NSLocalizedString("up next", comment: "Countdown label for the next medication in today's list"))
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else if let label = actionStatusLabel(for: status) {
+                AppBadge(
+                    text: label,
+                    tint: statusBadgeTint(for: status),
+                    icon: statusBadgeIcon(for: status)
+                )
             }
         }
         .opacity(status.isFinal ? 0.55 : 1.0)
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(item.med.name), \(item.med.dose), \(item.time.formatted(date: .omitted, time: .shortened)), \(status.displayText)")
     }
 
-    private func asNeededCompactSection(medications: [Medication]) -> some View {
+    private func asNeededInlineSection(medications: [Medication]) -> some View {
         Card {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text(NSLocalizedString("As Needed", comment: ""))
                         .appFont(.headline)
-                    Spacer()
-                    AppBadge(text: "\(medications.count)", tint: .secondary)
                 }
 
                 let visible = showAllPRN ? medications : Array(medications.prefix(3))
@@ -720,19 +641,6 @@ private extension DashboardView {
                     .buttonStyle(.plain)
                 }
             }
-        }
-    }
-
-    private func actionStatusHeadline(for status: TodayMedStatus) -> String {
-        switch status {
-        case .overdue:
-            return NSLocalizedString("Dose overdue", comment: "")
-        case .dueSoon:
-            return NSLocalizedString("Dose due now", comment: "")
-        case .snoozed:
-            return NSLocalizedString("Snoozed dose", comment: "")
-        default:
-            return NSLocalizedString("Current dose", comment: "")
         }
     }
 
@@ -803,128 +711,6 @@ private extension DashboardView {
         }
     }
 
-    @ViewBuilder
-    private func focusHeroCard(
-        schedules: [MedSchedule],
-        statusCache: [String: TodayMedStatus],
-        takenCount: Int,
-        totalCount: Int
-    ) -> some View {
-        let nextActionableItem = schedules.first { item in
-            canLogDose(for: item, status: statusCache[item.id] ?? .none)
-        }
-
-        if let item = nextActionableItem {
-            let status = statusCache[item.id] ?? .none
-            TintedCard(tint: heroTint(for: status)) {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .top, spacing: 10) {
-                        ZStack {
-                            Circle()
-                                .fill(heroTint(for: status).opacity(0.14))
-                                .frame(width: 44, height: 44)
-                            Image(systemName: heroSymbol(for: status))
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(heroTint(for: status))
-                        }
-
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(heroEyebrow(for: status))
-                                .appFont(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(item.med.name)
-                                .appFont(.title)
-                                .fontWeight(.bold)
-                            Text("\(item.med.dose) · \(item.time, style: .time)")
-                                .appFont(.subheadline)
-                                .foregroundStyle(.secondary)
-                            Text(heroSupportText(for: item, status: status))
-                                .appFont(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        statusBadge(for: item, status: status)
-                    }
-
-                    InsetPanel(tint: heroTint(for: status)) {
-                        Text(todayProgressText(taken: takenCount, total: totalCount))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Button {
-                        beginTakeFlow(for: item)
-                    } label: {
-                        Label(NSLocalizedString("Take Now", comment: ""), systemImage: "checkmark.circle.fill")
-                            .frame(maxWidth: .infinity)
-                            .appFont(.headline)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.green)
-                    .controlSize(.large)
-                    .accessibilityLabel(String(format: NSLocalizedString("Take %@ %@ now", comment: "Take medication accessibility"), item.med.name, item.med.dose))
-                }
-            }
-        } else if let upcoming = schedules.first(where: { !(statusCache[$0.id] ?? .none).isFinal }) {
-            Card {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text(NSLocalizedString("Up Next", comment: ""))
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(upcoming.med.name)
-                        .appFont(.title)
-                        .fontWeight(.bold)
-                    Text("\(upcoming.med.dose) · \(upcoming.time, style: .time)")
-                        .appFont(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Text(NSLocalizedString("Nothing needs action yet. Your next scheduled dose is lined up.", comment: ""))
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                    InsetPanel {
-                        Text(todayProgressText(taken: takenCount, total: totalCount))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-        } else {
-            TintedCard(tint: .green) {
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack(alignment: .center, spacing: 14) {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 34, weight: .semibold))
-                            .foregroundStyle(.green)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(NSLocalizedString("All caught up", comment: ""))
-                                .appFont(.title)
-                                .fontWeight(.bold)
-                            Text(NSLocalizedString("There are no scheduled doses waiting for you right now.", comment: ""))
-                                .appFont(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    InsetPanel(tint: .green) {
-                        Text(NSLocalizedString("Today is clear for now. PRN medications stay below as optional logs only.", comment: ""))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
-    }
-
-    private func heroSymbol(for status: TodayMedStatus) -> String {
-        switch status {
-        case .overdue:
-            return "exclamationmark.circle.fill"
-        case .dueSoon:
-            return "clock.badge.checkmark.fill"
-        case .snoozed:
-            return "zzz"
-        default:
-            return "checkmark.circle.fill"
-        }
-    }
 
     private func reminderRepairCard() -> some View {
         let issueText: String = {
@@ -982,164 +768,6 @@ private extension DashboardView {
         }
     }
 
-    private func sevenDayRhythmCard(
-        scheduledMedicationCount: Int,
-        setupIssueCount: Int,
-        checkInDays: Int
-    ) -> some View {
-        let hasSetupIssues = setupIssueCount > 0
-        let tint: Color = hasSetupIssues ? .orange : (checkInDays >= 7 ? .green : .blue)
-        let title = hasSetupIssues
-            ? NSLocalizedString("Finish Reminder Setup", comment: "")
-            : NSLocalizedString("7-Day Rhythm", comment: "")
-        let message: String = {
-            if hasSetupIssues {
-                return String(format: NSLocalizedString("%lld scheduled medications need reminder times or reminders turned on before a 7-day trial is reliable.", comment: ""), setupIssueCount)
-            }
-            if scheduledMedicationCount == 0 {
-                return NSLocalizedString("No fixed medications are scheduled. Log as-needed doses only when you actually take them.", comment: "")
-            }
-            if checkInDays == 0 {
-                return NSLocalizedString("Start today: respond to each due dose, then come back tomorrow.", comment: "")
-            }
-            if checkInDays >= 7 {
-                return NSLocalizedString("You have checked in across the last 7 days. Keep the same rhythm.", comment: "")
-            }
-            return String(format: NSLocalizedString("%lld of 7 days checked in. Keep logging each due dose for one week.", comment: ""), checkInDays)
-        }()
-
-        return Card {
-            HStack(alignment: .center, spacing: 12) {
-                Image(systemName: hasSetupIssues ? "bell.badge.fill" : "calendar.badge.checkmark")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(tint)
-                    .frame(width: 42, height: 42)
-                    .background(
-                        Circle()
-                            .fill(tint.opacity(0.10))
-                    )
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .appFont(.headline)
-                    Text(message)
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 8)
-
-                if !hasSetupIssues, scheduledMedicationCount > 0 {
-                    AppBadge(text: "\(min(checkInDays, 7))/7", tint: tint)
-                }
-            }
-        }
-    }
-
-    private func groupedScheduleCard(
-        title: String,
-        subtitle: String,
-        items: [MedSchedule],
-        statusCache: [String: TodayMedStatus]
-    ) -> some View {
-        let tint = attentionTint(for: items, statusCache: statusCache)
-
-        return Group {
-            if let tint {
-                TintedCard(tint: tint) {
-                    groupedScheduleCardContent(
-                        title: title,
-                        subtitle: subtitle,
-                        items: items,
-                        statusCache: statusCache,
-                        emphasized: true,
-                        accentTint: tint
-                    )
-                }
-            } else {
-                Card {
-                    groupedScheduleCardContent(
-                        title: title,
-                        subtitle: subtitle,
-                        items: items,
-                        statusCache: statusCache,
-                        emphasized: false,
-                        accentTint: nil
-                    )
-                }
-            }
-        }
-    }
-
-    private func groupedScheduleCardContent(
-        title: String,
-        subtitle: String,
-        items: [MedSchedule],
-        statusCache: [String: TodayMedStatus],
-        emphasized: Bool,
-        accentTint: Color?
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 10) {
-                Text(title)
-                    .appFont(.headline)
-                    .fontWeight(emphasized ? .bold : .semibold)
-                Spacer()
-                let count = items.count
-                AppBadge(
-                    text: count == 1
-                        ? NSLocalizedString("1 item", comment: "")
-                        : String(format: NSLocalizedString("%lld items", comment: ""), count),
-                    tint: accentTint ?? .secondary
-                )
-            }
-
-            Text(subtitle)
-                .appFont(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            VStack(spacing: 10) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { _, item in
-                    medRow(item: item, status: statusCache[item.id] ?? .none, emphasizeUrgency: emphasized)
-                }
-            }
-        }
-    }
-
-    private func prnCard(medications: [Medication]) -> some View {
-        let visibleMeds = Array(medications.prefix(2))
-        let hiddenCount = max(medications.count - visibleMeds.count, 0)
-        return Card {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(NSLocalizedString("As Needed", comment: ""))
-                        .appFont(.headline)
-                    Spacer()
-                    AppBadge(text: NSLocalizedString("Optional", comment: ""), tint: .secondary)
-                }
-                Text(NSLocalizedString("Log PRN medication only when you actually take it.", comment: ""))
-                    .appFont(.caption)
-                    .foregroundStyle(.secondary)
-
-                VStack(spacing: 10) {
-                    ForEach(Array(visibleMeds.enumerated()), id: \.element.id) { _, med in
-                        InsetPanel {
-                            prnMedRow(med: med)
-                        }
-                    }
-                }
-
-                if hiddenCount > 0 {
-                    Text(String(format: NSLocalizedString("%lld more as-needed medications saved.", comment: ""), hiddenCount))
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-
     private func latestTodayLogMap(now: Date = Date()) -> [ScheduleLookupKey: IntakeLog] {
         let cal = Calendar.current
         let start = cal.startOfDay(for: now)
@@ -1173,86 +801,6 @@ private extension DashboardView {
             return .skipped(entry.date)
         case .snoozed:
             return .snoozed(entry.date)
-        }
-    }
-
-    private func heroTint(for status: TodayMedStatus) -> Color {
-        switch status {
-        case .overdue:
-            return .red
-        case .dueSoon:
-            return .orange
-        case .snoozed:
-            return .blue
-        default:
-            return .green
-        }
-    }
-
-    private func heroEyebrow(for status: TodayMedStatus) -> String {
-        switch status {
-        case .overdue:
-            return NSLocalizedString("Overdue Dose", comment: "")
-        case .dueSoon:
-            return NSLocalizedString("Due Right Now", comment: "")
-        case .snoozed:
-            return NSLocalizedString("Snoozed Dose", comment: "")
-        default:
-            return NSLocalizedString("Next Dose", comment: "")
-        }
-    }
-
-    private func heroSupportText(for item: MedSchedule, status: TodayMedStatus) -> String {
-        switch status {
-        case .overdue:
-            return NSLocalizedString("Past your grace window. Handle this first.", comment: "")
-        case .dueSoon:
-            return NSLocalizedString("Current dose. Clear this before the rest.", comment: "")
-        case .snoozed:
-            return NSLocalizedString("Snoozed earlier. Back at the top.", comment: "")
-        default:
-            return NSLocalizedString("Next scheduled medication today.", comment: "")
-        }
-    }
-
-    private func attentionTint(for items: [MedSchedule], statusCache: [String: TodayMedStatus]) -> Color? {
-        let statuses = items.map { statusCache[$0.id] ?? .none }
-        if statuses.contains(where: {
-            if case .overdue = $0 { return true }
-            return false
-        }) {
-            return .red
-        }
-        if statuses.contains(where: {
-            if case .dueSoon = $0 { return true }
-            if case .snoozed = $0 { return true }
-            return false
-        }) {
-            return .orange
-        }
-        return nil
-    }
-
-    @ViewBuilder
-    private func statusBadge(for item: MedSchedule, status: TodayMedStatus) -> some View {
-        let tint = statusBadgeTint(for: status)
-        if let label = statusBadgeLabel(for: item, status: status) {
-            AppBadge(text: label, tint: tint, icon: statusBadgeIcon(for: status))
-        }
-    }
-
-    private func statusBadgeLabel(for item: MedSchedule, status: TodayMedStatus) -> String? {
-        switch status {
-        case .overdue:
-            return actionStatusLabel(for: status)
-        case .dueSoon:
-            return actionStatusLabel(for: status)
-        case .snoozed:
-            return actionStatusLabel(for: status)
-        case .none:
-            return item.time.formatted(date: .omitted, time: .shortened)
-        case .taken, .skipped:
-            return nil
         }
     }
 
@@ -1299,13 +847,6 @@ private extension DashboardView {
         }
     }
 
-    private func todayProgressText(taken: Int, total: Int) -> String {
-        guard total > 0 else {
-            return NSLocalizedString("No fixed doses scheduled today.", comment: "")
-        }
-        return String(format: NSLocalizedString("%lld of %lld fixed doses handled today.", comment: ""), taken, total)
-    }
-
     private func todayCompleteSummary(taken: Int, skipped: Int, total: Int) -> String {
         if skipped > 0 {
             return String(format: NSLocalizedString("%lld taken, %lld skipped out of %lld", comment: "complete summary"), taken, skipped, total)
@@ -1328,103 +869,6 @@ private extension DashboardView {
         } else {
             pendingNoteItem = item
             commitTaken(note: nil)
-        }
-    }
-
-    // MARK: - Medication Row (Things-style: tap circle = take)
-    @ViewBuilder
-    private func medRow(item: MedSchedule, status: TodayMedStatus, emphasizeUrgency: Bool = false) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            // Tappable circle — primary action
-            Button {
-                if canLogDose(for: item, status: status) {
-                    beginTakeFlow(for: item)
-                }
-            } label: {
-                statusDot(for: status)
-                    .frame(width: 28, height: 28)
-            }
-            .buttonStyle(.plain)
-            .disabled(!canLogDose(for: item, status: status))
-
-            // Content
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.med.name)
-                    .appFont(.body)
-                    .strikethrough(status.isFinal, color: .secondary)
-                    .foregroundStyle(status.isFinal ? .secondary : .primary)
-                Text("\(item.med.dose) · \(item.time, style: .time)")
-                    .appFont(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 4)
-
-            rowStatusAccessory(for: item, status: status)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, emphasizeUrgency ? 10 : 8)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(rowBackgroundTint(for: status, emphasized: emphasizeUrgency))
-        )
-        .contentShape(Rectangle())
-    }
-
-    @ViewBuilder
-    private func rowStatusAccessory(for item: MedSchedule, status: TodayMedStatus) -> some View {
-        switch status {
-        case .dueSoon, .overdue:
-            compactStatusBadge(for: status)
-        case .snoozed:
-            VStack(alignment: .trailing, spacing: 8) {
-                compactStatusBadge(for: status)
-                Button {
-                    beginTakeFlow(for: item)
-                } label: {
-                    Text(NSLocalizedString("Take", comment: ""))
-                        .appFont(.caption)
-                        .fontWeight(.semibold)
-                }
-                .buttonStyle(.bordered)
-                .tint(.green)
-                .controlSize(.mini)
-            }
-        default:
-            EmptyView()
-        }
-    }
-
-    private func compactStatusBadge(for status: TodayMedStatus) -> some View {
-        let tint = statusBadgeTint(for: status)
-        let label = actionStatusLabel(for: status) ?? ""
-
-        return AppBadge(text: label, tint: tint, icon: statusBadgeIcon(for: status))
-    }
-
-    private func rowBackgroundTint(for status: TodayMedStatus, emphasized: Bool) -> Color {
-        guard emphasized else {
-            switch status {
-            case .overdue:
-                return Color.red.opacity(0.07)
-            case .dueSoon:
-                return Color.orange.opacity(0.06)
-            case .snoozed:
-                return Color.blue.opacity(0.05)
-            default:
-                return Color.primary.opacity(0.03)
-            }
-        }
-
-        switch status {
-        case .overdue:
-            return Color.red.opacity(0.12)
-        case .dueSoon:
-            return Color.orange.opacity(0.11)
-        case .snoozed:
-            return Color.blue.opacity(0.10)
-        default:
-            return Color.white.opacity(0.45)
         }
     }
 

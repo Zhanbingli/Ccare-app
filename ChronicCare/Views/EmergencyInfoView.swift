@@ -524,8 +524,7 @@ struct EmergencyCardView: View {
         InsetPanel(tint: tint) {
             VStack(alignment: .leading, spacing: AppSpacing.xxSmall) {
                 Text(value)
-                    .appFont(.subheadline)
-                    .fontWeight(.semibold)
+                    .appFontNumeric(.subheadline)
                     .foregroundStyle(tint)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)

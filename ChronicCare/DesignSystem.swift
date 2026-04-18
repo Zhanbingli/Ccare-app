@@ -28,7 +28,6 @@ enum AppSemanticColor {
 }
 
 struct Card<Content: View>: View {
-    @Environment(\.colorScheme) private var colorScheme
     let content: Content
     init(@ViewBuilder content: () -> Content) { self.content = content() }
     var body: some View {
@@ -37,34 +36,13 @@ struct Card<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                    .fill(cardFill)
+                    .fill(Color(.secondarySystemGroupedBackground))
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                    .stroke(cardStroke, lineWidth: 1)
-            )
-            .shadow(color: cardShadow, radius: 14, x: 0, y: 8)
-    }
-
-    private var cardFill: Color {
-        colorScheme == .dark
-            ? Color.white.opacity(0.07)
-            : Color.white.opacity(0.82)
-    }
-
-    private var cardStroke: Color {
-        colorScheme == .dark
-            ? Color.white.opacity(0.07)
-            : Color.black.opacity(0.05)
-    }
-
-    private var cardShadow: Color {
-        colorScheme == .dark
-            ? Color.black.opacity(0.24)
-            : Color(red: 0.15, green: 0.22, blue: 0.28).opacity(0.10)
     }
 }
 
+/// Reserved for emphasis states (overdue dose, low supply, critical alert).
+/// Don't use as a default container — plain `Card` is the baseline now.
 struct TintedCard<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
     let tint: Color
@@ -79,13 +57,12 @@ struct TintedCard<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: AppRadius.hero, style: .continuous)
-                    .fill(tint.opacity(colorScheme == .dark ? 0.10 : 0.06))
+                    .fill(tint.opacity(colorScheme == .dark ? 0.12 : 0.07))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: AppRadius.hero, style: .continuous)
-                    .stroke(tint.opacity(colorScheme == .dark ? 0.18 : 0.12), lineWidth: 0.8)
+                    .stroke(tint.opacity(colorScheme == .dark ? 0.22 : 0.16), lineWidth: 1)
             )
-            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.16 : 0.06), radius: 8, x: 0, y: 4)
     }
 }
 
