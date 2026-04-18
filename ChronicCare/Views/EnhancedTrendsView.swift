@@ -75,7 +75,7 @@ struct EnhancedTrendsView: View {
                         if let selected = selectedDataPoint {
                             dataPointDetailCard(measurement: selected)
                                 .padding(.horizontal)
-                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                                .transition(.opacity)
                         }
 
                         aiInsightsSection
@@ -97,20 +97,12 @@ struct EnhancedTrendsView: View {
 
     // MARK: - Empty State
     private var emptyStateView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "chart.xyaxis.line")
-                .font(.system(size: 60))
-                .foregroundStyle(.secondary)
-            Text(NSLocalizedString("No data in range", comment: ""))
-                .appFont(.headline)
-                .foregroundStyle(.secondary)
-            Text(NSLocalizedString("Add measurements to see trends", comment: ""))
-                .appFont(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 300)
+        EmptyStateView(
+            systemImage: "chart.xyaxis.line",
+            title: NSLocalizedString("No data in range", comment: ""),
+            subtitle: NSLocalizedString("Add measurements to see trends", comment: "")
+        )
+        .frame(minHeight: 260)
     }
 
     // MARK: - KPI Header
@@ -130,14 +122,15 @@ struct EnhancedTrendsView: View {
                 .fontWeight(.bold)
                 .monospacedDigit()
                 .lineLimit(1)
+                .minimumScaleFactor(0.75)
             Text(label)
                 .appFont(.caption)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
+        .padding(.vertical, AppSpacing.small)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                 .fill(Color(.secondarySystemBackground))
         )
     }
@@ -179,6 +172,7 @@ struct EnhancedTrendsView: View {
                     .appFont(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
 
             Spacer(minLength: 0)
@@ -191,10 +185,10 @@ struct EnhancedTrendsView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, AppSpacing.medium)
         .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
                 .fill(Color(.secondarySystemBackground))
         )
     }
@@ -245,9 +239,9 @@ struct EnhancedTrendsView: View {
                         .lineSpacing(5)
                 }
             }
-            .padding(14)
+            .padding(AppSpacing.medium)
             .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                     .fill(Color(.secondarySystemBackground))
             )
         }

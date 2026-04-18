@@ -170,6 +170,7 @@ struct InsightsView: View {
                                         .appFont(.footnote)
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
+                                        .minimumScaleFactor(0.85)
                                 }
                             }
                         }

@@ -83,20 +83,12 @@ struct DrugInteractionView: View {
     }
 
     private var emptyStateView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "pills")
-                .font(.system(size: 60))
-                .foregroundStyle(.secondary)
-            Text(NSLocalizedString("No medications added", comment: ""))
-                .appFont(.headline)
-                .foregroundStyle(.secondary)
-            Text(NSLocalizedString("Add medications to analyze drug interactions", comment: ""))
-                .appFont(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
+        EmptyStateView(
+            systemImage: "pills",
+            title: NSLocalizedString("No medications added", comment: ""),
+            subtitle: NSLocalizedString("Add medications to analyze drug interactions", comment: "")
+        )
+        .padding(.vertical, 40)
     }
 
     private var medicationListSection: some View {

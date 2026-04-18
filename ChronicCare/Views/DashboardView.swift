@@ -3,8 +3,9 @@ import UserNotifications
 
 struct DashboardView: View {
     // V2 entry point injected from RootViewV2. When set, a weekly adherence
-    // reflection card is appended below today's actionable content.
-    var onOpenInsights: (() -> Void)? = nil
+    // reflection card is appended below today's actionable content that
+    // opens the adherence calendar directly.
+    var onOpenCalendar: (() -> Void)? = nil
 
     @EnvironmentObject var store: DataStore
     @State private var showAddMedication = false
@@ -219,7 +220,7 @@ struct DashboardView: View {
                                         statusCache: statusCache,
                                         currentActionID: currentAction?.id
                                     )
-                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                                    .transition(.opacity)
                                 }
                             }
                         } else {
@@ -243,8 +244,8 @@ struct DashboardView: View {
 
                         // Weekly reflection — placed last so it sits below today's
                         // actionable content, not competing with it.
-                        if let onOpenInsights, shouldShowWeeklyReflection {
-                            WeeklyAdherenceCard(onTap: onOpenInsights)
+                        if let onOpenCalendar, shouldShowWeeklyReflection {
+                            WeeklyAdherenceCard(onTap: onOpenCalendar)
                                 .padding(.top, 4)
                         }
                     }
@@ -461,21 +462,38 @@ private extension DashboardView {
             let status = statusCache[item.id] ?? .none
             TintedCard(tint: heroTint(for: status)) {
                 VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(actionStatusHeadline(for: status))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(item.med.name)
-                            .appFont(.largeTitle)
-                            .fontWeight(.bold)
-                        Text("\(item.med.dose) • \(item.time.formatted(date: .omitted, time: .shortened))")
-                            .appFont(.subheadline)
-                            .foregroundStyle(.secondary)
-                        if let fi = item.med.foodInstruction {
-                            Label(fi.displayName, systemImage: "fork.knife")
+                    HStack(alignment: .top, spacing: AppSpacing.medium) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(actionStatusHeadline(for: status))
                                 .appFont(.caption)
-                                .fontWeight(.medium)
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(.secondary)
+                            Text(item.med.name)
+                                .appFont(.largeTitle)
+                                .fontWeight(.bold)
+                            Text("\(item.med.dose) • \(item.time.formatted(date: .omitted, time: .shortened))")
+                                .appFont(.subheadline)
+                                .foregroundStyle(.secondary)
+                            if let fi = item.med.foodInstruction {
+                                Label(fi.displayName, systemImage: "fork.knife")
+                                    .appFont(.caption)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(.blue)
+                            }
+                        }
+
+                        Spacer(minLength: 0)
+
+                        if let path = item.med.imagePath, let ui = loadMedicationImage(path: path) {
+                            Image(uiImage: ui)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 64, height: 64)
+                                .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                                        .stroke(Color.white.opacity(0.35), lineWidth: 0.5)
+                                )
+                                .accessibilityLabel(String(format: NSLocalizedString("%@ photo", comment: "Medication thumbnail accessibility"), item.med.name))
                         }
                     }
 
@@ -495,7 +513,7 @@ private extension DashboardView {
                                 snoozeDose(for: item)
                             } label: {
                                 Text(snoozeButtonLabel(for: item))
-                                    .frame(maxWidth: .infinity, minHeight: 36)
+                                    .frame(maxWidth: .infinity, minHeight: 44)
                             }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
@@ -505,7 +523,7 @@ private extension DashboardView {
                                 skipDose(for: item)
                             } label: {
                                 Text(NSLocalizedString("Skip", comment: ""))
-                                    .frame(maxWidth: .infinity, minHeight: 36)
+                                    .frame(maxWidth: .infinity, minHeight: 44)
                             }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
@@ -527,7 +545,7 @@ private extension DashboardView {
                         if let fi = nextUpcoming.med.foodInstruction {
                             Label(fi.displayName, systemImage: "fork.knife")
                                 .appFont(.caption)
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(.blue)
                         }
                     }
                     Spacer()
@@ -631,21 +649,23 @@ private extension DashboardView {
                         skipDose(for: item)
                     } label: {
                         Text(NSLocalizedString("Skip", comment: ""))
-                            .appFont(.caption)
+                            .appFont(.footnote)
+                            .frame(minWidth: 44, minHeight: 44)
                     }
                     .buttonStyle(.bordered)
-                    .controlSize(.mini)
+                    .controlSize(.small)
                     .tint(.orange)
 
                     Button {
                         beginTakeFlow(for: item)
                     } label: {
                         Text(NSLocalizedString("Take", comment: ""))
-                            .appFont(.caption)
+                            .appFont(.footnote)
                             .fontWeight(.semibold)
+                            .frame(minWidth: 44, minHeight: 44)
                     }
                     .buttonStyle(.borderedProminent)
-                    .controlSize(.mini)
+                    .controlSize(.small)
                     .tint(.green)
                 }
             } else {
@@ -671,10 +691,13 @@ private extension DashboardView {
 
                 let visible = showAllPRN ? medications : Array(medications.prefix(3))
                 ForEach(visible) { med in
-                    prnMedRow(med: med)
-                    if med.id != visible.last?.id {
-                        Divider()
+                    VStack(spacing: 0) {
+                        prnMedRow(med: med)
+                        if med.id != visible.last?.id {
+                            Divider()
+                        }
                     }
+                    .transition(.opacity)
                 }
 
                 if medications.count > 3 {
@@ -1301,6 +1324,7 @@ private extension DashboardView {
             pendingNoteItem = item
             duplicateAlertMinutes = mins
             showDuplicateAlert = true
+            Haptics.notification(.warning)
         } else {
             pendingNoteItem = item
             commitTaken(note: nil)
@@ -1417,10 +1441,12 @@ private extension DashboardView {
                 Text(med.name)
                     .appFont(.body)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                 Text(med.dose)
                     .appFont(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
             .layoutPriority(1)
 
@@ -1431,6 +1457,7 @@ private extension DashboardView {
                     .appFont(.caption)
                     .foregroundStyle(.green)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                     .fixedSize()
             }
 

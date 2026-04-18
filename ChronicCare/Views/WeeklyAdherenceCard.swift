@@ -52,6 +52,7 @@ struct WeeklyAdherenceCard: View {
                         .appFont(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
@@ -70,6 +71,6 @@ struct WeeklyAdherenceCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityHint(NSLocalizedString("Opens full adherence insights.", comment: ""))
+        .accessibilityHint(NSLocalizedString("Opens adherence calendar.", comment: ""))
     }
 }

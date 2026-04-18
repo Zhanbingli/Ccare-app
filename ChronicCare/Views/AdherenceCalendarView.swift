@@ -99,10 +99,10 @@ struct AdherenceCalendarView: View {
                             .appFont(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, AppSpacing.small)
+                    .padding(.vertical, AppSpacing.xSmall)
                     .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
                             .fill(Color(.secondarySystemBackground))
                     )
                     .padding(.horizontal)
@@ -116,7 +116,8 @@ struct AdherenceCalendarView: View {
                 // Inline day detail (no sheet)
                 if let day = selectedDay {
                     dayDetailInline(date: day)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
+                        .id(day)
+                        .transition(.opacity)
                 }
             }
             .padding(.vertical)
@@ -162,20 +163,20 @@ struct AdherenceCalendarView: View {
 
         ZStack {
             // Background fill based on adherence
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: AppRadius.small)
                 .fill(cellFill(data: data))
                 .frame(height: 44)
 
             // Today ring
             if isToday {
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: AppRadius.small)
                     .strokeBorder(Color.accentColor, lineWidth: 2)
                     .frame(height: 44)
             }
 
             // Selected highlight
             if isSelected {
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: AppRadius.small)
                     .strokeBorder(Color.primary.opacity(0.4), lineWidth: 1.5)
                     .frame(height: 44)
             }
@@ -283,10 +284,10 @@ struct AdherenceCalendarView: View {
                                 HStack(spacing: 10) {
                                     statusIcon(log.status)
                                         .frame(width: 20)
-                                    Text(med.name)
-                                        .appFont(.subheadline)
-                                    if let key = log.scheduleKey {
-                                        Text(key)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(med.name)
+                                            .appFont(.subheadline)
+                                        Text(med.dose)
                                             .appFont(.caption)
                                             .foregroundStyle(.secondary)
                                     }
@@ -325,7 +326,7 @@ struct AdherenceCalendarView: View {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                 .fill(Color(.secondarySystemBackground))
         )
         .padding(.horizontal)

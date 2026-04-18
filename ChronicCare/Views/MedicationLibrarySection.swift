@@ -158,6 +158,7 @@ struct MedicationLibrarySection: View {
                         Text(med.name)
                             .appFont(.headline)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.85)
                         HStack(spacing: 4) {
                             Text(med.dose)
                                 .appFont(.caption)
@@ -251,9 +252,9 @@ struct MedicationLibrarySection: View {
         if let path = med.imagePath, let ui = loadMedicationImage(path: path) {
             Image(uiImage: ui).resizable().scaledToFill()
                 .frame(width: 40, height: 40)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
         } else {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
                 .fill(Color.accentColor.opacity(0.10))
                 .frame(width: 40, height: 40)
                 .overlay(
@@ -270,7 +271,7 @@ struct MedicationLibrarySection: View {
                   let date = cal.date(bySettingHour: h, minute: m, second: 0, of: Date()) else { return nil }
             return formatter.string(from: date)
         }
-        return Text(times.joined(separator: ", ")).appFont(.caption).foregroundStyle(.secondary).lineLimit(1)
+        return Text(times.joined(separator: ", ")).appFont(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.85)
     }
 
     @ViewBuilder

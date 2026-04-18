@@ -11,7 +11,6 @@ struct MedicationsView: View {
     @State private var showAdd = false
     @State private var detailTarget: Medication? = nil
     @State private var editTarget: Medication? = nil
-    @State private var showSettings = false
     @State private var showNotificationDeniedAlert = false
     @State private var deniedMedName: String? = nil
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
@@ -93,12 +92,6 @@ struct MedicationsView: View {
             }
             .navigationTitle(NSLocalizedString("Medications", comment: ""))
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { showSettings = true } label: {
-                        Image(systemName: "gearshape")
-                    }
-                    .accessibilityLabel(NSLocalizedString("Settings", comment: ""))
-                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showAdd = true } label: { Image(systemName: "plus") }
                         .accessibilityLabel(NSLocalizedString("Add Medication", comment: ""))
@@ -141,10 +134,6 @@ struct MedicationsView: View {
                         refreshNotificationStatus()
                     }
                 })
-            }
-            .sheet(isPresented: $showSettings) {
-                ProfileView()
-                    .environmentObject(store)
             }
             .onAppear(perform: refreshNotificationStatus)
             .onChange(of: store.medications.count) { _ in refreshNotificationStatus() }
@@ -251,15 +240,9 @@ private extension MedicationsView {
                     Text(medicationScheduleSummary(for: med))
                         .appFont(.caption)
                         .foregroundStyle(.secondary)
-                    HStack(spacing: 6) {
-                        Text(nextDoseSummary(for: med))
-                        if let fi = med.foodInstruction {
-                            Text("· \(fi.shortLabel)")
-                                .foregroundStyle(.orange)
-                        }
-                    }
-                    .appFont(.caption)
-                    .foregroundStyle(.secondary)
+                    Text(nextDoseSummary(for: med))
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 8)
                 VStack(alignment: .trailing, spacing: 6) {
@@ -280,7 +263,7 @@ private extension MedicationsView {
 
     private func managementLinkRow(title: String, subtitle: String, systemImage: String, tint: Color) -> some View {
         HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
                 .fill(tint.opacity(0.14))
                 .frame(width: 38, height: 38)
                 .overlay(
@@ -394,6 +377,7 @@ private extension MedicationsView {
                         Text(med.name)
                             .appFont(.headline)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.85)
                         if med.isAsNeeded != true && !med.remindersEnabled {
                             Text(NSLocalizedString("Paused", comment: ""))
                                 .appFont(.caption)
@@ -443,9 +427,9 @@ private extension MedicationsView {
                 }
             }
         }
-        .padding(12)
+        .padding(AppSpacing.small)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                 .fill(Color(.secondarySystemBackground))
         )
         .contentShape(Rectangle())
@@ -594,10 +578,10 @@ private extension MedicationsView {
                 .resizable()
                 .scaledToFill()
                 .frame(width: 40, height: 40)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
                 .accessibilityLabel(String(format: NSLocalizedString("%@ photo", comment: "Medication thumbnail accessibility"), med.name))
         } else {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
                 .fill(Color.accentColor.opacity(0.10))
                 .frame(width: 40, height: 40)
                 .overlay(
@@ -625,6 +609,7 @@ private extension MedicationsView {
             .appFont(.caption)
             .foregroundStyle(.secondary)
             .lineLimit(1)
+            .minimumScaleFactor(0.85)
     }
 
     private func reminderToggle(for med: Medication) -> some View {
