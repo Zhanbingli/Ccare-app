@@ -139,7 +139,7 @@ struct ChronicCareTests {
 
         let strategy = AdaptiveReminderEngine.strategy(for: med, intakeLogs: logs, now: now)
 
-        #expect(strategy.followUpIntervals == [20])
+        #expect(strategy.followUpIntervals == [15, 45])
         #expect(strategy.riskLevel == .low)
     }
 

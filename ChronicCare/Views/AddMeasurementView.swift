@@ -1,109 +1,6 @@
 import SwiftUI
 import UIKit
 
-struct MeasurementsView: View {
-    @EnvironmentObject var store: DataStore
-    @State private var showAdd = false
-    @State private var selectedType: MeasurementType? = nil
-    @AppStorage("units.glucose") private var glucoseUnitRaw: String = GlucoseUnit.mgdL.rawValue
-
-    var body: some View {
-        NavigationStack {
-            List {
-                if filteredMeasurements.isEmpty {
-                    EmptyStateView(systemImage: "heart.text.square", title: NSLocalizedString("No measurements yet", comment: ""), subtitle: NSLocalizedString("Add your first measurement", comment: ""), actionTitle: NSLocalizedString("Add", comment: "")) {
-                        showAdd = true
-                    }
-                    .listRowBackground(Color.clear)
-                } else {
-                    ForEach(groupedMeasurements, id: \.day) { section in
-                        Section(header: Text(sectionHeaderTitle(for: section.day)).appFont(.subheadline).foregroundStyle(.secondary)) {
-                            ForEach(section.entries) { m in
-                                HStack(spacing: 12) {
-                                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                        .fill(m.cardTint)
-                                        .frame(width: 4)
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        HStack(alignment: .firstTextBaseline) {
-                                            Text(m.type.displayName).appFont(.headline)
-                                            Spacer()
-                                            if m.type == .bloodPressure, let d = m.diastolic {
-                                                Text("\(Int(m.value))/\(Int(d)) \(m.type.unit)")
-                                                    .appFont(.headline)
-                                                    .foregroundStyle(m.valueForeground)
-                                            } else if m.type == .bloodGlucose {
-                                                let v = UnitPreferences.mgdlToPreferred(m.value)
-                                                let unit = UnitPreferences.glucoseUnit.rawValue
-                                                let formatted = UnitPreferences.glucoseUnit == .mgdL ? String(format: "%.0f", v) : String(format: "%.1f", v)
-                                                Text("\(formatted) \(unit)")
-                                                    .appFont(.headline)
-                                                    .foregroundStyle(m.valueForeground)
-                                            } else {
-                                                Text("\(String(format: "%.1f", m.value)) \(m.type.unit)")
-                                                    .appFont(.headline)
-                                                    .foregroundStyle(m.valueForeground)
-                                            }
-                                        }
-                                        Text(m.date, style: .time)
-                                            .appFont(.caption)
-                                            .foregroundStyle(.secondary)
-                                        if let note = m.note, !note.isEmpty {
-                                            Text(note).appFont(.footnote)
-                                        }
-                                    }
-                                }
-                                .padding(.vertical, 4)
-                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) {
-                                        if let i = store.measurements.firstIndex(where: { $0.id == m.id }) {
-                                            store.removeMeasurement(at: IndexSet(integer: i))
-                                        }
-                                    } label: { Label("Delete", systemImage: "trash") }
-                                    .tint(.red)
-                                }
-                                .contextMenu {
-                                    Button(role: .destructive) { if let i = store.measurements.firstIndex(where: { $0.id == m.id }) { store.removeMeasurement(at: IndexSet(integer: i)) } } label: { Label("Delete", systemImage: "trash") }
-                                    Button { UIPasteboard.general.string = "\(m.type.displayName): \(m.value)" } label: { Label("Copy", systemImage: "doc.on.doc") }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Measurements")
-            .navigationBarTitleDisplayMode(.inline)
-            .safeAreaInset(edge: .top) {
-                VStack(spacing: 8) {
-                    Picker("Type", selection: $selectedType) {
-                        Text("All").tag(MeasurementType?.none)
-                        ForEach(MeasurementType.allCases) { t in
-                            Text(t.displayName).tag(Optional(t))
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .controlSize(.large)
-                    .padding(.horizontal)
-                }
-                .padding(.vertical, 8)
-                .background(.thinMaterial)
-                .overlay(Divider(), alignment: .bottom)
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showAdd = true } label: { Image(systemName: "plus") }
-                        .accessibilityLabel(NSLocalizedString("Add Measurement", comment: ""))
-                }
-            }
-            .sheet(isPresented: $showAdd) {
-                AddMeasurementView { m in
-                    store.addMeasurement(m)
-                    Haptics.success()
-                }
-            }
-        }
-    }
-}
-
 struct AddMeasurementView: View {
     var onSave: (Measurement) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -405,7 +302,6 @@ struct AddMeasurementView: View {
     private func validateAndSave() {
         guard let measurement = makeMeasurement() else { return }
 
-        // Perform final validation
         var finalResult: ValidationResult = .valid
 
         switch type {
@@ -435,6 +331,9 @@ struct AddMeasurementView: View {
     }
 
     private func saveWithoutValidation() {
+        if !timeManuallySet {
+            date = Date()
+        }
         guard let measurement = makeMeasurement() else { return }
         onSave(measurement.clampedToNow())
         Haptics.success()
@@ -443,29 +342,6 @@ struct AddMeasurementView: View {
 }
 
 private extension AddMeasurementView {
-    private func measurementSectionHeader(step: String, title: String, detail: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text(step)
-                .appFont(.caption)
-                .fontWeight(.bold)
-                .foregroundStyle(Color.accentColor)
-                .frame(width: 24, height: 24)
-                .background(
-                    Circle()
-                        .fill(Color.accentColor.opacity(0.12))
-                )
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .appFont(.headline)
-                Text(detail)
-                    .appFont(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
     var bloodPressureEntryLayout: some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 10) {
@@ -643,43 +519,4 @@ private extension AddMeasurementView {
             )
         }
     }
-}
-
-private extension MeasurementsView {
-    struct MeasurementSection {
-        let day: Date
-        let entries: [Measurement]
-    }
-
-    var filteredMeasurements: [Measurement] {
-        if let t = selectedType {
-            return store.measurements.filter { $0.type == t }
-        } else {
-            return store.measurements
-        }
-    }
-
-    var groupedMeasurements: [MeasurementSection] {
-        let cal = Calendar.current
-        let groups = Dictionary(grouping: filteredMeasurements) { entry in
-            cal.startOfDay(for: entry.date)
-        }
-        return groups.keys.sorted(by: >).map { key in
-            MeasurementSection(day: key, entries: groups[key]!.sorted { $0.date > $1.date })
-        }
-    }
-
-    func sectionHeaderTitle(for date: Date) -> String {
-        let cal = Calendar.current
-        if cal.isDateInToday(date) { return NSLocalizedString("Today", comment: "") }
-        if cal.isDateInYesterday(date) { return NSLocalizedString("Yesterday", comment: "") }
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        return formatter.string(from: date)
-    }
-}
-
-
-#Preview {
-    MeasurementsView().environmentObject(DataStore())
 }

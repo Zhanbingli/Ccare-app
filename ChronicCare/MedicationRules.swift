@@ -19,7 +19,7 @@ struct MedicationRuleConfig: Codable, Equatable {
     static let defaults = MedicationRuleConfig(
         duplicateGuardMinutes: 30,
         makeupWindowFraction: 0.5,
-        timingConflictMinutes: 60,
+        timingConflictMinutes: 15,
         snoozeEscalation: [10, 30, 60],
         missEscalationThresholds: [2, 3]
     )
@@ -268,7 +268,6 @@ enum MedicationRules {
 
     struct DailySafetySummary {
         let timingConflicts: [String]
-        let makeupAvailable: [String]
         let missEscalations: [String]
 
         var hasIssues: Bool {
@@ -282,13 +281,9 @@ enum MedicationRules {
         consecutiveMissedDaysProvider: (UUID) -> Int,
         now: Date = Date()
     ) -> DailySafetySummary {
-        var makeupAvailable: [String] = []
         var missEscalations: [String] = []
 
-        let cal = Calendar.current
-
         for med in medications where med.remindersEnabled {
-            // Miss escalation
             let missed = consecutiveMissedDaysProvider(med.id)
             switch escalationLevel(for: med.id, consecutiveMissedDays: missed) {
             case .gentle(let days), .urgent(let days):
@@ -296,34 +291,8 @@ enum MedicationRules {
             case .none:
                 break
             }
-
-            // Makeup doses
-            let dayStart = cal.startOfDay(for: now)
-            let dayEnd = cal.date(byAdding: .day, value: 1, to: dayStart)!
-            for t in med.timesOfDay {
-                guard let h = t.hour, let m = t.minute,
-                      let sched = cal.date(bySettingHour: h, minute: m, second: 0, of: now),
-                      now > sched else { continue }
-
-                let key = String(format: "%02d:%02d", h, m)
-                let alreadyHandled = intakeLogs.contains { log in
-                    log.medicationID == med.id &&
-                    log.date >= dayStart && log.date < dayEnd &&
-                    log.scheduleKey == key &&
-                    (log.status == .taken || log.status == .skipped)
-                }
-                guard !alreadyHandled else { continue }
-
-                if case .canTakeLate = checkMakeupDose(medication: med, missedTime: t, now: now) {
-                    let formatter = DateFormatter()
-                    formatter.timeStyle = .short
-                    let timeStr = formatter.string(from: sched)
-                    makeupAvailable.append(String(format: NSLocalizedString("%@ (%@) — you can still take it now", comment: ""), med.name, timeStr))
-                }
-            }
         }
 
-        // Timing conflicts
         let conflicts = checkTimingConflicts(medications: medications)
         let conflictMessages = conflicts.compactMap { result -> String? in
             if case .tooClose(let m1, let m2, let gap) = result {
@@ -334,7 +303,6 @@ enum MedicationRules {
 
         return DailySafetySummary(
             timingConflicts: conflictMessages,
-            makeupAvailable: makeupAvailable,
             missEscalations: missEscalations
         )
     }

@@ -326,7 +326,7 @@ enum PDFGenerator {
             let footer = NSLocalizedString("This report is for informational purposes only. Consult your healthcare provider for medical advice.", comment: "")
             footer.draw(at: CGPoint(x: margin, y: y), withAttributes: smallAttrs)
         }
-        try data.write(to: url, options: [.atomic, .completeFileProtection])
+        try data.write(to: url, options: .atomic)
         try? (url as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
         return url
     }

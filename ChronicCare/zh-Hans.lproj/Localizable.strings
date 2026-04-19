@@ -263,6 +263,8 @@
 "Too late — next dose " = "已过补服窗口 — 下次 ";
 "%@ (%@) — you can still take it now" = "%@（%@）— 现在还可以补服";
 "%@ and %@ are only %lld minutes apart" = "%@ 和 %@ 只间隔 %lld 分钟";
+"Needs attention" = "需要关注";
+"Schedule overlap" = "服药时间过近";
 
 /* Behavioral Feedback */
 "Great job taking %@ consistently!" = "%@ 服药非常规律，继续保持！";
@@ -315,7 +317,7 @@
 "Reminders enabled!" = "提醒已开启！";
 "You can enable reminders later in Settings." = "您可以稍后在设置中开启提醒。";
 "You're All Set!" = "设置完成！";
-"You can add medications anytime from the Medications tab." = "您可以随时在「用药」标签页中添加药物。";
+"Add medications anytime from the profile drawer." = "您可以随时在个人中心添加药物。";
 "We'll remind you to take %@ on time." = "我们会按时提醒您服用%@。";
 "Go to Dashboard" = "进入首页";
 

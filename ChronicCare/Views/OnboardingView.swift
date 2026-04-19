@@ -4,231 +4,235 @@ struct OnboardingView: View {
     @EnvironmentObject var store: DataStore
     var onComplete: () -> Void
 
-    @State private var currentStep = 0
+    @State private var currentStep: Step = .welcome
     @State private var medName = ""
     @State private var medDose = ""
     @State private var medTime = Calendar.current.date(bySettingHour: 8, minute: 0, second: 0, of: Date()) ?? Date()
     @State private var notificationGranted: Bool?
 
-    private let totalSteps = 4
+    private enum Step {
+        case welcome, addMedication, notifications, completion
+    }
 
     var body: some View {
-        Group {
-            switch currentStep {
-            case 0: welcomeStep
-            case 1: addMedicationStep
-            case 2: notificationStep
-            default: completionStep
+        ZStack {
+            AppBackground()
+            Group {
+                switch currentStep {
+                case .welcome: welcomeStep
+                case .addMedication: addMedicationStep
+                case .notifications: notificationStep
+                case .completion: completionStep
+                }
             }
+            .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .leading)))
+            .animation(.easeInOut(duration: 0.3), value: currentStep)
         }
-        .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .leading)))
-        .animation(.easeInOut(duration: 0.3), value: currentStep)
-        .environment(\.font, AppFontStyle.body.font)
         .dynamicTypeSize(.medium ... .accessibility5)
     }
 
-    // MARK: - Step 0: Welcome
+    // MARK: - Step: Welcome
 
     private var welcomeStep: some View {
         VStack(spacing: 0) {
             Spacer()
-            VStack(spacing: 24) {
+            VStack(spacing: 20) {
                 Image(systemName: "heart.text.clipboard")
-                    .font(.system(size: 80))
+                    .font(.system(size: 72))
                     .foregroundStyle(Color.accentColor)
                     .symbolRenderingMode(.hierarchical)
 
-                Text(NSLocalizedString("Welcome to ChronicCare", comment: "onboarding"))
-                    .appFont(.title)
-                    .fontWeight(.bold)
-                    .multilineTextAlignment(.center)
+                Text(NSLocalizedString("ChronicCare", comment: "onboarding"))
+                    .appFont(.largeTitle)
 
-                Text(NSLocalizedString("Your personal medication companion. We'll help you stay on track with your health.", comment: "onboarding"))
+                Text(NSLocalizedString("Track medications, log measurements, stay consistent.", comment: "onboarding"))
                     .appFont(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, 32)
             }
             Spacer()
-            VStack(spacing: 16) {
-                Button {
-                    withAnimation { currentStep = 1 }
-                } label: {
-                    Text(NSLocalizedString("Get Started", comment: "onboarding"))
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-
-                skipButton
+            primaryButton(NSLocalizedString("Get Started", comment: "onboarding")) {
+                advance(to: .addMedication)
             }
-            .padding(.horizontal, 32)
-            .padding(.bottom, 48)
+            skipButton
         }
     }
 
-    // MARK: - Step 1: Add First Medication
+    // MARK: - Step: Add Medication
 
     private var addMedicationStep: some View {
         VStack(spacing: 0) {
-            VStack(spacing: 8) {
-                stepIndicator(current: 1)
-                Text(NSLocalizedString("Add Your First Medication", comment: "onboarding"))
-                    .appFont(.headline)
-            }
-            .padding(.top, 32)
+            header(
+                title: NSLocalizedString("Add your first medication", comment: "onboarding"),
+                subtitle: NSLocalizedString("You can change or add more anytime.", comment: "onboarding")
+            )
 
-            Form {
-                Section {
-                    TextField(NSLocalizedString("Medication Name", comment: ""), text: $medName)
+            ScrollView {
+                VStack(spacing: 14) {
+                    Card {
+                        VStack(alignment: .leading, spacing: 14) {
+                            labeledField(
+                                title: NSLocalizedString("Name", comment: ""),
+                                text: $medName,
+                                placeholder: NSLocalizedString("e.g. Metformin", comment: "")
+                            )
+                            Divider()
+                            labeledField(
+                                title: NSLocalizedString("Dose", comment: ""),
+                                text: $medDose,
+                                placeholder: NSLocalizedString("e.g. 500mg", comment: "")
+                            )
+                        }
+                    }
+
+                    Card {
+                        DatePicker(
+                            NSLocalizedString("Reminder time", comment: "onboarding"),
+                            selection: $medTime,
+                            displayedComponents: .hourAndMinute
+                        )
                         .appFont(.body)
-                    TextField(NSLocalizedString("Dose (e.g. 500mg)", comment: ""), text: $medDose)
-                        .appFont(.body)
-                } header: {
-                    Text(NSLocalizedString("What are you taking?", comment: ""))
+                    }
                 }
-
-                Section {
-                    DatePicker(
-                        NSLocalizedString("Reminder Time", comment: "onboarding"),
-                        selection: $medTime,
-                        displayedComponents: .hourAndMinute
-                    )
-                    .appFont(.body)
-                } header: {
-                    Text(NSLocalizedString("When do you take it?", comment: ""))
-                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
             }
-            .scrollContentBackground(.hidden)
 
-            VStack(spacing: 16) {
-                Button {
-                    withAnimation { currentStep = 2 }
-                } label: {
-                    Text(NSLocalizedString("Next", comment: "onboarding"))
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(medName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                skipButton
+            primaryButton(NSLocalizedString("Next", comment: "onboarding")) {
+                advance(to: .notifications)
             }
-            .padding(.horizontal, 32)
-            .padding(.bottom, 48)
+            .disabled(medName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+            skipButton
         }
     }
 
-    // MARK: - Step 2: Notification Permission
+    // MARK: - Step: Notifications
 
     private var notificationStep: some View {
         VStack(spacing: 0) {
             Spacer()
-            VStack(spacing: 24) {
-                stepIndicator(current: 2)
-
+            VStack(spacing: 20) {
                 Image(systemName: "bell.badge.fill")
-                    .font(.system(size: 64))
+                    .font(.system(size: 72))
                     .foregroundStyle(.orange)
                     .symbolRenderingMode(.hierarchical)
 
-                Text(NSLocalizedString("Enable Reminders", comment: "onboarding"))
-                    .appFont(.headline)
+                Text(NSLocalizedString("Turn on reminders", comment: "onboarding"))
+                    .appFont(.title)
 
-                Text(NSLocalizedString("We'll send you a gentle reminder when it's time to take your medication. You won't miss a dose.", comment: "onboarding"))
+                Text(NSLocalizedString("So you don't miss a dose.", comment: "onboarding"))
                     .appFont(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, 32)
 
                 if let granted = notificationGranted {
-                    HStack(spacing: 8) {
-                        Image(systemName: granted ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            .foregroundStyle(granted ? .green : .orange)
-                        Text(granted
-                             ? NSLocalizedString("Reminders enabled!", comment: "onboarding")
-                             : NSLocalizedString("You can enable reminders later in Settings.", comment: "onboarding"))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    grantStatusBadge(granted: granted)
                 }
             }
             Spacer()
-            VStack(spacing: 16) {
-                if notificationGranted == nil {
-                    Button {
-                        Task {
-                            let granted = await NotificationManager.shared.ensureAuthorization()
-                            await MainActor.run {
-                                notificationGranted = granted
-                                Haptics.success()
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                                    withAnimation { currentStep = 3 }
-                                }
-                            }
-                        }
-                    } label: {
-                        Label(NSLocalizedString("Enable Reminders", comment: "onboarding"), systemImage: "bell")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                } else {
-                    Button {
-                        withAnimation { currentStep = 3 }
-                    } label: {
-                        Text(NSLocalizedString("Next", comment: "onboarding"))
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                }
 
-                skipButton
+            if notificationGranted == nil {
+                primaryButton(NSLocalizedString("Enable Reminders", comment: "onboarding")) {
+                    requestNotificationPermission()
+                }
+            } else {
+                primaryButton(NSLocalizedString("Next", comment: "onboarding")) {
+                    advance(to: .completion)
+                }
             }
-            .padding(.horizontal, 32)
-            .padding(.bottom, 48)
+
+            skipButton
         }
     }
 
-    // MARK: - Step 3: Completion
+    // MARK: - Step: Completion
 
     private var completionStep: some View {
         VStack(spacing: 0) {
             Spacer()
-            VStack(spacing: 24) {
+            VStack(spacing: 20) {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 80))
+                    .font(.system(size: 72))
                     .foregroundStyle(.green)
                     .symbolRenderingMode(.hierarchical)
 
-                Text(NSLocalizedString("You're All Set!", comment: "onboarding"))
+                Text(NSLocalizedString("You're all set", comment: "onboarding"))
                     .appFont(.title)
-                    .fontWeight(.bold)
 
-                Text(medName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                     ? NSLocalizedString("You can add medications anytime from the Medications tab.", comment: "onboarding")
-                     : String(format: NSLocalizedString("We'll remind you to take %@ on time.", comment: "onboarding"), medName))
+                Text(completionSubtitle)
                     .appFont(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, 32)
             }
             Spacer()
-            Button {
+
+            primaryButton(NSLocalizedString("Go to Dashboard", comment: "onboarding")) {
                 finishOnboarding()
-            } label: {
-                Text(NSLocalizedString("Go to Dashboard", comment: "onboarding"))
-                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .padding(.horizontal, 32)
             .padding(.bottom, 48)
         }
     }
 
     // MARK: - Helpers
+
+    private var completionSubtitle: String {
+        let trimmed = medName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return NSLocalizedString("Add medications anytime from the profile drawer.", comment: "onboarding")
+        }
+        return String(format: NSLocalizedString("We'll remind you to take %@ on time.", comment: "onboarding"), trimmed)
+    }
+
+    private func header(title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .appFont(.title)
+            Text(subtitle)
+                .appFont(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.top, 40)
+        .padding(.bottom, 8)
+    }
+
+    private func labeledField(title: String, text: Binding<String>, placeholder: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .appFont(.caption)
+                .foregroundStyle(.secondary)
+            TextField(placeholder, text: text)
+                .appFont(.body)
+                .textFieldStyle(.plain)
+        }
+    }
+
+    private func grantStatusBadge(granted: Bool) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: granted ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .foregroundStyle(granted ? .green : .orange)
+            Text(granted
+                 ? NSLocalizedString("Reminders enabled", comment: "onboarding")
+                 : NSLocalizedString("You can enable reminders later in Settings.", comment: "onboarding"))
+                .appFont(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func primaryButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .padding(.horizontal, 20)
+    }
 
     private var skipButton: some View {
         Button {
@@ -238,15 +242,22 @@ struct OnboardingView: View {
                 .appFont(.subheadline)
                 .foregroundStyle(.secondary)
         }
+        .padding(.vertical, 16)
     }
 
-    private func stepIndicator(current: Int) -> some View {
-        HStack(spacing: 8) {
-            ForEach(1..<totalSteps, id: \.self) { step in
-                Capsule()
-                    .fill(step <= current ? Color.accentColor : Color.primary.opacity(0.15))
-                    .frame(width: step == current ? 24 : 8, height: 8)
-                    .animation(.easeInOut(duration: 0.2), value: current)
+    private func advance(to step: Step) {
+        withAnimation { currentStep = step }
+    }
+
+    private func requestNotificationPermission() {
+        Task {
+            let granted = await NotificationManager.shared.ensureAuthorization()
+            await MainActor.run {
+                notificationGranted = granted
+                Haptics.success()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    withAnimation { currentStep = .completion }
+                }
             }
         }
     }

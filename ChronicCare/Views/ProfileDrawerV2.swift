@@ -4,36 +4,31 @@ struct ProfileDrawerV2: View {
     @EnvironmentObject var store: DataStore
     @Environment(\.dismiss) private var dismiss
     @State private var medicationDeepLink: UUID? = .none
+    @State private var shareURL: URL?
+    @State private var showShare = false
+    @State private var shareErrorMessage: String?
+    @State private var showShareError = false
     var onLogMeasurement: () -> Void = {}
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    Button(action: onLogMeasurement) {
-                        HStack(spacing: AppSpacing.medium) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(Color.accentColor.opacity(0.15))
-                                    .frame(width: 34, height: 34)
-                                Image(systemName: "plus")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(Color.accentColor)
-                            }
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(NSLocalizedString("Log Measurement", comment: ""))
-                                    .appFont(.body)
-                                    .foregroundStyle(.primary)
-                                Text(NSLocalizedString("Blood pressure, glucose, weight, heart rate", comment: ""))
-                                    .appFont(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                        }
-                        .padding(.vertical, 4)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
+                    quickActionRow(
+                        icon: "plus",
+                        tint: .accentColor,
+                        title: NSLocalizedString("Log Measurement", comment: ""),
+                        subtitle: NSLocalizedString("Blood pressure, glucose, weight, heart rate", comment: ""),
+                        action: onLogMeasurement
+                    )
+
+                    quickActionRow(
+                        icon: "square.and.arrow.up",
+                        tint: .teal,
+                        title: NSLocalizedString("Share Health Report", comment: ""),
+                        subtitle: NSLocalizedString("PDF for your doctor — last 30 days", comment: ""),
+                        action: exportHealthReport
+                    )
                 }
 
                 Section {
@@ -98,6 +93,18 @@ struct ProfileDrawerV2: View {
                     Button(NSLocalizedString("Done", comment: "")) { dismiss() }
                 }
             }
+            .sheet(isPresented: $showShare) {
+                if let url = shareURL {
+                    ShareSheet(activityItems: [url])
+                }
+            }
+            .alert(NSLocalizedString("Could not create report", comment: ""), isPresented: $showShareError) {
+                Button(NSLocalizedString("OK", comment: ""), role: .cancel) {}
+            } message: {
+                if let message = shareErrorMessage {
+                    Text(message)
+                }
+            }
         }
     }
 
@@ -125,6 +132,53 @@ struct ProfileDrawerV2: View {
             return NSLocalizedString("No measurements yet", comment: "")
         }
         return String(format: NSLocalizedString("%d measurements", comment: ""), store.measurements.count)
+    }
+
+    @MainActor
+    private func exportHealthReport() {
+        do {
+            let url = try PDFGenerator.generateReport(store: store, days: 30)
+            shareURL = url
+            showShare = true
+            Haptics.success()
+        } catch {
+            shareErrorMessage = error.localizedDescription
+            showShareError = true
+        }
+    }
+
+    @ViewBuilder
+    private func quickActionRow(
+        icon: String,
+        tint: Color,
+        title: String,
+        subtitle: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: AppSpacing.medium) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(tint.opacity(0.15))
+                        .frame(width: 34, height: 34)
+                    Image(systemName: icon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(tint)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .appFont(.body)
+                        .foregroundStyle(.primary)
+                    Text(subtitle)
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder

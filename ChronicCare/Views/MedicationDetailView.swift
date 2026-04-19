@@ -9,22 +9,10 @@ struct MedicationDetailView: View {
     let onEdit: (Medication) -> Void
     private let snapshotColumns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
-    private var reminderStrategy: AdaptiveReminderStrategy {
-        AdaptiveReminderEngine.strategy(for: medication, intakeLogs: store.intakeLogs)
-    }
-
-    private var reminderProfile: AdherenceProfile {
-        AdaptiveReminderEngine.profile(for: medication, intakeLogs: store.intakeLogs)
-    }
-
     private var lastTakenLog: IntakeLog? {
         store.intakeLogs
             .filter { $0.medicationID == medication.id && $0.status == .taken }
             .max(by: { $0.effectiveRecordedAt < $1.effectiveRecordedAt })
-    }
-
-    private var adherence7: Double {
-        store.adherencePercent(for: medication.id, days: 7)
     }
 
     private var adherence30: Double {
@@ -33,15 +21,6 @@ struct MedicationDetailView: View {
 
     private var streakCount: Int {
         store.currentStreak(for: medication.id)
-    }
-
-    private var monthlyTakenCount: Int {
-        let cal = Calendar.current
-        let now = Date()
-        let start = cal.date(from: cal.dateComponents([.year, .month], from: now))!
-        return store.intakeLogs.filter {
-            $0.medicationID == medication.id && $0.status == .taken && $0.date >= start
-        }.count
     }
 
     private var scheduleText: String {
@@ -90,7 +69,7 @@ struct MedicationDetailView: View {
     }
 
     private var detailAccentTint: Color {
-        if medication.isLowSupply || !maintenanceSummary.isEmpty {
+        if medication.isLowSupply {
             return .orange
         }
         return reminderStateTint
@@ -171,102 +150,6 @@ struct MedicationDetailView: View {
         return scheduleText
     }
 
-    private var reminderSummary: String {
-        if medication.isAsNeeded == true {
-            return NSLocalizedString("This medication is set to as-needed, so fixed reminders are off.", comment: "")
-        }
-        if !medication.remindersEnabled {
-            return NSLocalizedString("Fixed reminders are turned off for this medication.", comment: "")
-        }
-        if medication.timesOfDay.isEmpty {
-            return NSLocalizedString("No reminder times are set yet.", comment: "")
-        }
-
-        let startText = reminderStrategy.leadMinutes > 0
-            ? String(format: NSLocalizedString("Starts %lld minutes early", comment: ""), reminderStrategy.leadMinutes)
-            : NSLocalizedString("Starts at the scheduled time", comment: "")
-        let followUpText = reminderStrategy.followUpIntervals.isEmpty
-            ? NSLocalizedString("No follow-up reminders", comment: "")
-            : String(format: NSLocalizedString("%lld follow-up reminders", comment: ""), reminderStrategy.followUpIntervals.count)
-        return "\(startText) · \(followUpText)"
-    }
-
-    private var reminderExplanation: String {
-        if medication.isAsNeeded == true {
-            return NSLocalizedString("No fixed notifications for PRN medications.", comment: "")
-        }
-        if !medication.remindersEnabled {
-            return NSLocalizedString("Turn reminders on to include this medication in scheduling.", comment: "")
-        }
-        if reminderProfile.sampleCount == 0 {
-            return NSLocalizedString("The reminder pattern will adapt after more scheduled logs.", comment: "")
-        }
-
-        switch reminderStrategy.riskLevel {
-        case .high:
-            return String(format: NSLocalizedString("Higher recent miss risk. Using %lld follow-ups.", comment: ""), reminderStrategy.followUpIntervals.count)
-        case .medium:
-            return String(format: NSLocalizedString("Some recent delays or snoozes. Using %lld follow-ups.", comment: ""), reminderStrategy.followUpIntervals.count)
-        case .low:
-            return NSLocalizedString("Recent history looks consistent. Keeping reminders lighter.", comment: "")
-        }
-    }
-
-    private var reminderRiskLabel: String {
-        switch reminderStrategy.riskLevel {
-        case .high:
-            return NSLocalizedString("High Attention", comment: "")
-        case .medium:
-            return NSLocalizedString("Balanced", comment: "")
-        case .low:
-            return NSLocalizedString("Light Touch", comment: "")
-        }
-    }
-
-    private var reminderRiskTint: Color {
-        switch reminderStrategy.riskLevel {
-        case .high: return .orange
-        case .medium: return .blue
-        case .low: return .green
-        }
-    }
-
-    private var maintenanceSummary: [String] {
-        var items: [String] = []
-        if let remaining = medication.pillsRemaining {
-            if let days = medication.daysOfSupplyRemaining {
-                items.append(String(format: NSLocalizedString("%lld pills left, about %lld days remaining.", comment: ""), remaining, days))
-            } else {
-                items.append(String(format: NSLocalizedString("%lld pills left.", comment: ""), remaining))
-            }
-        }
-        if let courseState = medication.courseState() {
-            switch courseState {
-            case .ended(let daysPast):
-                items.append(String(format: NSLocalizedString("Course ended %lld days ago.", comment: ""), daysPast))
-            case .endsToday:
-                items.append(NSLocalizedString("Course ends today.", comment: ""))
-            case .endingSoon(let daysRemaining):
-                items.append(String(format: NSLocalizedString("Course ends in %lld days.", comment: ""), daysRemaining))
-            case .scheduled(let daysRemaining):
-                items.append(String(format: NSLocalizedString("Course ends in %lld days.", comment: ""), daysRemaining))
-            }
-        }
-        return items
-    }
-
-    private var maintenanceTint: Color {
-        if medication.isLowSupply { return .orange }
-        if let state = medication.courseState() {
-            switch state {
-            case .ended, .endsToday: return .red
-            case .endingSoon: return .orange
-            case .scheduled: return .green
-            }
-        }
-        return .green
-    }
-
     private var correlatedTypes: [MeasurementType] {
         (medication.category == .unspecified ? nil : medication.category)?.correlatedMeasurementTypes ?? []
     }
@@ -304,10 +187,6 @@ struct MedicationDetailView: View {
         return delta < 0
             ? NSLocalizedString("Recent readings are trending lower.", comment: "")
             : NSLocalizedString("Recent readings are trending higher.", comment: "")
-    }
-
-    private var hasRelatedMeasurementData: Bool {
-        correlatedTypes.contains { relatedMeasurements(for: $0) != nil }
     }
 
     // MARK: - Hero Card Data
@@ -516,25 +395,6 @@ struct MedicationDetailView: View {
                                 detailMetric(value: nextDoseText, label: NSLocalizedString("Scheduled", comment: ""), tint: .blue)
                                 detailMetric(value: lastTakenText, label: NSLocalizedString("Last taken", comment: ""), tint: .green)
                             }
-                            InsetPanel(tint: reminderRiskTint) {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    HStack {
-                                        Text(NSLocalizedString("Reminder Strategy", comment: ""))
-                                            .appFont(.subheadline)
-                                            .fontWeight(.semibold)
-                                        Spacer()
-                                        reminderBadge(reminderRiskLabel, tint: reminderRiskTint)
-                                    }
-                                    Text(reminderSummary)
-                                        .appFont(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                    Text(reminderExplanation)
-                                        .appFont(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                            }
                             if medication.isAsNeeded != true && (!medication.remindersEnabled || medication.timesOfDay.isEmpty) {
                                 Button(NSLocalizedString("Fix Reminder Setup", comment: "")) {
                                     onEdit(medication)
@@ -550,10 +410,8 @@ struct MedicationDetailView: View {
                             Text(NSLocalizedString("Adherence", comment: ""))
                                 .appFont(.headline)
                             LazyVGrid(columns: snapshotColumns, spacing: 10) {
-                                detailMetric(value: String(format: "%.0f%%", adherence7 * 100), label: NSLocalizedString("7-day", comment: ""), tint: adherence7 >= 0.8 ? .green : adherence7 >= 0.5 ? .orange : .red)
                                 detailMetric(value: String(format: "%.0f%%", adherence30 * 100), label: NSLocalizedString("30-day", comment: ""), tint: adherence30 >= 0.8 ? .green : adherence30 >= 0.5 ? .orange : .red)
                                 detailMetric(value: "\(streakCount)", label: NSLocalizedString("day streak", comment: ""), tint: .blue)
-                                detailMetric(value: "\(monthlyTakenCount)", label: NSLocalizedString("this month", comment: ""), tint: .purple)
                             }
 
                             NavigationLink {
@@ -576,16 +434,6 @@ struct MedicationDetailView: View {
                                 }
                             }
                             .buttonStyle(.plain)
-                        }
-                    }
-
-                    if correlatedTypes.isEmpty {
-                        Card {
-                            EmptyStateView(
-                                systemImage: "waveform.badge.questionmark",
-                                title: NSLocalizedString("No linked health signals", comment: ""),
-                                subtitle: NSLocalizedString("Choose a medication category if you want this page to connect the medication with related measurements like blood pressure or glucose.", comment: "")
-                            )
                         }
                     }
 
@@ -633,41 +481,6 @@ struct MedicationDetailView: View {
                                     Text(relatedMeasurementTrendText(for: measurementType, data: data))
                                         .appFont(.caption)
                                         .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-
-                    if !correlatedTypes.isEmpty && !hasRelatedMeasurementData {
-                        Card {
-                            EmptyStateView(
-                                systemImage: "waveform.path.ecg.rectangle",
-                                title: NSLocalizedString("No related measurements yet", comment: ""),
-                                subtitle: NSLocalizedString("Log measurements like blood pressure or glucose to see whether this medication lines up with recent trends.", comment: "")
-                            )
-                        }
-                    }
-
-                    if !maintenanceSummary.isEmpty {
-                        Card {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text(NSLocalizedString("Maintenance", comment: ""))
-                                    .appFont(.headline)
-                                InsetPanel(tint: maintenanceTint) {
-                                    VStack(alignment: .leading, spacing: 10) {
-                                        ForEach(maintenanceSummary, id: \.self) { item in
-                                            HStack(alignment: .top, spacing: 8) {
-                                                Circle()
-                                                    .fill(Color.secondary.opacity(0.45))
-                                                    .frame(width: 5, height: 5)
-                                                    .padding(.top, 7)
-                                                Text(item)
-                                                    .appFont(.subheadline)
-                                                    .foregroundStyle(.secondary)
-                                                    .fixedSize(horizontal: false, vertical: true)
-                                            }
-                                        }
-                                    }
                                 }
                             }
                         }

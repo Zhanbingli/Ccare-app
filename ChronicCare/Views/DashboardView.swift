@@ -16,8 +16,6 @@ struct DashboardView: View {
     @State private var pendingNoteItem: MedSchedule?
     @State private var showDuplicateAlert = false
     @State private var duplicateAlertMinutes: Int = 0
-    @State private var safetyAlerts: [String] = []
-    @State private var showSafetyAlerts = false
     @AppStorage("units.glucose") private var glucoseUnitRaw: String = GlucoseUnit.mgdL.rawValue
     @AppStorage("prefs.graceMinutes") private var graceMinutes: Int = 30
     @State private var tick = false
@@ -183,6 +181,11 @@ struct DashboardView: View {
                             reminderRepairCard()
                         }
 
+                        let safety = safetySummary
+                        if safety.hasIssues {
+                            safetyNoticeCard(summary: safety)
+                        }
+
                         let allComplete = currentAction == nil && nextUpcoming == nil && totalCount > 0
 
                         if !allComplete, let gap = daysSinceLastLog, gap >= 2 {
@@ -293,13 +296,6 @@ struct DashboardView: View {
             }
             .onAppear {
                 refreshNotificationStatus()
-                runDailySafetyCheck()
-            }
-            // Safety alerts from rule engine
-            .alert(NSLocalizedString("Safety Check", comment: ""), isPresented: $showSafetyAlerts) {
-                Button(NSLocalizedString("OK", comment: ""), role: .cancel) { }
-            } message: {
-                Text(safetyAlerts.joined(separator: "\n\n"))
             }
         }
     }
@@ -1040,29 +1036,41 @@ private extension DashboardView {
         }
     }
 
-    private func runDailySafetyCheck() {
-        let key = "lastSafetyCheckDate"
-        let today = Calendar.current.startOfDay(for: Date())
-        if let last = UserDefaults.standard.object(forKey: key) as? Date,
-           Calendar.current.isDate(last, inSameDayAs: today) {
-            return
-        }
-
-        let summary = MedicationRules.dailySafetyCheck(
+    private var safetySummary: MedicationRules.DailySafetySummary {
+        MedicationRules.dailySafetyCheck(
             medications: store.medications,
             intakeLogs: store.intakeLogs,
             consecutiveMissedDaysProvider: { store.consecutiveMissedDays(for: $0) }
         )
-        var alerts: [String] = []
-        alerts.append(contentsOf: summary.missEscalations)
-        alerts.append(contentsOf: summary.timingConflicts)
-        alerts.append(contentsOf: summary.makeupAvailable)
+    }
 
-        UserDefaults.standard.set(today, forKey: key)
+    @ViewBuilder
+    private func safetyNoticeCard(summary: MedicationRules.DailySafetySummary) -> some View {
+        let items = summary.missEscalations + summary.timingConflicts
+        let tint: Color = summary.missEscalations.isEmpty ? .orange : .red
+        let title = summary.missEscalations.isEmpty
+            ? NSLocalizedString("Schedule overlap", comment: "")
+            : NSLocalizedString("Needs attention", comment: "")
 
-        if !alerts.isEmpty {
-            safetyAlerts = alerts
-            showSafetyAlerts = true
+        TintedCard(tint: tint) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(tint.opacity(0.12)))
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title).appFont(.headline)
+                    ForEach(items, id: \.self) { item in
+                        Text("• \(item)")
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
         }
     }
 

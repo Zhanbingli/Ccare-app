@@ -1,10 +1,9 @@
 import SwiftUI
 
-/// V2 app root. Replaces ContentView's three-tab shell with a single Home
-/// (DashboardView) + a Profile drawer that houses Medications / Emergency /
-/// Caregivers / Settings. The weekly reflection card on Home opens the
-/// adherence calendar directly — it's the natural deepening of "how am I
-/// doing this week".
+/// App root: single Home (DashboardView) + a Profile drawer that houses
+/// Medications / Emergency / Caregivers / Settings. The weekly reflection
+/// card on Home opens the adherence calendar directly — the natural
+/// deepening of "how am I doing this week".
 struct RootViewV2: View {
     @EnvironmentObject var store: DataStore
     @Environment(\.scenePhase) private var scenePhase
@@ -12,6 +11,7 @@ struct RootViewV2: View {
     @State private var showProfileDrawer = false
     @State private var showLogSheet = false
     @State private var showAdherenceCalendar = false
+    @State private var showInsightsSheet = false
     @State private var showMedicationSheet = false
     @State private var deepLinkMedicationID: UUID? = nil
 
@@ -60,6 +60,19 @@ struct RootViewV2: View {
                         ToolbarItem(placement: .topBarTrailing) {
                             Button(NSLocalizedString("Done", comment: "")) {
                                 showAdherenceCalendar = false
+                            }
+                        }
+                }
+            }
+        }
+        .sheet(isPresented: $showInsightsSheet) {
+            NavigationStack {
+                EnhancedTrendsView()
+                    .environmentObject(store)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button(NSLocalizedString("Done", comment: "")) {
+                                showInsightsSheet = false
                             }
                         }
                     }
@@ -135,6 +148,7 @@ struct RootViewV2: View {
         case "today":
             showProfileDrawer = false
             showAdherenceCalendar = false
+            showInsightsSheet = false
             showMedicationSheet = false
         case "medication":
             let candidate = pathComponents.first ?? url.lastPathComponent
@@ -145,7 +159,10 @@ struct RootViewV2: View {
                 showMedicationSheet = true
             }
         case "insights":
-            showAdherenceCalendar = true
+            showProfileDrawer = false
+            showAdherenceCalendar = false
+            showMedicationSheet = false
+            showInsightsSheet = true
         default:
             break
         }
