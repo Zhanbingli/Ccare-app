@@ -291,6 +291,14 @@ final class NotificationManager {
                 )
                 .filter { medication.isDoseActive(on: $0) }
                 .forEach { doseDate in
+                    guard Self.shouldScheduleDoseReminder(
+                        medicationID: medication.id,
+                        scheduleTime: timeComponents,
+                        doseDate: doseDate,
+                        intakeLogs: intakeLogs,
+                        allowNilScheduleKey: medication.timesOfDay.count <= 1
+                    ) else { return }
+
                     guard let primaryFireDate = resolvedPrimaryFireDate(
                         for: doseDate,
                         leadMinutes: strategy.leadMinutes,
@@ -492,7 +500,9 @@ final class NotificationManager {
         let cal = Calendar.current
         let today = cal.startOfDay(for: now)
         let id = instanceId(for: medicationID, date: today, comps: timeComponents)
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id])
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [id])
+        center.removeDeliveredNotifications(withIdentifiers: [id])
     }
 
     func cancelAll(for medication: Medication) {
@@ -849,5 +859,48 @@ extension NotificationManager {
         }
         // snooze_<UUID>_HH_MM → no date component, return nil (caller uses userInfo)
         return nil
+    }
+
+    static func shouldScheduleDoseReminder(
+        medicationID: UUID,
+        scheduleTime: DateComponents,
+        doseDate: Date,
+        intakeLogs: [IntakeLog],
+        allowNilScheduleKey: Bool,
+        calendar: Calendar = .current
+    ) -> Bool {
+        latestDoseOutcome(
+            medicationID: medicationID,
+            scheduleTime: scheduleTime,
+            doseDate: doseDate,
+            intakeLogs: intakeLogs,
+            allowNilScheduleKey: allowNilScheduleKey,
+            calendar: calendar
+        ) == nil
+    }
+
+    static func latestDoseOutcome(
+        medicationID: UUID,
+        scheduleTime: DateComponents,
+        doseDate: Date,
+        intakeLogs: [IntakeLog],
+        allowNilScheduleKey: Bool,
+        calendar: Calendar = .current
+    ) -> IntakeStatus? {
+        guard let h = scheduleTime.hour, let m = scheduleTime.minute else { return nil }
+        let key = String(format: "%02d:%02d", h, m)
+        let dayStart = calendar.startOfDay(for: doseDate)
+        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return nil }
+
+        return intakeLogs
+            .filter { log in
+                log.medicationID == medicationID
+                    && log.date >= dayStart
+                    && log.date < dayEnd
+                    && (log.scheduleKey == key || (allowNilScheduleKey && log.scheduleKey == nil))
+            }
+            .sorted { $0.effectiveRecordedAt > $1.effectiveRecordedAt }
+            .first?
+            .status
     }
 }

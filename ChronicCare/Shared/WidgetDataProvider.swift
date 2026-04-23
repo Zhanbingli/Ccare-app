@@ -21,7 +21,7 @@ struct WidgetDoseEntry: Codable, Identifiable {
 }
 
 enum WidgetDataProvider {
-    static let appGroupID = "group.lizhanbing.Ccare"
+    static let appGroupID = "group.ccare"
     private static let widgetFileProtection: Data.WritingOptions = [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
 
     static var sharedContainerURL: URL? {

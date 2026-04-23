@@ -79,6 +79,69 @@ struct ChronicCareTests {
         #expect(count == 1)
     }
 
+    @Test func doseSchedulingSkipsLoggedOutcomeForSameScheduleAndDay() {
+        let medID = UUID()
+        let morning = DateComponents(hour: 8, minute: 0)
+        let evening = DateComponents(hour: 20, minute: 0)
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(secondsFromGMT: 0)!
+        let day = cal.date(from: DateComponents(year: 2026, month: 4, day: 8))!
+        let morningDate = cal.date(bySettingHour: 8, minute: 0, second: 0, of: day)!
+        let eveningDate = cal.date(bySettingHour: 20, minute: 0, second: 0, of: day)!
+        let log = IntakeLog(
+            medicationID: medID,
+            date: morningDate,
+            status: .taken,
+            scheduleKey: "08:00",
+            scheduledDate: morningDate,
+            recordedAt: morningDate.addingTimeInterval(60)
+        )
+
+        #expect(NotificationManager.shouldScheduleDoseReminder(
+            medicationID: medID,
+            scheduleTime: morning,
+            doseDate: morningDate,
+            intakeLogs: [log],
+            allowNilScheduleKey: false,
+            calendar: cal
+        ) == false)
+
+        #expect(NotificationManager.shouldScheduleDoseReminder(
+            medicationID: medID,
+            scheduleTime: evening,
+            doseDate: eveningDate,
+            intakeLogs: [log],
+            allowNilScheduleKey: false,
+            calendar: cal
+        ))
+    }
+
+    @Test func doseSchedulingSkipsSnoozedOutcomeForSameScheduleAndDay() {
+        let medID = UUID()
+        let morning = DateComponents(hour: 8, minute: 0)
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(secondsFromGMT: 0)!
+        let day = cal.date(from: DateComponents(year: 2026, month: 4, day: 8))!
+        let morningDate = cal.date(bySettingHour: 8, minute: 0, second: 0, of: day)!
+        let log = IntakeLog(
+            medicationID: medID,
+            date: morningDate,
+            status: .snoozed,
+            scheduleKey: "08:00",
+            scheduledDate: morningDate,
+            recordedAt: morningDate.addingTimeInterval(120)
+        )
+
+        #expect(NotificationManager.shouldScheduleDoseReminder(
+            medicationID: medID,
+            scheduleTime: morning,
+            doseDate: morningDate,
+            intakeLogs: [log],
+            allowNilScheduleKey: false,
+            calendar: cal
+        ) == false)
+    }
+
     @Test func measurementClampsFutureDateToNow() {
         let now = Date()
         let future = now.addingTimeInterval(60 * 60 * 24)
