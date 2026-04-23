@@ -39,7 +39,7 @@
 "Medication Update — %@" = "用药动态 — %@";
 "No medications scheduled today." = "今日无用药计划。";
 "  ⚠ %lld pills left — refill needed" = "  ⚠ 剩余 %lld 片 — 需要补药";
-"Sent from Ccare" = "来自 ChronicCare";
+"Sent from Ccare" = "来自药时护";
 
 /* Intake Notes */
 "Add a Note?" = "添加备注？";
@@ -216,7 +216,7 @@
 "Success" = "成功";
 
 /* PDF Report */
-"Ccare Health Report" = "ChronicCare 健康报告";
+"Ccare Health Report" = "药时护健康报告";
 "Generated: %@" = "生成时间：%@";
 "Report period: Last %lld days" = "报告周期：最近 %lld 天";
 "Overall Adherence" = "总体依从率";
@@ -239,7 +239,7 @@
 "This report is for informational purposes only. Consult your healthcare provider for medical advice." = "本报告仅供参考，不构成医疗建议。请咨询您的医生获取专业意见。";
 
 /* About */
-"Ccare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice." = "ChronicCare 将数据保存在本地，仅在你授权后使用 Apple 健康。本应用不提供医疗建议。";
+"Ccare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice." = "药时护将数据保存在本地，仅在你授权后使用 Apple 健康。本应用不提供医疗建议。";
 
 /* AI Analysis */
 "AI Analysis" = "AI 分析";
@@ -305,7 +305,8 @@
 "Your AI configuration has been updated successfully" = "AI 配置已更新成功";
 
 /* Onboarding */
-"Welcome to Ccare" = "欢迎使用 ChronicCare";
+"Welcome to Ccare" = "欢迎使用药时护";
+"Ccare" = "药时护";
 "Your personal medication companion. We'll help you stay on track with your health." = "您的个人用药助手，帮您按时服药、守护健康。";
 "Get Started" = "开始设置";
 "Skip for now" = "稍后再说";
@@ -354,7 +355,7 @@
 "When you miss medication for 2+ days, we'll remind you to share your status with this person." = "连续漏服2天以上时，我们会提醒您与此人分享用药状态。";
 "Medication Update — %@" = "用药更新 — %@";
 "Upcoming" = "待服用";
-"Sent from Ccare" = "来自 ChronicCare";
+"Sent from Ccare" = "来自药时护";
 "Share with Caregiver?" = "通知照护者？";
 "You haven't taken %@ for %lld days. Would you like to share your status with %@?" = "您已%lld天未服用%@，是否通知%@？";
 
@@ -740,7 +741,7 @@
 /* ProfileView */
 "Backup & Export" = "备份与导出";
 "Care & Emergency" = "照护与紧急信息";
-"ChronicCare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice." = "ChronicCare 会将数据保存在本地，并仅在你授权后使用 Apple Health。它不提供医疗建议。";
+"Ccare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice." = "药时护会将数据保存在本地，并仅在你授权后使用 Apple Health。它不提供医疗建议。";
 "Danger Zone" = "危险操作";
 "Edit Emergency Info" = "编辑紧急信息";
 "Keep emergency details and caregiver access up to date for missed-dose support." = "请及时更新紧急信息和照护人设置，以便在漏服支持时能顺利使用。";
@@ -957,21 +958,21 @@
 // MARK: - Privacy Policy
 "Privacy Policy" = "隐私政策";
 "About" = "关于";
-"ChronicCare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice — always consult your doctor." = "ChronicCare 将数据保存在设备上，仅在获得许可后使用 Apple 健康。本应用不提供医疗建议——请咨询医生。";
+"Ccare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice — always consult your doctor." = "药时护将数据保存在设备上，仅在获得许可后使用 Apple 健康。本应用不提供医疗建议——请咨询医生。";
 "Overview" = "概述";
-"药时护 is designed with your privacy as a priority. Medication routines, health measurements, intake logs, contacts, and settings are stored locally on your device. We do not operate analytics, advertising, or tracking services." = "药时护以保护隐私为首要设计原则。服药计划、健康测量、服药记录、联系人和设置均存储在您的设备上。我们不运营分析、广告或追踪服务。";
+"Ccare is designed with your privacy as a priority. Medication routines, health measurements, intake logs, contacts, and settings are stored locally on your device. We do not operate analytics, advertising, or tracking services." = "药时护以保护隐私为首要设计原则。服药计划、健康测量、服药记录、联系人和设置均存储在您的设备上。我们不运营分析、广告或追踪服务。";
 "Data Stored on Device" = "存储在设备上的数据";
 "The following data is stored only on your device:\n• Medications and dosing schedules\n• Health measurements (blood pressure, blood glucose, weight, heart rate)\n• Intake logs and adherence history\n• Emergency contacts and medical information\n• Caregiver contact information\n• App preferences and settings" = "以下数据仅存储在您的设备上：\n• 药物和服药计划\n• 健康测量数据（血压、血糖、体重、心率）\n• 服药记录和依从性历史\n• 紧急联系人和医疗信息\n• 照护人联系信息\n• 应用偏好设置";
 "Apple Health Integration" = "Apple 健康整合";
-"If you grant permission, 药时护 can read and write health measurements to Apple Health. This data exchange happens entirely on your device through Apple's HealthKit framework. We never access your Apple Health data remotely." = "如果您授权，药时护可以向 Apple 健康读取和写入健康测量数据。数据交换完全在您的设备上通过 Apple HealthKit 框架进行，我们绝不会远程访问您的 Apple 健康数据。";
+"If you grant permission, Ccare can read and write health measurements to Apple Health. This data exchange happens entirely on your device through Apple's HealthKit framework. We never access your Apple Health data remotely." = "如果您授权，药时护可以向 Apple 健康读取和写入健康测量数据。数据交换完全在您的设备上通过 Apple HealthKit 框架进行，我们绝不会远程访问您的 Apple 健康数据。";
 "Camera Access" = "相机访问";
 "The camera is used solely to scan medication labels for assisted data entry. Photos taken for scanning are processed on-device and are not stored or transmitted unless you choose to save a medication photo." = "相机仅用于扫描药物标签以辅助数据录入。扫描拍摄的照片在设备上处理，除非您选择保存药物照片，否则不会被存储或传输。";
 "Notifications" = "通知";
-"With your permission, 药时护 sends local notifications to remind you of medication doses. These notifications are scheduled on-device and do not involve any external server." = "经您许可，药时护会发送本地通知提醒您服药。这些通知在设备上调度，不涉及任何外部服务器。";
+"With your permission, Ccare sends local notifications to remind you of medication doses. These notifications are scheduled on-device and do not involve any external server." = "经您许可，药时护会发送本地通知提醒您服药。这些通知在设备上调度，不涉及任何外部服务器。";
 "AI Features" = "AI 功能";
 "If you choose to use AI-powered features (such as drug interaction checks), the text you enter for that AI request is sent to the configured AI service for processing. No medication or health data is sent automatically unless you explicitly include it in your query. The AI API key is stored securely in your device's Keychain." = "如果您使用 AI 功能（如药物相互作用检查），您为该 AI 请求输入的文本会被发送到配置的 AI 服务进行处理。除非您主动写入查询，否则不会自动发送药物或健康数据。AI API 密钥安全存储在设备的钥匙串中。";
 "No Analytics or Tracking" = "无分析或追踪";
-"药时护 does not use any analytics, crash reporting, or advertising frameworks. We do not track your usage or behavior in any way." = "药时护不使用任何分析、崩溃报告或广告框架。我们不会以任何方式追踪您的使用情况或行为。";
+"Ccare does not use any analytics, crash reporting, or advertising frameworks. We do not track your usage or behavior in any way." = "药时护不使用任何分析、崩溃报告或广告框架。我们不会以任何方式追踪您的使用情况或行为。";
 "Data Deletion" = "数据删除";
 "You can delete all your data at any time from Settings > Clear All Data. Uninstalling the app also removes all stored data from your device." = "您可以随时在「设置 > 清除所有数据」中删除所有数据。卸载应用也会从设备中移除所有存储的数据。";
 "Changes to This Policy" = "政策变更";
@@ -1107,12 +1108,12 @@
 "Your adherence to %@ is %d%% in the past week. Consistent use is important for best results." = "你过去一周对 %@ 的依从率为 %d%%，坚持服药对效果很重要。";
 
 /* Missing translations — Other */
-"ChronicCare Health Report" = "ChronicCare 健康报告";
+"Ccare Health Report" = "药时护健康报告";
 "Log" = "记录";
 "Refresh" = "刷新";
 "Saved" = "已保存";
 "Share Medical Summary" = "分享医疗摘要";
-"Welcome to ChronicCare" = "欢迎使用 ChronicCare";
+"Welcome to Ccare" = "欢迎使用药时护";
 "Suggested next step:" = "建议下一步：";
 "Context Notes" = "备注";
 "Symptoms, meals, activity..." = "症状、饮食、活动…";
@@ -1139,7 +1140,7 @@
 "Next %@" = "下次 %@";
 "All caught up" = "全部完成";
 "No scheduled dose" = "无排定剂量";
-"Open ChronicCare to set up" = "打开 ChronicCare 设置用药";
+"Open Ccare to set up" = "打开药时护设置用药";
 
 /* Schedule Presets */
 "Once Daily" = "每日一次";

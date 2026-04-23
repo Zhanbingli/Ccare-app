@@ -409,7 +409,7 @@
 				DEVELOPMENT_TEAM = 635R58Z8K8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = CcareWidgit/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "药时护小组件";
+				INFOPLIST_KEY_CFBundleDisplayName = "Ccare Widget";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -438,7 +438,7 @@
 				DEVELOPMENT_TEAM = 635R58Z8K8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = CcareWidgit/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "药时护小组件";
+				INFOPLIST_KEY_CFBundleDisplayName = "Ccare Widget";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -588,13 +588,13 @@
 				DEVELOPMENT_TEAM = 635R58Z8K8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "药时护";
+				INFOPLIST_KEY_CFBundleDisplayName = Ccare;
 				INFOPLIST_KEY_CFBundleURLTypes = "{\n    CFBundleTypeRole = Editor;\n    CFBundleURLName = \"lizhanbing.Ccare\";\n    CFBundleURLSchemes =     (\n        chroniccare\n    );\n}";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_NSCameraUsageDescription = "药时护 uses the camera to scan medication labels and fill in medication details.";
-				INFOPLIST_KEY_NSContactsUsageDescription = "药时护 uses Contacts so you can add emergency contacts and caregivers without typing them manually.";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "药时护 uses Health to read your health data (blood pressure, blood glucose, heart rate, weight) for trends and insights.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "药时护 writes measurements you add to Apple Health for safe storage and cross-app use.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Ccare uses the camera to scan medication labels and fill in medication details.";
+				INFOPLIST_KEY_NSContactsUsageDescription = "Ccare uses Contacts so you can add emergency contacts and caregivers without typing them manually.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Ccare uses Health to read your health data (blood pressure, blood glucose, heart rate, weight) for trends and insights.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Ccare writes measurements you add to Apple Health for safe storage and cross-app use.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -624,13 +624,13 @@
 				DEVELOPMENT_TEAM = 635R58Z8K8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "药时护";
+				INFOPLIST_KEY_CFBundleDisplayName = Ccare;
 				INFOPLIST_KEY_CFBundleURLTypes = "{\n    CFBundleTypeRole = Editor;\n    CFBundleURLName = \"lizhanbing.Ccare\";\n    CFBundleURLSchemes =     (\n        chroniccare\n    );\n}";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_NSCameraUsageDescription = "药时护 uses the camera to scan medication labels and fill in medication details.";
-				INFOPLIST_KEY_NSContactsUsageDescription = "药时护 uses Contacts so you can add emergency contacts and caregivers without typing them manually.";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "药时护 uses Health to read your health data (blood pressure, blood glucose, heart rate, weight) for trends and insights.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "药时护 writes measurements you add to Apple Health for safe storage and cross-app use.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Ccare uses the camera to scan medication labels and fill in medication details.";
+				INFOPLIST_KEY_NSContactsUsageDescription = "Ccare uses Contacts so you can add emergency contacts and caregivers without typing them manually.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Ccare uses Health to read your health data (blood pressure, blood glucose, heart rate, weight) for trends and insights.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Ccare writes measurements you add to Apple Health for safe storage and cross-app use.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

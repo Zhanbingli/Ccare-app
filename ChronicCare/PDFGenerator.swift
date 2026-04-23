@@ -7,7 +7,7 @@ enum PDFGenerator {
     @MainActor
     static func generateReport(store: DataStore, days: Int = 30) throws -> URL {
         let tmp = FileManager.default.temporaryDirectory
-        let url = tmp.appendingPathComponent("ChronicCare_Report_\(Int(Date().timeIntervalSince1970)).pdf")
+        let url = tmp.appendingPathComponent("Ccare_Report_\(Int(Date().timeIntervalSince1970)).pdf")
         let bounds = CGRect(x: 0, y: 0, width: 612, height: 792) // US Letter
         let margin: CGFloat = 40
         let renderer = UIGraphicsPDFRenderer(bounds: bounds)
@@ -45,7 +45,7 @@ enum PDFGenerator {
             ctx.beginPage()
             y = margin
 
-            let title = NSLocalizedString("ChronicCare Health Report", comment: "")
+            let title = NSLocalizedString("Ccare Health Report", comment: "")
             title.draw(at: CGPoint(x: margin, y: y), withAttributes: titleAttrs)
             y += 30
 

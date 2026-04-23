@@ -9,7 +9,7 @@ struct PrivacyPolicyView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     policySection(
                         title: NSLocalizedString("Overview", comment: ""),
-                        body: NSLocalizedString("药时护 is designed with your privacy as a priority. Medication routines, health measurements, intake logs, contacts, and settings are stored locally on your device. We do not operate analytics, advertising, or tracking services.", comment: "")
+                        body: NSLocalizedString("Ccare is designed with your privacy as a priority. Medication routines, health measurements, intake logs, contacts, and settings are stored locally on your device. We do not operate analytics, advertising, or tracking services.", comment: "")
                     )
 
                     policySection(
@@ -19,7 +19,7 @@ struct PrivacyPolicyView: View {
 
                     policySection(
                         title: NSLocalizedString("Apple Health Integration", comment: ""),
-                        body: NSLocalizedString("If you grant permission, 药时护 can read and write health measurements to Apple Health. This data exchange happens entirely on your device through Apple's HealthKit framework. We never access your Apple Health data remotely.", comment: "")
+                        body: NSLocalizedString("If you grant permission, Ccare can read and write health measurements to Apple Health. This data exchange happens entirely on your device through Apple's HealthKit framework. We never access your Apple Health data remotely.", comment: "")
                     )
 
                     policySection(
@@ -29,7 +29,7 @@ struct PrivacyPolicyView: View {
 
                     policySection(
                         title: NSLocalizedString("Notifications", comment: ""),
-                        body: NSLocalizedString("With your permission, 药时护 sends local notifications to remind you of medication doses. These notifications are scheduled on-device and do not involve any external server.", comment: "")
+                        body: NSLocalizedString("With your permission, Ccare sends local notifications to remind you of medication doses. These notifications are scheduled on-device and do not involve any external server.", comment: "")
                     )
 
                     policySection(
@@ -39,7 +39,7 @@ struct PrivacyPolicyView: View {
 
                     policySection(
                         title: NSLocalizedString("No Analytics or Tracking", comment: ""),
-                        body: NSLocalizedString("药时护 does not use any analytics, crash reporting, or advertising frameworks. We do not track your usage or behavior in any way.", comment: "")
+                        body: NSLocalizedString("Ccare does not use any analytics, crash reporting, or advertising frameworks. We do not track your usage or behavior in any way.", comment: "")
                     )
 
                     policySection(

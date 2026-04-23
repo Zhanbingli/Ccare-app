@@ -49,7 +49,7 @@ enum BackupManager {
             medicationImagesByPath: medicationImagesByPath.isEmpty ? nil : medicationImagesByPath
         )
         let data = try JSONEncoder().encode(backup)
-        let url = prepareExportURL(prefix: "ChronicCare_Backup", ext: "json")
+        let url = prepareExportURL(prefix: "Ccare_Backup", ext: "json")
         try writeProtectedData(data, to: url)
         return url
     }
@@ -104,7 +104,7 @@ enum BackupManager {
             csv += "\(dateStr),\(name),\(dose),\(status),\(key)\n"
         }
 
-        let url = prepareExportURL(prefix: "ChronicCare_Intake", ext: "csv")
+        let url = prepareExportURL(prefix: "Ccare_Intake", ext: "csv")
         try writeProtectedString(csv, to: url)
         return url
     }
@@ -134,7 +134,7 @@ enum BackupManager {
             csv += "\(dateStr),\(typeName),\(value),\(dia),\(unit)\n"
         }
 
-        let url = prepareExportURL(prefix: "ChronicCare_Measurements", ext: "csv")
+        let url = prepareExportURL(prefix: "Ccare_Measurements", ext: "csv")
         try writeProtectedString(csv, to: url)
         return url
     }

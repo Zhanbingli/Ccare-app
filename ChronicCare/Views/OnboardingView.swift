@@ -42,7 +42,7 @@ struct OnboardingView: View {
                     .foregroundStyle(Color.accentColor)
                     .symbolRenderingMode(.hierarchical)
 
-                Text(NSLocalizedString("ChronicCare", comment: "onboarding"))
+                Text(NSLocalizedString("Ccare", comment: "onboarding"))
                     .appFont(.largeTitle)
 
                 Text(NSLocalizedString("Track medications, log measurements, stay consistent.", comment: "onboarding"))

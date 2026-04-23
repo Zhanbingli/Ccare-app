@@ -723,7 +723,7 @@ private struct ProfileAboutSection: View {
             } label: {
                 Label(NSLocalizedString("Privacy Policy", comment: ""), systemImage: "hand.raised.fill")
             }
-            Text(NSLocalizedString("ChronicCare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice.", comment: ""))
+            Text(NSLocalizedString("Ccare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice.", comment: ""))
                 .appFont(.caption)
                 .foregroundStyle(.secondary)
             Text(String(format: NSLocalizedString("Version %@", comment: "App version"), appVersion))
