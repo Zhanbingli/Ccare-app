@@ -21,6 +21,7 @@ struct DashboardView: View {
     @State private var tick = false
     @State private var showAllPRN = false
     @State private var showCompletedTimeline = false
+    @State private var showSymptomLog = false
     private let refreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     private struct MedSchedule: Identifiable {
@@ -85,6 +86,14 @@ struct DashboardView: View {
             default: return false
             }
         }
+    }
+
+    private struct MissedDoseRecoveryGuidance {
+        let title: String
+        let message: String
+        let compactText: String
+        let icon: String
+        let tint: Color
     }
 
     private struct TodayState {
@@ -240,6 +249,8 @@ struct DashboardView: View {
                             asNeededInlineSection(medications: prnMeds)
                         }
 
+                        symptomQuickLogEntry()
+
                         if notificationStatus != .denied && hasReminderSetupIssues {
                             reminderRepairCard()
                         }
@@ -248,6 +259,10 @@ struct DashboardView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 6)
                 .padding(.bottom, 24)
+            }
+            .sheet(isPresented: $showSymptomLog) {
+                SymptomQuickLogSheet()
+                    .environmentObject(store)
             }
             .sheet(isPresented: $showAddMedication) {
                 MedicationFormView(editing: nil, onSave: { med in
@@ -501,6 +516,10 @@ private extension DashboardView {
                     }
                 }
 
+                if let guidance = missedDoseRecovery(for: item, status: status) {
+                    missedDoseRecoveryNotice(guidance)
+                }
+
                 VStack(spacing: 8) {
                     Button {
                         beginTakeFlow(for: item)
@@ -565,6 +584,13 @@ private extension DashboardView {
                 Text("\(item.med.dose) · \(item.time.formatted(date: .omitted, time: .shortened))")
                     .appFont(.caption)
                     .foregroundStyle(.secondary)
+                if let guidance = missedDoseRecovery(for: item, status: status) {
+                    Label(guidance.compactText, systemImage: guidance.icon)
+                        .font(.caption2)
+                        .foregroundStyle(guidance.tint)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             Spacer(minLength: 4)
@@ -596,6 +622,65 @@ private extension DashboardView {
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(item.med.name), \(item.med.dose), \(item.time.formatted(date: .omitted, time: .shortened)), \(status.displayText)")
+    }
+
+    private func missedDoseRecovery(for item: MedSchedule, status: TodayMedStatus) -> MissedDoseRecoveryGuidance? {
+        guard case .overdue = status else { return nil }
+        let comps = Calendar.current.dateComponents([.hour, .minute], from: item.time)
+        let result = MedicationRules.checkMakeupDose(
+            medication: item.med,
+            missedTime: comps,
+            now: Date()
+        )
+
+        switch result {
+        case .canTakeLate:
+            return MissedDoseRecoveryGuidance(
+                title: NSLocalizedString("Recovery window open", comment: "Missed dose recovery title"),
+                message: NSLocalizedString("If you are sure this dose was missed, you can log it now. Do not take extra doses beyond the schedule unless your clinician told you to.", comment: "Missed dose recovery guidance"),
+                compactText: NSLocalizedString("Can log late dose", comment: "Compact missed dose recovery guidance"),
+                icon: "arrow.uturn.backward.circle.fill",
+                tint: .orange
+            )
+        case .tooCloseToNext(let next):
+            let nextText = next.formatted(date: .omitted, time: .shortened)
+            return MissedDoseRecoveryGuidance(
+                title: NSLocalizedString("Too close to next dose", comment: "Missed dose recovery title"),
+                message: String(format: NSLocalizedString("Next scheduled dose is at %@. Avoid doubling up; skip this missed dose unless your clinician told you otherwise.", comment: "Missed dose recovery guidance"), nextText),
+                compactText: NSLocalizedString("Near next dose; avoid doubling up", comment: "Compact missed dose recovery guidance"),
+                icon: "exclamationmark.triangle.fill",
+                tint: .red
+            )
+        case .noNextDose:
+            return MissedDoseRecoveryGuidance(
+                title: NSLocalizedString("Check before logging", comment: "Missed dose recovery title"),
+                message: NSLocalizedString("No next scheduled dose was found. Log this only if you actually took it.", comment: "Missed dose recovery guidance"),
+                compactText: NSLocalizedString("Confirm before logging", comment: "Compact missed dose recovery guidance"),
+                icon: "questionmark.circle.fill",
+                tint: .orange
+            )
+        }
+    }
+
+    private func missedDoseRecoveryNotice(_ guidance: MissedDoseRecoveryGuidance) -> some View {
+        InsetPanel(tint: guidance.tint) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: guidance.icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(guidance.tint)
+                    .frame(width: 24)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(guidance.title)
+                        .appFont(.subheadline)
+                        .fontWeight(.semibold)
+                    Text(guidance.message)
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
     }
 
     private func asNeededInlineSection(medications: [Medication]) -> some View {
@@ -640,6 +725,41 @@ private extension DashboardView {
         }
     }
 
+
+    @ViewBuilder
+    private func symptomQuickLogEntry() -> some View {
+        let todays = store.symptomEntries.filter { Calendar.current.isDateInToday($0.date) }
+        Button {
+            showSymptomLog = true
+        } label: {
+            Card {
+                HStack(spacing: 12) {
+                    Image(systemName: "heart.text.square.fill")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(.pink)
+                        .frame(width: 40, height: 40)
+                        .background(Circle().fill(Color.pink.opacity(0.12)))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(NSLocalizedString("How are you feeling?", comment: "Symptom entry prompt"))
+                            .appFont(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.primary)
+                        Text(todays.isEmpty
+                             ? NSLocalizedString("Log any discomfort so your doctor can review next visit.", comment: "")
+                             : String(format: NSLocalizedString("%lld logged today. Tap to add another.", comment: ""), todays.count))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.leading)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
 
     private func tomorrowsFirstDoseText() -> String? {
         let cal = Calendar.current

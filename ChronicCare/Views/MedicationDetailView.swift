@@ -176,6 +176,22 @@ struct MedicationDetailView: View {
     }
 
     private func relatedMeasurementTrendText(for type: MeasurementType, data: [Measurement]) -> String {
+        if let trend = weeklyMeasurementTrend(for: type, data: data) {
+            let threshold: Double = type == .bloodPressure ? 4 : type == .bloodGlucose ? 8 : 1
+            if abs(trend.change) < threshold {
+                return String(format: NSLocalizedString("Recent average is stable at %@ compared with the previous week.", comment: "Outcome trend stable text"), formattedMeasurementAverage(trend.recentAverage, type: type))
+            }
+            let direction = trend.change < 0
+                ? NSLocalizedString("lower", comment: "Measurement trend direction")
+                : NSLocalizedString("higher", comment: "Measurement trend direction")
+            return String(
+                format: NSLocalizedString("Recent average is %@, %@ by %@ from the previous week.", comment: "Outcome trend comparison text"),
+                formattedMeasurementAverage(trend.recentAverage, type: type),
+                direction,
+                formattedMeasurementDelta(abs(trend.change), type: type)
+            )
+        }
+
         guard let first = data.first, let last = data.last else {
             return NSLocalizedString("No recent trend available.", comment: "")
         }
@@ -187,6 +203,88 @@ struct MedicationDetailView: View {
         return delta < 0
             ? NSLocalizedString("Recent readings are trending lower.", comment: "")
             : NSLocalizedString("Recent readings are trending higher.", comment: "")
+    }
+
+    private struct WeeklyMeasurementTrend {
+        let recentAverage: Double
+        let previousAverage: Double
+        let recentCount: Int
+        let previousCount: Int
+
+        var change: Double {
+            recentAverage - previousAverage
+        }
+    }
+
+    private func weeklyMeasurementTrend(for type: MeasurementType, data: [Measurement], now: Date = Date()) -> WeeklyMeasurementTrend? {
+        let cal = Calendar.current
+        guard let sevenDaysAgo = cal.date(byAdding: .day, value: -7, to: now),
+              let fourteenDaysAgo = cal.date(byAdding: .day, value: -14, to: now) else { return nil }
+
+        let recentValues = data
+            .filter { $0.date >= sevenDaysAgo && $0.date <= now }
+            .map(\.value)
+        let previousValues = data
+            .filter { $0.date >= fourteenDaysAgo && $0.date < sevenDaysAgo }
+            .map(\.value)
+
+        guard recentValues.count >= 2, previousValues.count >= 2 else { return nil }
+        let recentAverage = recentValues.reduce(0, +) / Double(recentValues.count)
+        let previousAverage = previousValues.reduce(0, +) / Double(previousValues.count)
+        return WeeklyMeasurementTrend(
+            recentAverage: recentAverage,
+            previousAverage: previousAverage,
+            recentCount: recentValues.count,
+            previousCount: previousValues.count
+        )
+    }
+
+    private func formattedMeasurementAverage(_ value: Double, type: MeasurementType) -> String {
+        if type == .bloodGlucose {
+            let preferred = UnitPreferences.mgdlToPreferred(value)
+            let formatted = UnitPreferences.glucoseUnit == .mgdL ? String(format: "%.0f", preferred) : String(format: "%.1f", preferred)
+            return "\(formatted) \(UnitPreferences.glucoseUnit.rawValue)"
+        }
+        if type == .bloodPressure {
+            return String(format: NSLocalizedString("%.0f mmHg systolic", comment: "Systolic blood pressure average"), value)
+        }
+        return String(format: "%.1f %@", value, type.unit)
+    }
+
+    private func formattedMeasurementDelta(_ value: Double, type: MeasurementType) -> String {
+        if type == .bloodGlucose {
+            let preferred = UnitPreferences.mgdlToPreferred(value)
+            let formatted = UnitPreferences.glucoseUnit == .mgdL ? String(format: "%.0f", preferred) : String(format: "%.1f", preferred)
+            return "\(formatted) \(UnitPreferences.glucoseUnit.rawValue)"
+        }
+        if type == .bloodPressure {
+            return String(format: NSLocalizedString("%.0f mmHg", comment: "Blood pressure delta"), value)
+        }
+        return String(format: "%.1f %@", value, type.unit)
+    }
+
+    private func outcomeLinkageContextText(for type: MeasurementType) -> String {
+        let cal = Calendar.current
+        let now = Date()
+        guard let fourteenDaysAgo = cal.date(byAdding: .day, value: -14, to: now) else {
+            return NSLocalizedString("Trend context only; this does not prove the medication caused the change.", comment: "Outcome trend disclaimer")
+        }
+
+        let readingCount = store.measurements.filter {
+            $0.type == type && $0.date >= fourteenDaysAgo && $0.date <= now
+        }.count
+        let takenCount = store.intakeLogs.filter {
+            $0.medicationID == medication.id &&
+            $0.status == .taken &&
+            $0.effectiveRecordedAt >= fourteenDaysAgo &&
+            $0.effectiveRecordedAt <= now
+        }.count
+
+        return String(
+            format: NSLocalizedString("Trend context only: %lld readings and %lld taken logs in the past 14 days; this does not prove the medication caused the change.", comment: "Outcome trend disclaimer with counts"),
+            readingCount,
+            takenCount
+        )
     }
 
     // MARK: - Hero Card Data
@@ -439,50 +537,7 @@ struct MedicationDetailView: View {
 
                     ForEach(correlatedTypes, id: \.self) { measurementType in
                         if let data = relatedMeasurements(for: measurementType) {
-                            Card {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    HStack {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text(NSLocalizedString("Related Measurements", comment: ""))
-                                                .appFont(.headline)
-                                            Text(measurementType.displayName)
-                                                .appFont(.subheadline)
-                                                .foregroundStyle(measurementType.tint)
-                                        }
-                                        Spacer()
-                                        Text(relatedMeasurementSummary(for: measurementType, data: data))
-                                            .appFont(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-
-                                    InsetPanel(tint: measurementType.tint) {
-                                        Chart(data) { measurement in
-                                            LineMark(
-                                                x: .value("Date", measurement.date),
-                                                y: .value("Value", measurement.value)
-                                            )
-                                            .foregroundStyle(measurementType.tint)
-                                            .interpolationMethod(.catmullRom)
-
-                                            PointMark(
-                                                x: .value("Date", measurement.date),
-                                                y: .value("Value", measurement.value)
-                                            )
-                                            .foregroundStyle(measurementType.tint)
-                                            .symbolSize(18)
-                                        }
-                                        .frame(height: 120)
-                                        .chartXAxis(.hidden)
-                                        .chartYAxis {
-                                            AxisMarks(position: .leading, values: .automatic(desiredCount: 3))
-                                        }
-                                    }
-
-                                    Text(relatedMeasurementTrendText(for: measurementType, data: data))
-                                        .appFont(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
+                            relatedMeasurementCard(for: measurementType, data: data)
                         }
                     }
 
@@ -498,6 +553,65 @@ struct MedicationDetailView: View {
                     }
                 }
             }
+        }
+    }
+
+    private func relatedMeasurementCard(for measurementType: MeasurementType, data: [Measurement]) -> some View {
+        let summary = relatedMeasurementSummary(for: measurementType, data: data)
+        let trendText = relatedMeasurementTrendText(for: measurementType, data: data)
+        let contextText = outcomeLinkageContextText(for: measurementType)
+
+        return Card {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(NSLocalizedString("Related Measurements", comment: ""))
+                            .appFont(.headline)
+                        Text(measurementType.displayName)
+                            .appFont(.subheadline)
+                            .foregroundStyle(measurementType.tint)
+                    }
+                    Spacer()
+                    Text(summary)
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                InsetPanel(tint: measurementType.tint) {
+                    relatedMeasurementChart(for: measurementType, data: data)
+                }
+
+                Text(trendText)
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+                Text(contextText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func relatedMeasurementChart(for measurementType: MeasurementType, data: [Measurement]) -> some View {
+        Chart(data) { measurement in
+            LineMark(
+                x: .value("Date", measurement.date),
+                y: .value("Value", measurement.value)
+            )
+            .foregroundStyle(measurementType.tint)
+            .interpolationMethod(.catmullRom)
+
+            PointMark(
+                x: .value("Date", measurement.date),
+                y: .value("Value", measurement.value)
+            )
+            .foregroundStyle(measurementType.tint)
+            .symbolSize(18)
+        }
+        .frame(height: 120)
+        .chartXAxis(.hidden)
+        .chartYAxis {
+            AxisMarks(position: .leading, values: .automatic(desiredCount: 3))
         }
     }
 

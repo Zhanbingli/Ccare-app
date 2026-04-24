@@ -12,6 +12,7 @@ final class DataStore: ObservableObject {
     @Published private(set) var intakeLogs: [IntakeLog] = []
     @Published private(set) var emergencyInfo: EmergencyInfo?
     @Published private(set) var caregivers: [CaregiverContact] = []
+    @Published private(set) var symptomEntries: [SymptomEntry] = []
 
     private var cancellables: Set<AnyCancellable> = []
 
@@ -20,6 +21,7 @@ final class DataStore: ObservableObject {
     private let intakeLogsURL: URL
     private let emergencyInfoURL: URL
     private let caregiversURL: URL
+    private let symptomEntriesURL: URL
     private let goalsDefaults = UserDefaults.standard
 
     init() {
@@ -30,6 +32,7 @@ final class DataStore: ObservableObject {
         self.intakeLogsURL = docs.appendingPathComponent("intake_logs.json")
         self.emergencyInfoURL = docs.appendingPathComponent("emergency_info.json")
         self.caregiversURL = docs.appendingPathComponent("caregivers.json")
+        self.symptomEntriesURL = docs.appendingPathComponent("symptom_entries.json")
 
         load()
 
@@ -63,6 +66,12 @@ final class DataStore: ObservableObject {
             .dropFirst()
             .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.saveCaregivers() }
+            .store(in: &cancellables)
+
+        $symptomEntries
+            .dropFirst()
+            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+            .sink { [weak self] _ in self?.saveSymptomEntries() }
             .store(in: &cancellables)
     }
 
@@ -309,6 +318,7 @@ final class DataStore: ObservableObject {
         intakeLogs.removeAll()
         emergencyInfo = nil
         caregivers.removeAll()
+        symptomEntries.removeAll()
         saveEmergencyInfo()
     }
 
@@ -324,6 +334,22 @@ final class DataStore: ObservableObject {
     func updateCaregiver(_ c: CaregiverContact) {
         if let idx = caregivers.firstIndex(where: { $0.id == c.id }) {
             caregivers[idx] = c
+        }
+    }
+
+    // MARK: - Symptom Entries
+    func addSymptomEntry(_ entry: SymptomEntry) {
+        // Keep sorted by date desc so the consultation view doesn't need to resort.
+        if let idx = symptomEntries.firstIndex(where: { entry.date > $0.date }) {
+            symptomEntries.insert(entry, at: idx)
+        } else {
+            symptomEntries.append(entry)
+        }
+    }
+    func removeSymptomEntry(at offsets: IndexSet) { symptomEntries.remove(atOffsets: offsets) }
+    func updateSymptomEntry(_ entry: SymptomEntry) {
+        if let idx = symptomEntries.firstIndex(where: { $0.id == entry.id }) {
+            symptomEntries[idx] = entry
         }
     }
 
@@ -351,6 +377,7 @@ final class DataStore: ObservableObject {
         emergencyInfo = backup.emergencyInfo
         saveEmergencyInfo()
         caregivers = backup.caregivers ?? []
+        symptomEntries = (backup.symptomEntries ?? []).sorted(by: { $0.date > $1.date })
     }
 
     // MARK: - Load/Save
@@ -363,6 +390,7 @@ final class DataStore: ObservableObject {
             self.emergencyInfo = try JSONDecoder().decode(EmergencyInfo.self, from: data)
         } catch { /* first launch or no data */ }
         self.caregivers = loadResilient(from: caregiversURL, label: "caregivers")
+        self.symptomEntries = loadResilient(from: symptomEntriesURL, label: "symptom entries").sorted(by: { $0.date > $1.date })
         updateWidgetData()
     }
 
@@ -412,6 +440,11 @@ final class DataStore: ObservableObject {
     private func saveCaregivers() {
         let snapshot = caregivers
         persist(snapshot, to: caregiversURL, label: "caregivers")
+    }
+
+    private func saveSymptomEntries() {
+        let snapshot = symptomEntries
+        persist(snapshot, to: symptomEntriesURL, label: "symptom entries")
     }
 
     private func saveIntakeLogs() {

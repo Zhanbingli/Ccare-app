@@ -1172,3 +1172,105 @@
 "A few doses slipped — we'll help you catch up." = "漏了几次，我们一起调整。";
 "Some doses missed. Tap to review and adjust." = "本周漏服较多，点击查看并调整。";
 "Opens full adherence insights." = "打开完整的依从报告。";
+
+/* Missed dose recovery */
+"Recovery window open" = "仍在补救窗口";
+"If you are sure this dose was missed, you can log it now. Do not take extra doses beyond the schedule unless your clinician told you to." = "如果确认这一剂漏服，可以现在记录。除非医生明确要求，不要在排定剂量之外额外加服。";
+"Can log late dose" = "可补记这一剂";
+"Too close to next dose" = "距离下一剂太近";
+"Next scheduled dose is at %@. Avoid doubling up; skip this missed dose unless your clinician told you otherwise." = "下一剂排在 %@。避免一次服用双倍剂量；除非医生另有说明，建议跳过这次漏服。";
+"Near next dose; avoid doubling up" = "接近下一剂，避免加倍服用";
+"Check before logging" = "记录前请确认";
+"No next scheduled dose was found. Log this only if you actually took it." = "未找到下一次排定剂量。只有在确实已经服用时才记录。";
+"Confirm before logging" = "确认后再记录";
+
+/* Outcome linkage */
+"Recent average is stable at %@ compared with the previous week." = "近期平均值为 %@，与前一周相比基本稳定。";
+"lower" = "降低";
+"higher" = "升高";
+"Recent average is %@, %@ by %@ from the previous week." = "近期平均值为 %@，较前一周%@ %@。";
+"%.0f mmHg systolic" = "%.0f mmHg 收缩压";
+"Trend context only; this does not prove the medication caused the change." = "仅作为趋势参考；这不能证明变化由该药物导致。";
+"Trend context only: %lld readings and %lld taken logs in the past 14 days; this does not prove the medication caused the change." = "仅作为趋势参考：过去 14 天有 %lld 次读数和 %lld 条服药记录；这不能证明变化由该药物导致。";
+"Your %@ average %@ by %.0f%% compared with the previous week while %@ had %lld taken logs. This is trend context, not proof of cause." = "与前一周相比，%@ 平均值%@ %.0f%%；同期 %@ 有 %lld 条服药记录。这仅是趋势参考，并不能证明因果关系。";
+
+/* ── v2 Consultation Snapshot & Symptom Logging ── */
+
+/* Medication source */
+"Prescription" = "本院处方";
+"External Rx" = "外院处方";
+"OTC" = "非处方药";
+"Supplement" = "保健品";
+"Unspecified" = "未分类";
+
+/* Symptom severity */
+"Mild" = "轻度";
+"Moderate" = "中度";
+"Severe" = "重度";
+
+/* Symptom preset tags */
+"Dizziness" = "头晕";
+"Abdominal pain" = "腹痛";
+"Insomnia" = "失眠";
+"Rash" = "皮疹";
+"Chest tightness" = "胸闷";
+"Wheezing" = "喘息";
+
+/* Symptom sheet */
+"Other (type here)" = "其他（输入症状）";
+"Symptoms" = "症状";
+"Tap to pick one or more. Your doctor will see this during your next visit." = "可多选。医生下次就诊时能看到这些信息。";
+"Severity" = "严重程度";
+"When" = "发生时间";
+"Occurred" = "发生时间";
+"e.g., after lunch, lasted 30 minutes" = "例如：午饭后出现，持续 30 分钟";
+"Notes (optional)" = "备注（可选）";
+"Suspected medication" = "疑似关联用药";
+"If you think a medication might have caused this, link it here. Optional." = "如果你怀疑是某种药导致的，可以关联。选填。";
+"Log Symptom" = "记录症状";
+"Edit Symptom" = "编辑症状";
+"No medications to choose from." = "暂无可选用药。";
+
+/* Dashboard symptom entry card */
+"How are you feeling?" = "今天感觉如何？";
+"Log any discomfort so your doctor can review next visit." = "记录任何不适，下次就诊时让医生看。";
+"%lld logged today. Tap to add another." = "今天已记录 %lld 条，点击继续添加。";
+
+/* Consultation Snapshot */
+"Consultation Snapshot" = "就诊摘要";
+"What the hospital doesn't see" = "医院病历看不到的部分";
+"For Your Doctor" = "给医生看";
+"Patient-reported · not from hospital records" = "患者自报 · 非病历数据";
+"No medications recorded." = "暂无用药记录。";
+"PRN" = "按需";
+"since %@ (%lldd)" = "自 %@（已用 %lld 天）";
+"Adherence · last %lld days" = "服药依从 · 近 %lld 天";
+"Adherence" = "服药依从";
+"No scheduled medications." = "暂无定时用药。";
+"No missed doses." = "无漏服。";
+"%lld missed" = "漏服 %lld 次";
+"Home Measurements · last %lld days" = "家庭自测 · 近 %lld 天";
+"Home Measurements" = "家庭自测";
+"No measurements recorded in the window." = "此时段内没有测量记录。";
+"%lld out-of-range" = "超出范围 %lld 次";
+"%lld readings · in range" = "共 %lld 次 · 均在范围内";
+"Symptoms · last %lld days" = "症状 · 近 %lld 天";
+"No symptoms logged. Tap Add when you feel unwell." = "暂无症状记录。感觉不适时点击添加。";
+"suspected: %@" = "疑似：%@";
+"Blood type" = "血型";
+"Conditions" = "基础病";
+"Contact" = "紧急联系人";
+"Not set. Use the menu to edit." = "未设置，可在菜单中编辑。";
+"Share Snapshot" = "分享摘要";
+"Edit Emergency Info" = "编辑急救信息";
+"since" = "起始于";
+"None." = "无。";
+"Add" = "添加";
+
+/* Emergency Card (slimmed) */
+"Emergency Card" = "急救卡";
+"For emergencies: show first responders or ER staff." = "紧急情况使用：可展示给急救人员或急诊医护。";
+"Who prescribed this?" = "这个药从哪来？";
+"Source" = "来源";
+"Hospital or doctor (optional)" = "医院 / 诊所 / 医生名（选填）";
+"Helps your doctor see at a glance which meds come from other clinics, OTC, or supplements." = "便于医生一眼看清哪些是外院、OTC 或保健品。";

@@ -30,6 +30,8 @@ struct MedicationFormView: View {
     @State private var pillsPerDose: Int = 1
     @State private var foodInstruction: FoodInstruction?
     @State private var specialInstructions: String = ""
+    @State private var source: MedicationSource? = nil
+    @State private var hospital: String = ""
 
     // MARK: - Photo / OCR
     @State private var pickedItem: PhotosPickerItem? = nil
@@ -452,9 +454,35 @@ struct MedicationFormView: View {
     @ViewBuilder
     private var moreDetailsContent: some View {
         VStack(alignment: .leading, spacing: 20) {
+            sourceBlock
             instructionsBlock
             inventoryBlock
             categoryPhotoBlock
+        }
+    }
+
+    private var sourceBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(NSLocalizedString("Who prescribed this?", comment: "Medication source header"))
+                .appFont(.subheadline)
+                .fontWeight(.semibold)
+            Picker(NSLocalizedString("Source", comment: ""), selection: $source) {
+                Text(NSLocalizedString("Unspecified", comment: "")).tag(MedicationSource?.none)
+                ForEach(MedicationSource.allCases.filter { $0 != .unknown }) { s in
+                    Text(s.displayName).tag(Optional(s))
+                }
+            }
+            if source == .prescribed || source == .external {
+                TextField(
+                    NSLocalizedString("Hospital or doctor (optional)", comment: ""),
+                    text: $hospital
+                )
+                .textFieldStyle(.roundedBorder)
+            }
+            Text(NSLocalizedString("Helps your doctor see at a glance which meds come from other clinics, OTC, or supplements.", comment: ""))
+                .appFont(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -720,6 +748,8 @@ struct MedicationFormView: View {
             hasCourseEnd = med.courseEndDate != nil
             courseEndDate = med.courseEndDate ?? Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
             specialInstructions = med.specialInstructions ?? ""
+            source = med.source
+            hospital = med.hospital ?? ""
             schedulePreset = inferredSchedulePreset(from: times)
             showMoreDetails = hasOptionalData
         } else {
@@ -782,7 +812,9 @@ struct MedicationFormView: View {
             foodInstruction: foodInstruction,
             isAsNeeded: isAsNeeded ? true : nil,
             courseEndDate: hasCourseEnd ? courseEndDate : nil,
-            specialInstructions: specialInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : specialInstructions.trimmingCharacters(in: .whitespacesAndNewlines)
+            specialInstructions: specialInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : specialInstructions.trimmingCharacters(in: .whitespacesAndNewlines),
+            source: source,
+            hospital: hospital.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : hospital.trimmingCharacters(in: .whitespacesAndNewlines)
         )
         if let error = onSave(med) {
             presentSaveError(error)

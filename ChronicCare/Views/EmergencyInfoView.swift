@@ -289,7 +289,7 @@ struct EmergencyCardView: View {
     }
 
     private var hasShareableSummary: Bool {
-        hasEmergencyDetails || !store.medications.isEmpty || !latestMeasurementsByType.isEmpty || !store.caregivers.isEmpty
+        hasEmergencyDetails
     }
 
     var body: some View {
@@ -297,17 +297,13 @@ struct EmergencyCardView: View {
             VStack(spacing: 14) {
                 summaryHeader
                 emptyEmergencyState
-                doctorVisitSnapshot
-                currentMedicationsCard
                 coreMedicalInfoCards
-                recentMeasurementsCard
                 emergencyContactsCard
-                caregiverSupportCard
                 shareSummaryButton
             }
             .padding()
         }
-        .navigationTitle(NSLocalizedString("Medical Summary", comment: ""))
+        .navigationTitle(NSLocalizedString("Emergency Card", comment: ""))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -341,11 +337,11 @@ struct EmergencyCardView: View {
                     .foregroundStyle(.red)
 
                 VStack(alignment: .leading, spacing: AppSpacing.xxSmall) {
-                    Text(NSLocalizedString("Medical Summary", comment: ""))
+                    Text(NSLocalizedString("Emergency Card", comment: ""))
                         .appFont(.title)
                         .fontWeight(.bold)
                         .foregroundStyle(.red)
-                    Text(NSLocalizedString("Use this during appointments to answer common questions quickly.", comment: ""))
+                    Text(NSLocalizedString("For emergencies: show first responders or ER staff.", comment: ""))
                         .appFont(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

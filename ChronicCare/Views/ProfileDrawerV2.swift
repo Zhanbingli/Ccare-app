@@ -54,11 +54,20 @@ struct ProfileDrawerV2: View {
                     }
                 }
 
-                Section(NSLocalizedString("Safety", comment: "")) {
+                Section(NSLocalizedString("For Your Doctor", comment: "Drawer section")) {
+                    navRow(
+                        icon: "stethoscope",
+                        tint: .blue,
+                        title: NSLocalizedString("Consultation Snapshot", comment: ""),
+                        subtitle: NSLocalizedString("What the hospital doesn't see", comment: "")
+                    ) {
+                        ConsultationSnapshotView()
+                    }
+
                     navRow(
                         icon: "cross.case.fill",
                         tint: .red,
-                        title: NSLocalizedString("Emergency Info", comment: ""),
+                        title: NSLocalizedString("Emergency Card", comment: ""),
                         subtitle: emergencySubtitle
                     ) {
                         EmergencyCardView()

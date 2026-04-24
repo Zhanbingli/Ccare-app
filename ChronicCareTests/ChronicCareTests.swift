@@ -142,6 +142,54 @@ struct ChronicCareTests {
         ) == false)
     }
 
+    @MainActor
+    @Test func makeupDoseAllowsLateDoseBeforeMidpointToNextDose() {
+        let cal = Calendar.current
+        let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 8, hour: 10, minute: 0))!
+        let med = Medication(
+            name: "Metformin",
+            dose: "500mg",
+            timesOfDay: [DateComponents(hour: 8, minute: 0), DateComponents(hour: 20, minute: 0)],
+            remindersEnabled: true
+        )
+
+        let result = MedicationRules.checkMakeupDose(
+            medication: med,
+            missedTime: DateComponents(hour: 8, minute: 0),
+            now: now
+        )
+
+        if case .canTakeLate = result {
+            #expect(true)
+        } else {
+            #expect(Bool(false), "Expected late dose to remain in the recovery window")
+        }
+    }
+
+    @MainActor
+    @Test func makeupDoseBlocksLateDoseWhenTooCloseToNextDose() {
+        let cal = Calendar.current
+        let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 8, hour: 16, minute: 0))!
+        let med = Medication(
+            name: "Metformin",
+            dose: "500mg",
+            timesOfDay: [DateComponents(hour: 8, minute: 0), DateComponents(hour: 20, minute: 0)],
+            remindersEnabled: true
+        )
+
+        let result = MedicationRules.checkMakeupDose(
+            medication: med,
+            missedTime: DateComponents(hour: 8, minute: 0),
+            now: now
+        )
+
+        if case .tooCloseToNext(let next) = result {
+            #expect(cal.component(.hour, from: next) == 20)
+        } else {
+            #expect(Bool(false), "Expected missed dose to be too close to the next scheduled dose")
+        }
+    }
+
     @Test func measurementClampsFutureDateToNow() {
         let now = Date()
         let future = now.addingTimeInterval(60 * 60 * 24)

@@ -8,6 +8,7 @@ struct AppBackup: Codable {
     let intakeLogs: [IntakeLog]
     var emergencyInfo: EmergencyInfo?
     var caregivers: [CaregiverContact]?
+    var symptomEntries: [SymptomEntry]?
     var medicationImagesByPath: [String: Data]?
 }
 
@@ -46,6 +47,7 @@ enum BackupManager {
             intakeLogs: store.intakeLogs,
             emergencyInfo: store.emergencyInfo,
             caregivers: store.caregivers,
+            symptomEntries: store.symptomEntries,
             medicationImagesByPath: medicationImagesByPath.isEmpty ? nil : medicationImagesByPath
         )
         let data = try JSONEncoder().encode(backup)
