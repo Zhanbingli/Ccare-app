@@ -35,11 +35,8 @@ struct RootViewV2: View {
                 onLogMeasurement: { showLogSheet = true }
             )
         }
-        .safeAreaInset(edge: .top, alignment: .trailing, spacing: 0) {
-            profileButton
-                .padding(.top, 8)
-                .padding(.trailing, 16)
-                .padding(.bottom, 6)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            homeHeader
         }
         .dynamicTypeSize(.xSmall ... .accessibility5)
         .sheet(isPresented: $showProfileDrawer) {
@@ -116,6 +113,36 @@ struct RootViewV2: View {
         }
     }
 
+    private var homeHeader: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(NSLocalizedString("Today", comment: "Home header eyebrow"))
+                    .appFont(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                    .tracking(0.8)
+                Text(homeDateText)
+                    .appFont(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.primary)
+            }
+
+            Spacer()
+
+            profileButton
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+    }
+
+    private var homeDateText: String {
+        let formatter = DateFormatter()
+        formatter.setLocalizedDateFormatFromTemplate("MMMEd")
+        return formatter.string(from: Date())
+    }
+
     private var profileButton: some View {
         circularActionButton(
             systemName: "person.crop.circle",
@@ -136,9 +163,8 @@ struct RootViewV2: View {
                 .foregroundStyle(.primary)
                 .frame(width: 42, height: 42)
                 .background(
-                    Circle().fill(.ultraThinMaterial)
+                    Circle().fill(Color.primary.opacity(0.06))
                 )
-                .shadow(color: .black.opacity(0.08), radius: 6, x: 0, y: 2)
         }
         .accessibilityLabel(accessibilityLabel)
     }

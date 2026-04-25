@@ -867,7 +867,7 @@ private extension DashboardView {
         return Card {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text(NSLocalizedString("Data readiness", comment: "Visit prep readiness card title"))
+                    Text(NSLocalizedString("Visit prep materials", comment: "Visit prep readiness card title"))
                         .appFont(.headline)
                     Spacer()
                     Text(readinessScoreText(medCount: medCount, measurementCount: measurementCount, symptomCount: symptomCount))
@@ -877,26 +877,26 @@ private extension DashboardView {
                 }
 
                 readinessRow(
-                    title: NSLocalizedString("Medication history", comment: "Visit prep readiness item"),
+                    title: NSLocalizedString("Review current medications", comment: "Visit prep readiness item"),
                     detail: medCount == 0
                         ? NSLocalizedString("No medications yet", comment: "")
-                        : String(format: NSLocalizedString("%lld current medications", comment: "Visit prep readiness medication count"), medCount),
+                        : String(format: NSLocalizedString("%lld medications to review", comment: "Visit prep readiness medication count"), medCount),
                     isReady: medCount > 0,
                     action: { showAddMedication = true }
                 )
                 readinessRow(
-                    title: NSLocalizedString("Home measurements", comment: "Visit prep readiness item"),
+                    title: NSLocalizedString("Home measurement records", comment: "Visit prep readiness item"),
                     detail: measurementCount == 0
-                        ? NSLocalizedString("No readings in the last 30 days", comment: "")
-                        : String(format: NSLocalizedString("%lld readings in the last 30 days", comment: "Visit prep readiness readings count"), measurementCount),
+                        ? NSLocalizedString("Record blood pressure, glucose, weight, or heart rate", comment: "Visit prep readiness empty measurement detail")
+                        : String(format: NSLocalizedString("%lld home readings in the last 30 days", comment: "Visit prep readiness readings count"), measurementCount),
                     isReady: measurementCount > 0,
                     action: { onLogMeasurement?() }
                 )
                 readinessRow(
-                    title: NSLocalizedString("Symptoms and feelings", comment: "Visit prep readiness item"),
+                    title: NSLocalizedString("Body changes and symptoms", comment: "Visit prep readiness item"),
                     detail: symptomCount == 0
-                        ? NSLocalizedString("No symptom notes yet", comment: "")
-                        : String(format: NSLocalizedString("%lld notes in the last 30 days", comment: "Visit prep readiness symptom count"), symptomCount),
+                        ? NSLocalizedString("Add discomfort only when something feels different", comment: "Visit prep readiness empty symptom detail")
+                        : String(format: NSLocalizedString("%lld body notes in the last 30 days", comment: "Visit prep readiness symptom count"), symptomCount),
                     isReady: symptomCount > 0,
                     action: { showSymptomLog = true }
                 )
@@ -1517,41 +1517,6 @@ private extension DashboardView {
         }
     }
 
-
-    @ViewBuilder
-    private func symptomQuickLogEntry() -> some View {
-        let todays = store.symptomEntries.filter { Calendar.current.isDateInToday($0.date) }
-        Button {
-            showSymptomLog = true
-        } label: {
-            Card {
-                HStack(spacing: 12) {
-                    Image(systemName: "heart.text.square.fill")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(.pink)
-                        .frame(width: 40, height: 40)
-                        .background(Circle().fill(Color.pink.opacity(0.12)))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(NSLocalizedString("How are you feeling?", comment: "Symptom entry prompt"))
-                            .appFont(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.primary)
-                        Text(todays.isEmpty
-                             ? NSLocalizedString("Log any discomfort so your doctor can review next visit.", comment: "")
-                             : String(format: NSLocalizedString("%lld logged today. Tap to add another.", comment: ""), todays.count))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.leading)
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-    }
 
     private func tomorrowsFirstDoseText() -> String? {
         let cal = Calendar.current
