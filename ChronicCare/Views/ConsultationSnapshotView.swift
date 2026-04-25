@@ -10,6 +10,8 @@ import Charts
 /// measurements trend → symptom timeline between visits.
 struct ConsultationSnapshotView: View {
     @EnvironmentObject var store: DataStore
+    var visit: DoctorVisit? = nil
+
     @State private var showEmergencyEdit = false
     @State private var showSymptomEditor: SymptomEntry?
     @State private var showNewSymptom = false
@@ -18,10 +20,15 @@ struct ConsultationSnapshotView: View {
 
     private let daysWindow: Int = 30
 
+    private var snapshotVisit: DoctorVisit? {
+        visit ?? store.nextDoctorVisit
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 header
+                visitPrepSection
                 Divider()
                 allergiesWarning
                 medicationsSection
@@ -69,6 +76,51 @@ struct ConsultationSnapshotView: View {
         }
         .sheet(isPresented: $showShare) {
             ShareSheet(activityItems: [shareText])
+        }
+    }
+
+    @ViewBuilder
+    private var visitPrepSection: some View {
+        if let visit = snapshotVisit {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
+                    sectionLabel(NSLocalizedString("Prepared For", comment: ""))
+                    Spacer()
+                    Text(visit.scheduledDate, format: .dateTime.year().month().day())
+                        .appFontNumeric(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(visit.displayTitle)
+                        .appFont(.subheadline)
+                        .fontWeight(.semibold)
+                    if let reason = visit.reason, !reason.isEmpty {
+                        Text(reason)
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text(preVisitReadinessText(for: visit))
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 5) {
+                    ForEach(preVisitTalkingPoints(), id: \.self) { point in
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.teal)
+                                .padding(.top, 2)
+                            Text(point)
+                                .appFont(.caption)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .padding(.top, 2)
+            }
         }
     }
 
@@ -556,12 +608,56 @@ struct ConsultationSnapshotView: View {
         return f.string(from: date)
     }
 
+    private func preVisitReadinessText(for visit: DoctorVisit) -> String {
+        guard let days = visit.daysUntil() else {
+            return NSLocalizedString("Completed visit. Keep notes here for the next follow-up.", comment: "")
+        }
+        if days == 0 {
+            return NSLocalizedString("Use this during the appointment to answer common doctor questions quickly.", comment: "")
+        }
+        if days > 0 {
+            return String(format: NSLocalizedString("Your appointment is in %lld days. Keep logging anything the doctor should know.", comment: ""), days)
+        }
+        return NSLocalizedString("This appointment is overdue. Update it after the visit or schedule the next one.", comment: "")
+    }
+
+    private func preVisitTalkingPoints() -> [String] {
+        var points: [String] = []
+        let missedCount = computeMissedDates().reduce(0) { $0 + $1.1.count }
+        let anomalyCount = MeasurementType.allCases.reduce(0) { total, type in
+            total + countAnomalies(type: type, series: recentMeasurements(type: type))
+        }
+
+        if !store.medications.isEmpty {
+            points.append(String(format: NSLocalizedString("%lld current medications, grouped by source.", comment: ""), store.medications.count))
+        }
+        if missedCount > 0 {
+            points.append(String(format: NSLocalizedString("%lld missed-dose days to discuss.", comment: ""), missedCount))
+        }
+        if anomalyCount > 0 {
+            points.append(String(format: NSLocalizedString("%lld out-of-range home readings in the last 30 days.", comment: ""), anomalyCount))
+        }
+        if !recentSymptoms.isEmpty {
+            points.append(String(format: NSLocalizedString("%lld symptom notes since the last review window.", comment: ""), recentSymptoms.count))
+        }
+        if points.isEmpty {
+            points.append(NSLocalizedString("No major issues logged yet; keep recording doses, symptoms, and measurements before the visit.", comment: ""))
+        }
+        return points
+    }
+
     private func buildShareText() -> String {
         var lines: [String] = []
         lines.append(NSLocalizedString("Consultation Snapshot", comment: ""))
         let df = DateFormatter()
         df.dateStyle = .medium
         lines.append(df.string(from: Date()))
+        if let visit = snapshotVisit {
+            lines.append(String(format: NSLocalizedString("Prepared for: %@ (%@)", comment: ""), visit.displayTitle, df.string(from: visit.scheduledDate)))
+            if let reason = visit.reason, !reason.isEmpty {
+                lines.append(String(format: NSLocalizedString("Reason: %@", comment: ""), reason))
+            }
+        }
         lines.append("")
         if let allergies = store.emergencyInfo?.allergies, !allergies.isEmpty {
             lines.append("⚠ \(NSLocalizedString("Allergies", comment: "")): \(allergies)")

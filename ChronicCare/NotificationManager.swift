@@ -133,7 +133,12 @@ final class NotificationManager {
             actions: [],
             intentIdentifiers: []
         )
-        UNUserNotificationCenter.current().setNotificationCategories([doseCategory, refillCategory, courseCategory])
+        let visitCategory = UNNotificationCategory(
+            identifier: Self.visitPrepCategoryId,
+            actions: [],
+            intentIdentifiers: []
+        )
+        UNUserNotificationCenter.current().setNotificationCategories([doseCategory, refillCategory, courseCategory, visitCategory])
     }
 
     func ensureAuthorization() async -> Bool {

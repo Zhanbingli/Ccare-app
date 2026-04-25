@@ -56,6 +56,15 @@ struct ProfileDrawerV2: View {
 
                 Section(NSLocalizedString("For Your Doctor", comment: "Drawer section")) {
                     navRow(
+                        icon: "calendar.badge.clock",
+                        tint: .teal,
+                        title: NSLocalizedString("Visit Prep", comment: ""),
+                        subtitle: visitPrepSubtitle
+                    ) {
+                        DoctorVisitsView()
+                    }
+
+                    navRow(
                         icon: "stethoscope",
                         tint: .blue,
                         title: NSLocalizedString("Consultation Snapshot", comment: ""),
@@ -141,6 +150,22 @@ struct ProfileDrawerV2: View {
             return NSLocalizedString("No measurements yet", comment: "")
         }
         return String(format: NSLocalizedString("%d measurements", comment: ""), store.measurements.count)
+    }
+
+    private var visitPrepSubtitle: String {
+        guard let visit = store.nextDoctorVisit else {
+            return NSLocalizedString("Plan your next appointment", comment: "")
+        }
+        if let days = visit.daysUntil() {
+            if days == 0 {
+                return String(format: NSLocalizedString("Today · %@", comment: ""), visit.displayTitle)
+            }
+            if days > 0 {
+                return String(format: NSLocalizedString("In %lld days · %@", comment: ""), days, visit.displayTitle)
+            }
+            return String(format: NSLocalizedString("%lld days overdue · %@", comment: ""), abs(days), visit.displayTitle)
+        }
+        return visit.displayTitle
     }
 
     @MainActor

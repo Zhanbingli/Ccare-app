@@ -6,6 +6,7 @@ struct DashboardView: View {
     // reflection card is appended below today's actionable content that
     // opens the adherence calendar directly.
     var onOpenCalendar: (() -> Void)? = nil
+    var onLogMeasurement: (() -> Void)? = nil
 
     @EnvironmentObject var store: DataStore
     @State private var showAddMedication = false
@@ -20,8 +21,11 @@ struct DashboardView: View {
     @AppStorage("prefs.graceMinutes") private var graceMinutes: Int = 30
     @State private var tick = false
     @State private var showAllPRN = false
-    @State private var showCompletedTimeline = false
+    @State private var showFullTodaySchedule = false
     @State private var showSymptomLog = false
+    @State private var showDoctorVisitForm = false
+    @State private var editingDoctorVisit: DoctorVisit?
+    @State private var showVisitSnapshot = false
     private let refreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     private struct MedSchedule: Identifiable {
@@ -96,6 +100,14 @@ struct DashboardView: View {
         let tint: Color
     }
 
+    private enum HomeMode {
+        case quietAccumulation
+        case lightPrep(DoctorVisit, daysUntil: Int)
+        case activePrep(DoctorVisit, daysUntil: Int)
+        case visitDay(DoctorVisit)
+        case postVisitCapture(DoctorVisit)
+    }
+
     private struct TodayState {
         let schedules: [MedSchedule]
         let statusCache: [String: TodayMedStatus]
@@ -166,9 +178,38 @@ struct DashboardView: View {
             let currentAction = state.currentAction
             let nextUpcoming = state.nextUpcoming
             let prnMeds = state.prnMeds
+            let mode = homeMode
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    switch mode {
+                    case .quietAccumulation:
+                        dailyStatusHero(state: state)
+                    case .lightPrep(let visit, let days):
+                        lightPrepHero(visit: visit, daysUntil: days, state: state)
+                        visitDataReadinessCard(visit: visit, mode: mode)
+                    case .activePrep(let visit, _):
+                        preVisitPrepCard(priority: .pinned)
+                        visitDataReadinessCard(visit: visit, mode: mode)
+                    case .visitDay(let visit):
+                        visitDayBoardingPass(visit: visit)
+                    case .postVisitCapture(let visit):
+                        postVisitCaptureCard(visit: visit)
+                    }
+
+                    if notificationStatus == .denied {
+                        reminderRepairCard()
+                    }
+
+                    let safety = safetySummary
+                    if safety.hasIssues {
+                        safetyNoticeCard(summary: safety)
+                    }
+
+                    if let gap = daysSinceLastLog, gap >= 2, !store.medications.isEmpty {
+                        inactivityWarningCard(daysSince: gap)
+                    }
+
                     if store.medications.isEmpty {
                         Card {
                             EmptyStateView(
@@ -180,80 +221,42 @@ struct DashboardView: View {
                             )
                         }
                     } else {
-                        if let onOpenCalendar {
-                            WeekSparkline(onTap: onOpenCalendar)
-                                .padding(.top, 4)
-                                .padding(.trailing, 48)
-                        }
-
-                        if notificationStatus == .denied {
-                            reminderRepairCard()
-                        }
-
-                        let safety = safetySummary
-                        if safety.hasIssues {
-                            safetyNoticeCard(summary: safety)
-                        }
-
                         let allComplete = currentAction == nil && nextUpcoming == nil && totalCount > 0
-
-                        if !allComplete, let gap = daysSinceLastLog, gap >= 2 {
-                            inactivityWarningCard(daysSince: gap)
-                        }
 
                         if allComplete {
                             todayCompleteHero(
                                 takenCount: takenCount,
                                 skippedCount: state.skippedCount,
-                                totalCount: totalCount
+                                totalCount: totalCount,
+                                mode: mode
                             )
 
                             if !schedules.isEmpty {
-                                Button {
-                                    withAnimation(.easeInOut(duration: 0.25)) { showCompletedTimeline.toggle() }
-                                } label: {
-                                    HStack(spacing: 6) {
-                                        Text(showCompletedTimeline
-                                             ? NSLocalizedString("Hide schedule", comment: "")
-                                             : NSLocalizedString("Show today's schedule", comment: ""))
-                                            .appFont(.footnote)
-                                            .fontWeight(.medium)
-                                        Image(systemName: showCompletedTimeline ? "chevron.up" : "chevron.down")
-                                            .font(.system(size: 10, weight: .semibold))
-                                    }
-                                    .foregroundStyle(.secondary)
-                                    .frame(maxWidth: .infinity)
-                                }
-                                .buttonStyle(.plain)
-
-                                if showCompletedTimeline {
-                                    todayUnifiedList(
-                                        schedules: schedules,
-                                        statusCache: statusCache,
-                                        currentActionID: nil,
-                                        nextUpcomingID: nextUpcoming?.id
-                                    )
-                                    .transition(.opacity)
-                                }
+                                todayUnifiedList(
+                                    schedules: schedules,
+                                    statusCache: statusCache,
+                                    currentActionID: nil,
+                                    nextUpcomingID: nextUpcoming?.id,
+                                    collapsedLimit: 3
+                                )
                             }
                         } else if !schedules.isEmpty {
                             todayUnifiedList(
                                 schedules: schedules,
                                 statusCache: statusCache,
                                 currentActionID: currentAction?.id,
-                                nextUpcomingID: nextUpcoming?.id
+                                nextUpcomingID: nextUpcoming?.id,
+                                collapsedLimit: 3
                             )
                         }
 
                         if !prnMeds.isEmpty {
                             asNeededInlineSection(medications: prnMeds)
                         }
+                    }
 
-                        symptomQuickLogEntry()
-
-                        if notificationStatus != .denied && hasReminderSetupIssues {
-                            reminderRepairCard()
-                        }
+                    if notificationStatus != .denied && hasReminderSetupIssues {
+                        reminderRepairCard()
                     }
                 }
                 .padding(.horizontal, 16)
@@ -263,6 +266,31 @@ struct DashboardView: View {
             .sheet(isPresented: $showSymptomLog) {
                 SymptomQuickLogSheet()
                     .environmentObject(store)
+            }
+            .sheet(isPresented: $showDoctorVisitForm) {
+                NavigationStack {
+                    DoctorVisitFormView()
+                        .environmentObject(store)
+                }
+            }
+            .sheet(item: $editingDoctorVisit) { visit in
+                NavigationStack {
+                    DoctorVisitFormView(editing: visit)
+                        .environmentObject(store)
+                }
+            }
+            .sheet(isPresented: $showVisitSnapshot) {
+                NavigationStack {
+                    ConsultationSnapshotView(visit: store.nextDoctorVisit)
+                        .environmentObject(store)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button(NSLocalizedString("Done", comment: "")) {
+                                    showVisitSnapshot = false
+                                }
+                            }
+                        }
+                }
             }
             .sheet(isPresented: $showAddMedication) {
                 MedicationFormView(editing: nil, onSave: { med in
@@ -345,6 +373,11 @@ private struct TakenConfirmationOverlay: View {
 }
 
 private extension DashboardView {
+    private enum VisitPrepPriority {
+        case pinned
+        case secondary
+    }
+
     private var untimedScheduledMeds: [Medication] {
         store.medications.filter { $0.isAsNeeded != true && $0.timesOfDay.isEmpty }
     }
@@ -355,6 +388,37 @@ private extension DashboardView {
 
     private var hasReminderSetupIssues: Bool {
         notificationStatus == .denied || !untimedScheduledMeds.isEmpty || !disabledReminderMeds.isEmpty
+    }
+
+    private var homeMode: HomeMode {
+        if let visit = recentCompletedVisitForCapture {
+            return .postVisitCapture(visit)
+        }
+
+        guard let visit = store.nextDoctorVisit,
+              let days = visit.daysUntil() else {
+            return .quietAccumulation
+        }
+
+        if days == 0 { return .visitDay(visit) }
+        if days <= 3 { return .activePrep(visit, daysUntil: days) }
+        if days <= 7 { return .lightPrep(visit, daysUntil: days) }
+        return .quietAccumulation
+    }
+
+    private var recentCompletedVisitForCapture: DoctorVisit? {
+        let now = Date()
+        return store.completedDoctorVisits.first { visit in
+            guard let completedDate = visit.completedDate else { return false }
+            guard now.timeIntervalSince(completedDate) <= 48 * 60 * 60 else { return false }
+            return needsPostVisitCapture(visit)
+        }
+    }
+
+    private func needsPostVisitCapture(_ visit: DoctorVisit) -> Bool {
+        let notesEmpty = visit.notes?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
+        let changesEmpty = visit.medicationChangesSummary?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
+        return notesEmpty || changesEmpty || visit.nextVisitDate == nil
     }
 
     /// How many days since the last intake log for any scheduled medication. Nil if no scheduled meds.
@@ -368,6 +432,265 @@ private extension DashboardView {
         guard let latestLog else { return nil }
         let cal = Calendar.current
         return cal.dateComponents([.day], from: cal.startOfDay(for: latestLog.date), to: cal.startOfDay(for: Date())).day
+    }
+
+    private func dailyStatusHero(state: TodayState) -> some View {
+        let tint = dailyStatusTint(state: state)
+        return TintedCard(tint: tint) {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(alignment: .top, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(NSLocalizedString("Today", comment: "Dashboard daily status title"))
+                            .appFont(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                            .textCase(.uppercase)
+                            .tracking(0.8)
+
+                        Text(dailyStatusTitle(state: state))
+                            .appFont(.title)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.primary)
+
+                        Text(NSLocalizedString("Small logs today become useful context for your next doctor visit.", comment: "Daily status subtitle"))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    Image(systemName: dailyStatusIconName(state: state))
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(tint)
+                        .frame(width: 52, height: 52)
+                        .background(Circle().fill(tint.opacity(0.12)))
+                }
+
+                HStack(spacing: 8) {
+                    dailyMetricPill(
+                        value: state.totalCount == 0 ? "0" : "\(state.takenCount)/\(state.totalCount)",
+                        label: NSLocalizedString("Doses", comment: "Daily metric label"),
+                        tint: .green
+                    )
+                    dailyMetricPill(
+                        value: "\(todayMeasurementCount)",
+                        label: NSLocalizedString("Readings", comment: "Daily metric label"),
+                        tint: .blue
+                    )
+                    dailyMetricPill(
+                        value: "\(todaySymptomCount)",
+                        label: NSLocalizedString("Feelings", comment: "Daily metric label"),
+                        tint: .pink
+                    )
+                }
+
+                HStack(spacing: 10) {
+                    Button {
+                        showSymptomLog = true
+                    } label: {
+                        Label(NSLocalizedString("How are you feeling?", comment: "Symptom entry prompt"), systemImage: "heart.text.square")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.pink)
+
+                    if let onLogMeasurement {
+                        Button {
+                            onLogMeasurement()
+                        } label: {
+                            Image(systemName: "waveform.path.ecg")
+                                .frame(width: 42)
+                        }
+                        .buttonStyle(.bordered)
+                        .accessibilityLabel(NSLocalizedString("Log Measurement", comment: ""))
+                    }
+                }
+            }
+        }
+    }
+
+    private func dailyMetricPill(value: String, label: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .appFont(.headline)
+                .fontWeight(.bold)
+                .foregroundStyle(.primary)
+                .monospacedDigit()
+            Text(label)
+                .appFont(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(tint.opacity(0.08))
+        )
+    }
+
+    private var todayMeasurementCount: Int {
+        store.measurements.filter { Calendar.current.isDateInToday($0.date) }.count
+    }
+
+    private var todaySymptomCount: Int {
+        store.symptomEntries.filter { Calendar.current.isDateInToday($0.date) }.count
+    }
+
+    private func dailyStatusTitle(state: TodayState) -> String {
+        if state.overdueCount > 0 {
+            return String(format: NSLocalizedString("%lld doses need attention", comment: "Daily status title"), state.overdueCount)
+        }
+        if state.currentAction != nil {
+            return NSLocalizedString("One thing to handle now", comment: "Daily status title")
+        }
+        if state.totalCount == 0 {
+            return NSLocalizedString("Start today's health log", comment: "Daily status title")
+        }
+        if state.remainingCount == 0 {
+            return NSLocalizedString("Today is documented", comment: "Daily status title")
+        }
+        return String(format: NSLocalizedString("%lld doses left today", comment: "Daily status title"), state.remainingCount)
+    }
+
+    private func dailyStatusIconName(state: TodayState) -> String {
+        if state.overdueCount > 0 { return "exclamationmark.triangle.fill" }
+        if state.currentAction != nil { return "clock.badge.exclamationmark.fill" }
+        if state.remainingCount == 0, state.totalCount > 0 { return "checkmark.seal.fill" }
+        return "heart.text.square.fill"
+    }
+
+    private func dailyStatusTint(state: TodayState) -> Color {
+        if state.overdueCount > 0 { return .red }
+        if state.currentAction != nil { return .orange }
+        if state.remainingCount == 0, state.totalCount > 0 { return .green }
+        return .teal
+    }
+
+    private func preVisitPrepCard(priority: VisitPrepPriority) -> some View {
+        let visit = store.nextDoctorVisit
+        let tint = visit.map(visitPrepTint) ?? Color.secondary
+        return TintedCard(tint: tint) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: visitIconName(for: priority, visit: visit))
+                        .font(.system(size: priority == .pinned ? 24 : 20, weight: .semibold))
+                        .foregroundStyle(tint)
+                        .frame(width: priority == .pinned ? 44 : 36, height: priority == .pinned ? 44 : 36)
+                        .background(Circle().fill(tint.opacity(0.12)))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(visit.map { visitPrepTitle($0, priority: priority) } ?? NSLocalizedString("Plan your next appointment", comment: ""))
+                            .appFont(priority == .pinned ? .headline : .subheadline)
+                            .fontWeight(priority == .pinned ? .bold : .semibold)
+                            .foregroundStyle(.primary)
+                        Text(visit.map { visitPrepSubtitle($0, priority: priority) } ?? NSLocalizedString("Add a visit date when you know your next appointment.", comment: ""))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                HStack(spacing: 10) {
+                    visitPrimaryActionButton(visit: visit, priority: priority)
+
+                    if visit != nil {
+                        Button {
+                            showDoctorVisitForm = true
+                        } label: {
+                            Image(systemName: "calendar.badge.plus")
+                                .frame(width: 42)
+                        }
+                        .buttonStyle(.bordered)
+                        .accessibilityLabel(NSLocalizedString("Add Visit", comment: ""))
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func visitPrimaryActionButton(visit: DoctorVisit?, priority: VisitPrepPriority) -> some View {
+        if priority == .pinned {
+            Button {
+                openVisitPrimaryAction(visit: visit)
+            } label: {
+                visitPrimaryActionLabel(visit: visit, priority: priority)
+            }
+            .buttonStyle(.borderedProminent)
+        } else {
+            Button {
+                openVisitPrimaryAction(visit: visit)
+            } label: {
+                visitPrimaryActionLabel(visit: visit, priority: priority)
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    private func visitPrimaryActionLabel(visit: DoctorVisit?, priority: VisitPrepPriority) -> some View {
+        Label(visit == nil ? NSLocalizedString("Add Visit", comment: "") : primaryVisitActionTitle(for: priority),
+              systemImage: visit == nil ? "plus" : "doc.text.magnifyingglass")
+            .frame(maxWidth: .infinity)
+    }
+
+    private func openVisitPrimaryAction(visit: DoctorVisit?) {
+        if visit == nil {
+            showDoctorVisitForm = true
+        } else {
+            showVisitSnapshot = true
+        }
+    }
+
+    private func visitIconName(for priority: VisitPrepPriority, visit: DoctorVisit?) -> String {
+        guard let visit else { return "calendar.badge.plus" }
+        guard let days = visit.daysUntil() else { return "calendar" }
+        if days <= 0 { return "stethoscope" }
+        return priority == .pinned ? "stethoscope" : "calendar.badge.clock"
+    }
+
+    private func primaryVisitActionTitle(for priority: VisitPrepPriority) -> String {
+        priority == .pinned
+            ? NSLocalizedString("Open Doctor Snapshot", comment: "")
+            : NSLocalizedString("Review Snapshot", comment: "")
+    }
+
+    private func visitPrepTitle(_ visit: DoctorVisit, priority: VisitPrepPriority) -> String {
+        guard let days = visit.daysUntil() else {
+            return NSLocalizedString("Visit completed", comment: "")
+        }
+        if days == 0 { return NSLocalizedString("Appointment today", comment: "") }
+        if days < 0 { return String(format: NSLocalizedString("%lld days overdue", comment: ""), abs(days)) }
+        if priority == .secondary {
+            return NSLocalizedString("Next appointment planned", comment: "")
+        }
+        if days > 0 {
+            return String(format: NSLocalizedString("%lld days until appointment", comment: ""), days)
+        }
+        return NSLocalizedString("Next appointment planned", comment: "")
+    }
+
+    private func visitPrepSubtitle(_ visit: DoctorVisit, priority: VisitPrepPriority) -> String {
+        let title = visit.displayTitle
+        if priority == .secondary, let days = visit.daysUntil(), days > 3 {
+            return String(format: NSLocalizedString("%@ · %@. Keep logging quietly until the visit gets close.", comment: ""), title, visit.scheduledDate.formatted(date: .abbreviated, time: .omitted))
+        }
+        if let reason = visit.reason, !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "\(title) · \(reason)"
+        }
+        if let days = visit.daysUntil(), days <= 3 {
+            return String(format: NSLocalizedString("%@ · prepare the doctor snapshot now.", comment: ""), title)
+        }
+        return String(format: NSLocalizedString("%@ · keep logging doses, symptoms, and measurements.", comment: ""), title)
+    }
+
+    private func visitPrepTint(_ visit: DoctorVisit) -> Color {
+        guard let days = visit.daysUntil() else { return .secondary }
+        if days < 0 { return .orange }
+        return days <= 3 ? .teal : .secondary
     }
 
     private func inactivityWarningCard(daysSince: Int) -> some View {
@@ -407,7 +730,7 @@ private extension DashboardView {
     }
 
     private func todayCompleteHero(takenCount: Int, skippedCount: Int, totalCount: Int) -> some View {
-        Card {
+        return Card {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 14) {
                     Image(systemName: "checkmark.seal.fill")
@@ -445,15 +768,35 @@ private extension DashboardView {
         schedules: [MedSchedule],
         statusCache: [String: TodayMedStatus],
         currentActionID: String?,
-        nextUpcomingID: String?
+        nextUpcomingID: String?,
+        collapsedLimit: Int
     ) -> some View {
-        Card {
+        let visibleSchedules = showFullTodaySchedule || schedules.count <= collapsedLimit
+            ? schedules
+            : previewSchedules(
+                schedules: schedules,
+                statusCache: statusCache,
+                currentActionID: currentActionID,
+                nextUpcomingID: nextUpcomingID,
+                limit: collapsedLimit
+            )
+        let isCollapsed = visibleSchedules.count < schedules.count
+
+        return Card {
             VStack(alignment: .leading, spacing: 14) {
-                Text(NSLocalizedString("Today", comment: "Unified schedule section title"))
-                    .appFont(.headline)
+                HStack(alignment: .firstTextBaseline) {
+                    Text(NSLocalizedString("Today schedule", comment: "Unified schedule section title"))
+                        .appFont(.headline)
+                    Spacer()
+                    if schedules.count > collapsedLimit {
+                        Text(String(format: NSLocalizedString("%lld total", comment: "Schedule total count"), schedules.count))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
 
                 VStack(spacing: 10) {
-                    ForEach(Array(schedules.enumerated()), id: \.element.id) { index, item in
+                    ForEach(Array(visibleSchedules.enumerated()), id: \.element.id) { index, item in
                         let status = statusCache[item.id] ?? .none
                         let isCurrent = item.id == currentActionID
                         let isNextUpcoming = item.id == nextUpcomingID
@@ -464,13 +807,77 @@ private extension DashboardView {
                             compactUnifiedRow(item: item, status: status, isNextUpcoming: isNextUpcoming)
                         }
 
-                        if index < schedules.count - 1 {
+                        if index < visibleSchedules.count - 1 {
                             Divider()
                         }
                     }
                 }
+
+                if schedules.count > collapsedLimit {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            showFullTodaySchedule.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(isCollapsed
+                                 ? NSLocalizedString("Show full schedule", comment: "")
+                                 : NSLocalizedString("Show key items only", comment: ""))
+                                .appFont(.footnote)
+                                .fontWeight(.medium)
+                            Image(systemName: isCollapsed ? "chevron.down" : "chevron.up")
+                                .font(.system(size: 10, weight: .semibold))
+                        }
+                        .foregroundStyle(Color.accentColor)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 2)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
+    }
+
+    private func previewSchedules(
+        schedules: [MedSchedule],
+        statusCache: [String: TodayMedStatus],
+        currentActionID: String?,
+        nextUpcomingID: String?,
+        limit: Int
+    ) -> [MedSchedule] {
+        var result: [MedSchedule] = []
+        var seen = Set<String>()
+
+        func append(_ item: MedSchedule?) {
+            guard let item, !seen.contains(item.id), result.count < limit else { return }
+            result.append(item)
+            seen.insert(item.id)
+        }
+
+        append(schedules.first { $0.id == currentActionID })
+        for item in schedules where result.count < limit {
+            if case .overdue = statusCache[item.id] ?? .none {
+                append(item)
+            }
+        }
+        for item in schedules where result.count < limit {
+            switch statusCache[item.id] ?? .none {
+            case .dueSoon, .snoozed:
+                append(item)
+            default:
+                break
+            }
+        }
+        append(schedules.first { $0.id == nextUpcomingID })
+        for item in schedules where result.count < limit {
+            if !(statusCache[item.id] ?? .none).isFinal {
+                append(item)
+            }
+        }
+        for item in schedules where result.count < limit {
+            append(item)
+        }
+        return result
     }
 
     private func emphasizedPendingRow(item: MedSchedule, status: TodayMedStatus) -> some View {

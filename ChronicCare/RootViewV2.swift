@@ -31,7 +31,8 @@ struct RootViewV2: View {
         ZStack(alignment: .topTrailing) {
             AppBackground()
             DashboardView(
-                onOpenCalendar: { showAdherenceCalendar = true }
+                onOpenCalendar: { showAdherenceCalendar = true },
+                onLogMeasurement: { showLogSheet = true }
             )
             profileButton
         }

@@ -11,6 +11,7 @@ extension NotificationManager {
 
     static let refillCategoryId = "MED_REFILL"
     static let courseCategoryId = "MED_COURSE_END"
+    static let visitPrepCategoryId = "VISIT_PREP"
 
     // MARK: - Identifier helpers
 
@@ -20,6 +21,10 @@ extension NotificationManager {
 
     func courseIdentifier(for medID: UUID) -> String {
         "course_\(medID.uuidString)"
+    }
+
+    func visitPrepIdentifier(for visitID: UUID) -> String {
+        "visit_\(visitID.uuidString)"
     }
 
     /// A stable token that encodes both the medication ID and the course end date (day precision).
@@ -204,6 +209,65 @@ extension NotificationManager {
     func cancelCourseReminder(for medID: UUID) {
         setStoredCourseCatchUpToken(nil, for: medID)
         removeLifecycleNotifications(identifier: courseIdentifier(for: medID))
+    }
+
+    // MARK: - Doctor visit prep reminders
+
+    /// Schedules a single reminder for each upcoming doctor visit, normally at
+    /// 9 AM three days before the appointment. If the visit is already within
+    /// that window, the next 9 AM before the visit is used instead.
+    func syncVisitPrepReminders(visits: [DoctorVisit], now: Date = Date()) {
+        let center = UNUserNotificationCenter.current()
+        let upcoming = visits
+            .filter { $0.isUpcoming(now: now) }
+            .sorted { $0.scheduledDate < $1.scheduledDate }
+
+        center.getPendingNotificationRequests { [weak self] requests in
+            guard let self else { return }
+            let existingIDs = requests.map(\.identifier).filter { $0.hasPrefix("visit_") }
+            if !existingIDs.isEmpty {
+                center.removePendingNotificationRequests(withIdentifiers: existingIDs)
+            }
+
+            for visit in upcoming.prefix(8) {
+                guard let fireDate = self.visitPrepFireDate(for: visit, now: now) else { continue }
+                let content = UNMutableNotificationContent()
+                content.title = NSLocalizedString("Prepare for your doctor visit", comment: "")
+                content.body = String(
+                    format: NSLocalizedString("%@ is coming up. Review your medication, symptoms, and measurements before the appointment.", comment: ""),
+                    visit.displayTitle
+                )
+                content.sound = .default
+                content.categoryIdentifier = Self.visitPrepCategoryId
+                content.userInfo = ["doctorVisitID": visit.id.uuidString]
+
+                let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
+                let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
+                center.add(UNNotificationRequest(identifier: self.visitPrepIdentifier(for: visit.id), content: content, trigger: trigger), withCompletionHandler: nil)
+            }
+        }
+    }
+
+    func cancelVisitPrepReminder(for visitID: UUID) {
+        removeLifecycleNotifications(identifier: visitPrepIdentifier(for: visitID))
+    }
+
+    func visitPrepFireDate(for visit: DoctorVisit, now: Date = Date(), calendar: Calendar = .current) -> Date? {
+        guard visit.isUpcoming(now: now, calendar: calendar) else { return nil }
+        let visitDay = calendar.startOfDay(for: visit.scheduledDate)
+        guard let preferredDay = calendar.date(byAdding: .day, value: -3, to: visitDay),
+              let preferred = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: preferredDay) else {
+            return nil
+        }
+        if preferred > now { return preferred }
+
+        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)),
+              tomorrow <= visitDay,
+              let nextMorning = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow),
+              nextMorning > now else {
+            return nil
+        }
+        return nextMorning
     }
 
     /// Ensures refill and course reminders are in sync with the current medication list.

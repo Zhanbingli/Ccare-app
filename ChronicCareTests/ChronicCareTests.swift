@@ -200,6 +200,44 @@ struct ChronicCareTests {
         #expect(clamped.date == now)
     }
 
+    @Test func doctorVisitClassifiesUpcomingAndOverdueByCalendarDay() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 24, hour: 10))!
+        let future = cal.date(from: DateComponents(year: 2026, month: 4, day: 27, hour: 9))!
+        let past = cal.date(from: DateComponents(year: 2026, month: 4, day: 23, hour: 9))!
+
+        let upcoming = DoctorVisit(scheduledDate: future)
+        let overdue = DoctorVisit(scheduledDate: past)
+
+        #expect(upcoming.isUpcoming(now: now, calendar: cal))
+        #expect(upcoming.daysUntil(now: now, calendar: cal) == 3)
+        #expect(overdue.isOverdue(now: now, calendar: cal))
+        #expect(overdue.daysUntil(now: now, calendar: cal) == -1)
+    }
+
+    @Test func visitPrepReminderUsesThreeDayLeadOrNextMorning() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 24, hour: 10))!
+        let laterVisitDate = cal.date(from: DateComponents(year: 2026, month: 4, day: 30, hour: 9))!
+        let nearVisitDate = cal.date(from: DateComponents(year: 2026, month: 4, day: 27, hour: 9))!
+
+        let laterFire = NotificationManager.shared.visitPrepFireDate(
+            for: DoctorVisit(scheduledDate: laterVisitDate),
+            now: now,
+            calendar: cal
+        )
+        let nearFire = NotificationManager.shared.visitPrepFireDate(
+            for: DoctorVisit(scheduledDate: nearVisitDate),
+            now: now,
+            calendar: cal
+        )
+
+        #expect(laterFire == cal.date(from: DateComponents(year: 2026, month: 4, day: 27, hour: 9)))
+        #expect(nearFire == cal.date(from: DateComponents(year: 2026, month: 4, day: 25, hour: 9)))
+    }
+
     @Test func adaptiveReminderAddsLeadTimeForConsistentDelay() {
         let cal = Calendar.current
         let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 8, hour: 10, minute: 0))!

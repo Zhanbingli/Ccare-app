@@ -13,6 +13,7 @@ final class DataStore: ObservableObject {
     @Published private(set) var emergencyInfo: EmergencyInfo?
     @Published private(set) var caregivers: [CaregiverContact] = []
     @Published private(set) var symptomEntries: [SymptomEntry] = []
+    @Published private(set) var doctorVisits: [DoctorVisit] = []
 
     private var cancellables: Set<AnyCancellable> = []
 
@@ -22,6 +23,7 @@ final class DataStore: ObservableObject {
     private let emergencyInfoURL: URL
     private let caregiversURL: URL
     private let symptomEntriesURL: URL
+    private let doctorVisitsURL: URL
     private let goalsDefaults = UserDefaults.standard
 
     init() {
@@ -33,6 +35,7 @@ final class DataStore: ObservableObject {
         self.emergencyInfoURL = docs.appendingPathComponent("emergency_info.json")
         self.caregiversURL = docs.appendingPathComponent("caregivers.json")
         self.symptomEntriesURL = docs.appendingPathComponent("symptom_entries.json")
+        self.doctorVisitsURL = docs.appendingPathComponent("doctor_visits.json")
 
         load()
 
@@ -72,6 +75,12 @@ final class DataStore: ObservableObject {
             .dropFirst()
             .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.saveSymptomEntries() }
+            .store(in: &cancellables)
+
+        $doctorVisits
+            .dropFirst()
+            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+            .sink { [weak self] _ in self?.saveDoctorVisits() }
             .store(in: &cancellables)
     }
 
@@ -305,6 +314,7 @@ final class DataStore: ObservableObject {
     /// Sync all notification schedules and update the badge in one call.
     func syncNotifications(now: Date = Date()) {
         NotificationManager.shared.syncAll(medications: medications, intakeLogs: intakeLogs, now: now)
+        NotificationManager.shared.syncVisitPrepReminders(visits: doctorVisits, now: now)
         NotificationManager.shared.updateBadge(store: self)
     }
 
@@ -319,7 +329,9 @@ final class DataStore: ObservableObject {
         emergencyInfo = nil
         caregivers.removeAll()
         symptomEntries.removeAll()
+        doctorVisits.removeAll()
         saveEmergencyInfo()
+        saveDoctorVisits()
     }
 
     // MARK: - Emergency Info
@@ -353,6 +365,76 @@ final class DataStore: ObservableObject {
         }
     }
 
+    // MARK: - Doctor Visits
+    var upcomingDoctorVisits: [DoctorVisit] {
+        doctorVisits
+            .filter { $0.isUpcoming() }
+            .sorted { $0.scheduledDate < $1.scheduledDate }
+    }
+
+    var overdueDoctorVisits: [DoctorVisit] {
+        doctorVisits
+            .filter { $0.isOverdue() }
+            .sorted { $0.scheduledDate > $1.scheduledDate }
+    }
+
+    var completedDoctorVisits: [DoctorVisit] {
+        doctorVisits
+            .filter(\.isCompleted)
+            .sorted { ($0.completedDate ?? $0.scheduledDate) > ($1.completedDate ?? $1.scheduledDate) }
+    }
+
+    var nextDoctorVisit: DoctorVisit? {
+        upcomingDoctorVisits.first ?? overdueDoctorVisits.first
+    }
+
+    func addDoctorVisit(_ visit: DoctorVisit) {
+        doctorVisits.append(visit)
+        sortDoctorVisits()
+        NotificationManager.shared.syncVisitPrepReminders(visits: doctorVisits)
+    }
+
+    func updateDoctorVisit(_ visit: DoctorVisit) {
+        if let idx = doctorVisits.firstIndex(where: { $0.id == visit.id }) {
+            doctorVisits[idx] = visit
+            sortDoctorVisits()
+            NotificationManager.shared.syncVisitPrepReminders(visits: doctorVisits)
+        }
+    }
+
+    func removeDoctorVisit(at offsets: IndexSet) {
+        let removedIDs = offsets.map { doctorVisits[$0].id }
+        doctorVisits.remove(atOffsets: offsets)
+        for id in removedIDs {
+            NotificationManager.shared.cancelVisitPrepReminder(for: id)
+        }
+        NotificationManager.shared.syncVisitPrepReminders(visits: doctorVisits)
+    }
+
+    func removeDoctorVisit(_ visit: DoctorVisit) {
+        doctorVisits.removeAll { $0.id == visit.id }
+        NotificationManager.shared.cancelVisitPrepReminder(for: visit.id)
+        NotificationManager.shared.syncVisitPrepReminders(visits: doctorVisits)
+    }
+
+    func completeDoctorVisit(_ visit: DoctorVisit, completedDate: Date = Date()) {
+        var updated = visit
+        updated.completedDate = completedDate
+        updateDoctorVisit(updated)
+    }
+
+    func hasDoctorVisit(on date: Date, calendar: Calendar = .current) -> Bool {
+        let day = calendar.startOfDay(for: date)
+        return doctorVisits.contains { calendar.startOfDay(for: $0.scheduledDate) == day }
+    }
+
+    private func sortDoctorVisits() {
+        doctorVisits.sort { lhs, rhs in
+            if lhs.isCompleted != rhs.isCompleted { return !lhs.isCompleted }
+            return lhs.scheduledDate < rhs.scheduledDate
+        }
+    }
+
     // MARK: - Import Backup
     func importBackup(_ backup: AppBackup) {
         medications.forEach { deleteMedicationImage(path: $0.imagePath) }
@@ -378,6 +460,7 @@ final class DataStore: ObservableObject {
         saveEmergencyInfo()
         caregivers = backup.caregivers ?? []
         symptomEntries = (backup.symptomEntries ?? []).sorted(by: { $0.date > $1.date })
+        doctorVisits = (backup.doctorVisits ?? []).sorted(by: { $0.scheduledDate < $1.scheduledDate })
     }
 
     // MARK: - Load/Save
@@ -391,6 +474,7 @@ final class DataStore: ObservableObject {
         } catch { /* first launch or no data */ }
         self.caregivers = loadResilient(from: caregiversURL, label: "caregivers")
         self.symptomEntries = loadResilient(from: symptomEntriesURL, label: "symptom entries").sorted(by: { $0.date > $1.date })
+        self.doctorVisits = loadResilient(from: doctorVisitsURL, label: "doctor visits").sorted(by: { $0.scheduledDate < $1.scheduledDate })
         updateWidgetData()
     }
 
@@ -445,6 +529,11 @@ final class DataStore: ObservableObject {
     private func saveSymptomEntries() {
         let snapshot = symptomEntries
         persist(snapshot, to: symptomEntriesURL, label: "symptom entries")
+    }
+
+    private func saveDoctorVisits() {
+        let snapshot = doctorVisits
+        persist(snapshot, to: doctorVisitsURL, label: "doctor visits")
     }
 
     private func saveIntakeLogs() {

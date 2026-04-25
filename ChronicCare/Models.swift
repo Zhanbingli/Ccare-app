@@ -366,3 +366,71 @@ struct SymptomEntry: Identifiable, Codable {
     /// Optional: which medication(s) the patient suspects triggered this.
     var relatedMedicationIDs: [UUID]?
 }
+
+// MARK: - Doctor Visit (the center of the "pre-visit prep" loop)
+
+/// A single doctor visit — either scheduled (upcoming) or completed (past).
+/// The product treats these as the anchor points of the patient's chronic
+/// care timeline: the App silently collects data between visits, and
+/// surfaces relevant summaries around each one.
+struct DoctorVisit: Identifiable, Codable {
+    var id: UUID = UUID()
+    var scheduledDate: Date
+    /// nil while the visit is upcoming; filled when the patient confirms
+    /// the visit happened (or retroactively).
+    var completedDate: Date?
+
+    // Context — all optional because prep value doesn't depend on them.
+    var hospital: String?
+    var department: String?
+    var doctorName: String?
+    var reason: String?
+
+    // Post-visit reflection — filled after the visit.
+    var notes: String?
+    var medicationChangesSummary: String?
+    var nextVisitDate: Date?
+}
+
+extension DoctorVisit {
+    var isCompleted: Bool { completedDate != nil }
+
+    /// Upcoming = not yet completed and scheduled in the future OR today.
+    func isUpcoming(now: Date = Date(), calendar: Calendar = .current) -> Bool {
+        guard completedDate == nil else { return false }
+        let today = calendar.startOfDay(for: now)
+        let visitDay = calendar.startOfDay(for: scheduledDate)
+        return visitDay >= today
+    }
+
+    /// Overdue = scheduled before today and not yet confirmed.
+    func isOverdue(now: Date = Date(), calendar: Calendar = .current) -> Bool {
+        guard completedDate == nil else { return false }
+        let today = calendar.startOfDay(for: now)
+        let visitDay = calendar.startOfDay(for: scheduledDate)
+        return visitDay < today
+    }
+
+    /// Calendar days from today to the scheduled date. Negative if overdue.
+    /// Nil once the visit is completed.
+    func daysUntil(now: Date = Date(), calendar: Calendar = .current) -> Int? {
+        guard completedDate == nil else { return nil }
+        let today = calendar.startOfDay(for: now)
+        let visitDay = calendar.startOfDay(for: scheduledDate)
+        return calendar.dateComponents([.day], from: today, to: visitDay).day
+    }
+
+    /// Short display title — doctor + department fall back to hospital.
+    var displayTitle: String {
+        if let doctor = doctorName?.trimmingCharacters(in: .whitespaces), !doctor.isEmpty {
+            return doctor
+        }
+        if let dept = department?.trimmingCharacters(in: .whitespaces), !dept.isEmpty {
+            return dept
+        }
+        if let hospital = hospital?.trimmingCharacters(in: .whitespaces), !hospital.isEmpty {
+            return hospital
+        }
+        return NSLocalizedString("Doctor visit", comment: "Fallback visit title")
+    }
+}
