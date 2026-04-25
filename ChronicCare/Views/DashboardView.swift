@@ -26,6 +26,7 @@ struct DashboardView: View {
     @State private var showDoctorVisitForm = false
     @State private var editingDoctorVisit: DoctorVisit?
     @State private var showVisitSnapshot = false
+    @State private var quickFeelingConfirmation: String?
     private let refreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     private struct MedSchedule: Identifiable {
@@ -106,6 +107,58 @@ struct DashboardView: View {
         case activePrep(DoctorVisit, daysUntil: Int)
         case visitDay(DoctorVisit)
         case postVisitCapture(DoctorVisit)
+    }
+
+    private enum QuickFeeling: String, CaseIterable, Identifiable {
+        case good
+        case okay
+        case unwell
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .good:
+                return NSLocalizedString("Good", comment: "Quick feeling option")
+            case .okay:
+                return NSLocalizedString("Okay", comment: "Quick feeling option")
+            case .unwell:
+                return NSLocalizedString("Unwell", comment: "Quick feeling option")
+            }
+        }
+
+        var iconName: String {
+            switch self {
+            case .good:
+                return "face.smiling"
+            case .okay:
+                return "minus.circle"
+            case .unwell:
+                return "heart.text.square"
+            }
+        }
+
+        var tint: Color {
+            switch self {
+            case .good:
+                return .green
+            case .okay:
+                return .orange
+            case .unwell:
+                return .pink
+            }
+        }
+
+        var symptomTag: String {
+            switch self {
+            case .good:
+                return NSLocalizedString("Felt good", comment: "Quick feeling symptom tag")
+            case .okay:
+                return NSLocalizedString("Felt okay", comment: "Quick feeling symptom tag")
+            case .unwell:
+                return NSLocalizedString("Felt unwell", comment: "Quick feeling symptom tag")
+            }
+        }
     }
 
     private struct TodayState {
@@ -485,29 +538,80 @@ private extension DashboardView {
                     )
                 }
 
-                HStack(spacing: 10) {
-                    Button {
-                        showSymptomLog = true
-                    } label: {
-                        Label(NSLocalizedString("How are you feeling?", comment: "Symptom entry prompt"), systemImage: "heart.text.square")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.pink)
-
-                    if let onLogMeasurement {
-                        Button {
-                            onLogMeasurement()
-                        } label: {
-                            Image(systemName: "waveform.path.ecg")
-                                .frame(width: 42)
-                        }
-                        .buttonStyle(.bordered)
-                        .accessibilityLabel(NSLocalizedString("Log Measurement", comment: ""))
-                    }
-                }
+                dailyFeelingCheckIn()
             }
         }
+    }
+
+    private func dailyFeelingCheckIn() -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(NSLocalizedString("Body check-in", comment: "Quick daily feeling header"))
+                    .appFont(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                if todaySymptomCount > 0 {
+                    Text(NSLocalizedString("Logged today", comment: "Quick feeling logged status"))
+                        .appFont(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.green)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(Color.green.opacity(0.12)))
+                }
+            }
+
+            HStack(spacing: 8) {
+                ForEach(QuickFeeling.allCases) { feeling in
+                    quickFeelingButton(feeling)
+                }
+
+                if let onLogMeasurement {
+                    Button {
+                        onLogMeasurement()
+                    } label: {
+                        Image(systemName: "waveform.path.ecg")
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(width: 42, height: 42)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.blue)
+                    .background(Capsule().fill(Color.blue.opacity(0.10)))
+                    .accessibilityLabel(NSLocalizedString("Log Measurement", comment: ""))
+                }
+            }
+
+            if let quickFeelingConfirmation {
+                Text(quickFeelingConfirmation)
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    private func quickFeelingButton(_ feeling: QuickFeeling) -> some View {
+        Button {
+            handleQuickFeeling(feeling)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: feeling.iconName)
+                    .font(.system(size: 14, weight: .semibold))
+                Text(feeling.title)
+                    .appFont(.subheadline)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
+            }
+            .foregroundStyle(feeling.tint)
+            .frame(maxWidth: .infinity)
+            .frame(height: 42)
+            .background(Capsule().fill(feeling.tint.opacity(0.10)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(feeling.title)
     }
 
     private func dailyMetricPill(value: String, label: String, tint: Color) -> some View {
@@ -540,6 +644,49 @@ private extension DashboardView {
         store.symptomEntries.filter { Calendar.current.isDateInToday($0.date) }.count
     }
 
+    private func handleQuickFeeling(_ feeling: QuickFeeling) {
+        if feeling == .unwell {
+            showSymptomLog = true
+            return
+        }
+
+        let quickTags = Set(QuickFeeling.allCases.map(\.symptomTag))
+        let now = Date()
+        let entry = SymptomEntry(
+            date: now,
+            tags: [feeling.symptomTag],
+            severity: .mild,
+            note: nil,
+            relatedMedicationIDs: nil
+        )
+
+        if let existing = store.symptomEntries.first(where: { existing in
+            Calendar.current.isDateInToday(existing.date)
+                && existing.tags.contains(where: { quickTags.contains($0) })
+                && (existing.note?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        }) {
+            var updated = existing
+            updated.date = now
+            updated.tags = entry.tags
+            updated.severity = entry.severity
+            store.updateSymptomEntry(updated)
+        } else {
+            store.addSymptomEntry(entry)
+        }
+
+        let message = String(format: NSLocalizedString("Saved: %@", comment: "Quick feeling saved confirmation"), feeling.title)
+        withAnimation(.easeInOut(duration: 0.2)) {
+            quickFeelingConfirmation = message
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            if quickFeelingConfirmation == message {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    quickFeelingConfirmation = nil
+                }
+            }
+        }
+    }
+
     private func dailyStatusTitle(state: TodayState) -> String {
         if state.overdueCount > 0 {
             return String(format: NSLocalizedString("%lld doses need attention", comment: "Daily status title"), state.overdueCount)
@@ -568,6 +715,244 @@ private extension DashboardView {
         if state.currentAction != nil { return .orange }
         if state.remainingCount == 0, state.totalCount > 0 { return .green }
         return .teal
+    }
+
+    private func lightPrepHero(visit: DoctorVisit, daysUntil: Int, state: TodayState) -> some View {
+        TintedCard(tint: .teal) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.teal)
+                        .frame(width: 48, height: 48)
+                        .background(Circle().fill(Color.teal.opacity(0.12)))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(String(format: NSLocalizedString("Appointment in %lld days", comment: "Light visit prep title"), daysUntil))
+                            .appFont(.title)
+                            .fontWeight(.bold)
+                        Text(visitSupportingLine(visit))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Divider()
+
+                HStack(spacing: 8) {
+                    dailyMetricPill(
+                        value: state.totalCount == 0 ? "0" : "\(state.takenCount)/\(state.totalCount)",
+                        label: NSLocalizedString("Doses", comment: "Daily metric label"),
+                        tint: .green
+                    )
+                    dailyMetricPill(
+                        value: "\(recentMeasurementCount(days: 30))",
+                        label: NSLocalizedString("30d readings", comment: "Visit prep readiness metric"),
+                        tint: .blue
+                    )
+                    dailyMetricPill(
+                        value: "\(recentSymptomCount(days: 30))",
+                        label: NSLocalizedString("30d feelings", comment: "Visit prep readiness metric"),
+                        tint: .pink
+                    )
+                }
+            }
+        }
+    }
+
+    private func visitDayBoardingPass(visit: DoctorVisit) -> some View {
+        TintedCard(tint: .teal) {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(NSLocalizedString("Today is your appointment", comment: "Visit day hero title"))
+                        .appFont(.title)
+                        .fontWeight(.bold)
+                    Text(visitSupportingLine(visit))
+                        .appFont(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Button {
+                    showVisitSnapshot = true
+                } label: {
+                    Label(NSLocalizedString("Show Doctor Snapshot", comment: "Visit day primary action"), systemImage: "doc.text.magnifyingglass")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.teal)
+
+                InsetPanel(tint: .teal) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label(NSLocalizedString("Bring ID, insurance card, and your medication list.", comment: "Visit day reminder"), systemImage: "checklist")
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                        Button {
+                            editingDoctorVisit = visit
+                        } label: {
+                            Label(NSLocalizedString("Record doctor notes after the visit", comment: "Visit day secondary action"), systemImage: "square.and.pencil")
+                                .appFont(.caption)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private func postVisitCaptureCard(visit: DoctorVisit) -> some View {
+        TintedCard(tint: .blue) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "stethoscope.circle.fill")
+                        .font(.system(size: 30, weight: .semibold))
+                        .foregroundStyle(.blue)
+                        .frame(width: 50, height: 50)
+                        .background(Circle().fill(Color.blue.opacity(0.12)))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(NSLocalizedString("Capture what the doctor said", comment: "Post visit capture title"))
+                            .appFont(.title)
+                            .fontWeight(.bold)
+                        Text(NSLocalizedString("The first 48 hours after a visit are the best time to record instructions, medication changes, and the next appointment.", comment: "Post visit capture subtitle"))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    readinessRow(
+                        title: NSLocalizedString("Doctor instructions", comment: "Post visit checklist"),
+                        detail: visit.notes?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                            ? NSLocalizedString("Saved", comment: "")
+                            : NSLocalizedString("Not recorded yet", comment: ""),
+                        isReady: visit.notes?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
+                        action: { editingDoctorVisit = visit }
+                    )
+                    readinessRow(
+                        title: NSLocalizedString("Medication changes", comment: "Post visit checklist"),
+                        detail: visit.medicationChangesSummary?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                            ? NSLocalizedString("Saved", comment: "")
+                            : NSLocalizedString("Not recorded yet", comment: ""),
+                        isReady: visit.medicationChangesSummary?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
+                        action: { editingDoctorVisit = visit }
+                    )
+                    readinessRow(
+                        title: NSLocalizedString("Next appointment", comment: "Post visit checklist"),
+                        detail: visit.nextVisitDate?.formatted(date: .abbreviated, time: .omitted) ?? NSLocalizedString("Not scheduled yet", comment: ""),
+                        isReady: visit.nextVisitDate != nil,
+                        action: { editingDoctorVisit = visit }
+                    )
+                }
+
+                Button {
+                    editingDoctorVisit = visit
+                } label: {
+                    Label(NSLocalizedString("Record Visit Notes", comment: "Post visit capture action"), systemImage: "square.and.pencil")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+    }
+
+    private func visitDataReadinessCard(visit: DoctorVisit, mode: HomeMode) -> some View {
+        let measurementCount = recentMeasurementCount(days: 30)
+        let symptomCount = recentSymptomCount(days: 30)
+        let medCount = store.medications.count
+
+        return Card {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text(NSLocalizedString("Data readiness", comment: "Visit prep readiness card title"))
+                        .appFont(.headline)
+                    Spacer()
+                    Text(readinessScoreText(medCount: medCount, measurementCount: measurementCount, symptomCount: symptomCount))
+                        .appFont(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.secondary)
+                }
+
+                readinessRow(
+                    title: NSLocalizedString("Medication history", comment: "Visit prep readiness item"),
+                    detail: medCount == 0
+                        ? NSLocalizedString("No medications yet", comment: "")
+                        : String(format: NSLocalizedString("%lld current medications", comment: "Visit prep readiness medication count"), medCount),
+                    isReady: medCount > 0,
+                    action: { showAddMedication = true }
+                )
+                readinessRow(
+                    title: NSLocalizedString("Home measurements", comment: "Visit prep readiness item"),
+                    detail: measurementCount == 0
+                        ? NSLocalizedString("No readings in the last 30 days", comment: "")
+                        : String(format: NSLocalizedString("%lld readings in the last 30 days", comment: "Visit prep readiness readings count"), measurementCount),
+                    isReady: measurementCount > 0,
+                    action: { onLogMeasurement?() }
+                )
+                readinessRow(
+                    title: NSLocalizedString("Symptoms and feelings", comment: "Visit prep readiness item"),
+                    detail: symptomCount == 0
+                        ? NSLocalizedString("No symptom notes yet", comment: "")
+                        : String(format: NSLocalizedString("%lld notes in the last 30 days", comment: "Visit prep readiness symptom count"), symptomCount),
+                    isReady: symptomCount > 0,
+                    action: { showSymptomLog = true }
+                )
+            }
+        }
+    }
+
+    private func readinessRow(title: String, detail: String, isReady: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: isReady ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(isReady ? Color.green : Color.orange)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .appFont(.subheadline)
+                        .foregroundStyle(.primary)
+                    Text(detail)
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 6)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func readinessScoreText(medCount: Int, measurementCount: Int, symptomCount: Int) -> String {
+        let readyCount = [medCount > 0, measurementCount > 0, symptomCount > 0].filter { $0 }.count
+        return String(format: NSLocalizedString("%lld/3 ready", comment: "Visit prep readiness score"), readyCount)
+    }
+
+    private func visitSupportingLine(_ visit: DoctorVisit) -> String {
+        let time = visit.scheduledDate.formatted(date: .omitted, time: .shortened)
+        let place = [Optional(visit.displayTitle), visit.hospital]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+        if place.isEmpty { return time }
+        return "\(time) · \(place)"
+    }
+
+    private func recentMeasurementCount(days: Int) -> Int {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
+        return store.measurements.filter { $0.date >= cutoff }.count
+    }
+
+    private func recentSymptomCount(days: Int) -> Int {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
+        return store.symptomEntries.filter { $0.date >= cutoff }.count
     }
 
     private func preVisitPrepCard(priority: VisitPrepPriority) -> some View {
@@ -729,7 +1114,7 @@ private extension DashboardView {
         return items.sorted { $0.time < $1.time }
     }
 
-    private func todayCompleteHero(takenCount: Int, skippedCount: Int, totalCount: Int) -> some View {
+    private func todayCompleteHero(takenCount: Int, skippedCount: Int, totalCount: Int, mode: HomeMode) -> some View {
         return Card {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 14) {
@@ -740,7 +1125,7 @@ private extension DashboardView {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(NSLocalizedString("Today complete", comment: ""))
                             .appFont(.headline)
-                        Text(todayCompleteSummary(taken: takenCount, skipped: skippedCount, total: totalCount))
+                        Text(todayCompleteSummary(taken: takenCount, skipped: skippedCount, total: totalCount, mode: mode))
                             .appFont(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -1370,7 +1755,19 @@ private extension DashboardView {
         }
     }
 
-    private func todayCompleteSummary(taken: Int, skipped: Int, total: Int) -> String {
+    private func todayCompleteSummary(taken: Int, skipped: Int, total: Int, mode: HomeMode) -> String {
+        if case .lightPrep(_, let days) = mode {
+            return String(format: NSLocalizedString("Today complete. Appointment in %lld days; your records are getting ready.", comment: "Complete summary with light visit prep"), days)
+        }
+        if case .activePrep(_, let days) = mode {
+            if days < 0 {
+                return NSLocalizedString("Today complete. This appointment is overdue; update it after the visit.", comment: "Complete summary with overdue visit")
+            }
+            return String(format: NSLocalizedString("Today complete. Appointment in %lld days; review the doctor snapshot next.", comment: "Complete summary with active visit prep"), days)
+        }
+        if case .visitDay = mode {
+            return NSLocalizedString("Today complete. Keep the doctor snapshot ready for the appointment.", comment: "Complete summary on visit day")
+        }
         if skipped > 0 {
             return String(format: NSLocalizedString("%lld taken, %lld skipped out of %lld", comment: "complete summary"), taken, skipped, total)
         }

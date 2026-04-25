@@ -28,13 +28,18 @@ struct RootViewV2: View {
     }
 
     private var mainContent: some View {
-        ZStack(alignment: .topTrailing) {
+        ZStack {
             AppBackground()
             DashboardView(
                 onOpenCalendar: { showAdherenceCalendar = true },
                 onLogMeasurement: { showLogSheet = true }
             )
+        }
+        .safeAreaInset(edge: .top, alignment: .trailing, spacing: 0) {
             profileButton
+                .padding(.top, 8)
+                .padding(.trailing, 16)
+                .padding(.bottom, 6)
         }
         .dynamicTypeSize(.xSmall ... .accessibility5)
         .sheet(isPresented: $showProfileDrawer) {
@@ -118,8 +123,6 @@ struct RootViewV2: View {
         ) {
             showProfileDrawer = true
         }
-        .padding(.top, 8)
-        .padding(.trailing, 16)
     }
 
     private func circularActionButton(
