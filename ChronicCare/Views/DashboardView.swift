@@ -7,6 +7,7 @@ struct DashboardView: View {
     // opens the adherence calendar directly.
     var onOpenCalendar: (() -> Void)? = nil
     var onLogMeasurement: (() -> Void)? = nil
+    var onOpenProfile: (() -> Void)? = nil
 
     @EnvironmentObject var store: DataStore
     @State private var showAddMedication = false
@@ -235,6 +236,8 @@ struct DashboardView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    homeHeader()
+
                     switch mode {
                     case .quietAccumulation:
                         dailyStatusHero(state: state)
@@ -313,7 +316,7 @@ struct DashboardView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 6)
+                .padding(.top, 10)
                 .padding(.bottom, 24)
             }
             .sheet(isPresented: $showSymptomLog) {
@@ -394,6 +397,43 @@ struct DashboardView: View {
                 refreshNotificationStatus()
             }
         }
+    }
+
+    private func homeHeader() -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(NSLocalizedString("Today", comment: "Home header eyebrow"))
+                    .appFont(.micro)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(EditorialPalette.textSecondary)
+                    .textCase(.uppercase)
+                    .tracking(0.8)
+                Text(homeDateText)
+                    .appFont(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.primary)
+            }
+
+            Spacer()
+
+            Button {
+                onOpenProfile?()
+            } label: {
+                Image(systemName: "person.crop.circle")
+                    .font(.system(size: 22, weight: .regular))
+                    .foregroundStyle(EditorialPalette.textPrimary)
+                    .frame(width: 42, height: 42)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(NSLocalizedString("Profile", comment: ""))
+        }
+        .padding(.bottom, 4)
+    }
+
+    private var homeDateText: String {
+        let formatter = DateFormatter()
+        formatter.setLocalizedDateFormatFromTemplate("MMMEd")
+        return formatter.string(from: Date())
     }
 }
 
@@ -488,83 +528,136 @@ private extension DashboardView {
     }
 
     private func dailyStatusHero(state: TodayState) -> some View {
-        let tint = dailyStatusTint(state: state)
-        return TintedCard(tint: tint) {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .top, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(NSLocalizedString("Today", comment: "Dashboard daily status title"))
-                            .appFont(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.secondary)
-                            .textCase(.uppercase)
-                            .tracking(0.8)
+        VStack(alignment: .leading, spacing: EditorialSpacing.lg) {
+            editorialDivider()
 
-                        Text(dailyStatusTitle(state: state))
-                            .appFont(.title)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.primary)
+            VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
+                Text(NSLocalizedString("Today", comment: "Dashboard daily status title"))
+                    .appFont(.headline)
+                    .foregroundStyle(EditorialPalette.textPrimary)
 
-                        Text(NSLocalizedString("Small logs today become useful context for your next doctor visit.", comment: "Daily status subtitle"))
+                HStack(alignment: .firstTextBaseline, spacing: EditorialSpacing.md) {
+                    Text("\(state.takenCount)")
+                        .appFontNumeric(.heroNumber)
+                        .foregroundStyle(EditorialPalette.textPrimary)
+
+                    VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                        Rectangle()
+                            .fill(EditorialPalette.textPrimary)
+                            .frame(width: 48, height: 1)
+                        Text(String(format: NSLocalizedString("of %lld items", comment: "Daily dose progress denominator"), state.totalCount))
                             .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .foregroundStyle(EditorialPalette.textSecondary)
                     }
-
-                    Spacer(minLength: 8)
-
-                    Image(systemName: dailyStatusIconName(state: state))
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundStyle(tint)
-                        .frame(width: 52, height: 52)
-                        .background(Circle().fill(tint.opacity(0.12)))
                 }
 
-                HStack(spacing: 8) {
-                    dailyMetricPill(
-                        value: state.totalCount == 0 ? "0" : "\(state.takenCount)/\(state.totalCount)",
-                        label: NSLocalizedString("Doses", comment: "Daily metric label"),
-                        tint: .green
-                    )
-                    dailyMetricPill(
-                        value: "\(todayMeasurementCount)",
-                        label: NSLocalizedString("Readings", comment: "Daily metric label"),
-                        tint: .blue
-                    )
-                    dailyMetricPill(
-                        value: "\(todaySymptomCount)",
-                        label: NSLocalizedString("Feelings", comment: "Daily metric label"),
-                        tint: .pink
-                    )
+                if let current = state.currentAction ?? state.nextUpcoming {
+                    nextDoseEditorialLine(item: current, isActionable: state.currentAction != nil)
+                } else {
+                    Text(dailyStatusTitle(state: state))
+                        .appFont(.caption)
+                        .foregroundStyle(EditorialPalette.textSecondary)
                 }
+            }
 
-                dailyFeelingCheckIn()
+            editorialDivider()
+
+            dailyMeasurementInlineSection()
+
+            editorialDivider()
+
+            dailyFeelingCheckIn()
+        }
+    }
+
+    private func nextDoseEditorialLine(item: MedSchedule, isActionable: Bool) -> some View {
+        VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
+            Text(String(format: NSLocalizedString("Next item %@", comment: "Dashboard next dose label"), item.time.formatted(date: .omitted, time: .shortened)))
+                .appFont(.micro)
+                .textCase(.uppercase)
+                .tracking(0.6)
+                .foregroundStyle(EditorialPalette.textSecondary)
+
+            Text(item.med.name)
+                .appFont(.headline)
+                .foregroundStyle(EditorialPalette.textPrimary)
+
+            Text(item.med.dose)
+                .appFont(.caption)
+                .foregroundStyle(EditorialPalette.textSecondary)
+
+            if isActionable {
+                HStack(spacing: EditorialSpacing.sm) {
+                    Button(NSLocalizedString("Take", comment: "")) {
+                        beginTakeFlow(for: item)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(EditorialPalette.primary)
+
+                    Button(NSLocalizedString("Skip", comment: "")) {
+                        skipDose(for: item)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(EditorialPalette.textSecondary)
+                }
+                .padding(.top, EditorialSpacing.xs)
             }
         }
     }
 
+    private func dailyMeasurementInlineSection() -> some View {
+        VStack(spacing: EditorialSpacing.sm) {
+            measurementPromptRow(title: NSLocalizedString("Blood pressure", comment: "Measurement quick prompt"), value: todayMeasurementCount > 0 ? NSLocalizedString("Logged", comment: "Measurement logged status") : NSLocalizedString("Not measured", comment: "Measurement missing status"))
+            measurementPromptRow(title: NSLocalizedString("Blood glucose", comment: "Measurement quick prompt"), value: NSLocalizedString("Not measured", comment: "Measurement missing status"))
+        }
+    }
+
+    private func measurementPromptRow(title: String, value: String) -> some View {
+        Button {
+            onLogMeasurement?()
+        } label: {
+            HStack {
+                Text(title)
+                    .appFont(.body)
+                    .foregroundStyle(EditorialPalette.textPrimary)
+                Spacer()
+                Text(value)
+                    .appFont(.caption)
+                    .foregroundStyle(EditorialPalette.textSecondary)
+                Image(systemName: "plus")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(EditorialPalette.primary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func editorialDivider() -> some View {
+        Rectangle()
+            .fill(EditorialPalette.divider)
+            .frame(height: 1)
+    }
+
     private func dailyFeelingCheckIn() -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: EditorialSpacing.md) {
             HStack {
                 Text(NSLocalizedString("Body check-in", comment: "Quick daily feeling header"))
-                    .appFont(.caption)
+                    .appFont(.headline)
                     .fontWeight(.semibold)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(EditorialPalette.textPrimary)
 
                 Spacer()
 
                 if todaySymptomCount > 0 {
                     Text(NSLocalizedString("Logged today", comment: "Quick feeling logged status"))
-                        .appFont(.caption)
+                        .appFont(.micro)
                         .fontWeight(.semibold)
-                        .foregroundStyle(.green)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(Color.green.opacity(0.12)))
+                        .foregroundStyle(EditorialPalette.textSecondary)
                 }
             }
 
-            HStack(spacing: 8) {
+            HStack(spacing: EditorialSpacing.lg) {
                 ForEach(QuickFeeling.allCases) { feeling in
                     quickFeelingButton(feeling)
                 }
@@ -574,12 +667,11 @@ private extension DashboardView {
                         onLogMeasurement()
                     } label: {
                         Image(systemName: "waveform.path.ecg")
-                            .font(.system(size: 15, weight: .semibold))
-                            .frame(width: 42, height: 42)
+                            .font(.system(size: 14, weight: .regular))
+                            .frame(width: 28, height: 28)
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(.blue)
-                    .background(Capsule().fill(Color.blue.opacity(0.10)))
+                    .foregroundStyle(EditorialPalette.primary)
                     .accessibilityLabel(NSLocalizedString("Log Measurement", comment: ""))
                 }
             }
@@ -587,7 +679,7 @@ private extension DashboardView {
             if let quickFeelingConfirmation {
                 Text(quickFeelingConfirmation)
                     .appFont(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(EditorialPalette.textSecondary)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
@@ -598,17 +690,15 @@ private extension DashboardView {
             handleQuickFeeling(feeling)
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: feeling.iconName)
-                    .font(.system(size: 14, weight: .semibold))
+                Image(systemName: "circle")
+                    .font(.system(size: 12, weight: .regular))
                 Text(feeling.title)
                     .appFont(.subheadline)
-                    .fontWeight(.semibold)
+                    .fontWeight(.regular)
                     .lineLimit(1)
             }
-            .foregroundStyle(feeling.tint)
-            .frame(maxWidth: .infinity)
-            .frame(height: 42)
-            .background(Capsule().fill(feeling.tint.opacity(0.10)))
+            .foregroundStyle(EditorialPalette.textPrimary)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(feeling.title)
@@ -619,21 +709,16 @@ private extension DashboardView {
             Text(value)
                 .appFont(.headline)
                 .fontWeight(.bold)
-                .foregroundStyle(.primary)
+                .foregroundStyle(EditorialPalette.textPrimary)
                 .monospacedDigit()
             Text(label)
                 .appFont(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(EditorialPalette.textSecondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(tint.opacity(0.08))
-        )
+        .padding(.vertical, EditorialSpacing.sm)
     }
 
     private var todayMeasurementCount: Int {
@@ -711,34 +796,30 @@ private extension DashboardView {
     }
 
     private func dailyStatusTint(state: TodayState) -> Color {
-        if state.overdueCount > 0 { return .red }
-        if state.currentAction != nil { return .orange }
-        if state.remainingCount == 0, state.totalCount > 0 { return .green }
-        return .teal
+        if state.overdueCount > 0 { return EditorialPalette.warning }
+        if state.currentAction != nil { return EditorialPalette.primary }
+        if state.remainingCount == 0, state.totalCount > 0 { return EditorialPalette.success }
+        return EditorialPalette.primary
     }
 
     private func lightPrepHero(visit: DoctorVisit, daysUntil: Int, state: TodayState) -> some View {
-        TintedCard(tint: .teal) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "calendar.badge.clock")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(.teal)
-                        .frame(width: 48, height: 48)
-                        .background(Circle().fill(Color.teal.opacity(0.12)))
+        TintedCard(tint: EditorialPalette.primary) {
+            VStack(alignment: .leading, spacing: EditorialSpacing.lg) {
+                Text(NSLocalizedString("Appointment countdown", comment: "Visit prep editorial title"))
+                    .appFont(.headline)
+                    .foregroundStyle(EditorialPalette.textPrimary)
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(String(format: NSLocalizedString("Appointment in %lld days", comment: "Light visit prep title"), daysUntil))
-                            .appFont(.title)
-                            .fontWeight(.bold)
-                        Text(visitSupportingLine(visit))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                    Text(String(format: NSLocalizedString("%lld days", comment: "Visit countdown hero number"), daysUntil))
+                        .appFontNumeric(.heroNumber)
+                        .foregroundStyle(EditorialPalette.primary)
+                    Text(visitSupportingLine(visit))
+                        .appFont(.caption)
+                        .foregroundStyle(EditorialPalette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Divider()
+                editorialDivider()
 
                 HStack(spacing: 8) {
                     dailyMetricPill(
@@ -762,15 +843,16 @@ private extension DashboardView {
     }
 
     private func visitDayBoardingPass(visit: DoctorVisit) -> some View {
-        TintedCard(tint: .teal) {
-            VStack(alignment: .leading, spacing: 18) {
+        TintedCard(tint: EditorialPalette.primary) {
+            VStack(alignment: .leading, spacing: EditorialSpacing.lg) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(NSLocalizedString("Today is your appointment", comment: "Visit day hero title"))
-                        .appFont(.title)
+                        .appFont(.displayTitle)
                         .fontWeight(.bold)
+                        .foregroundStyle(EditorialPalette.textPrimary)
                     Text(visitSupportingLine(visit))
                         .appFont(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(EditorialPalette.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -782,13 +864,13 @@ private extension DashboardView {
                         .frame(maxWidth: .infinity, minHeight: 52)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.teal)
+                .tint(EditorialPalette.primary)
 
-                InsetPanel(tint: .teal) {
+                InsetPanel(tint: nil) {
                     VStack(alignment: .leading, spacing: 8) {
                         Label(NSLocalizedString("Bring ID, insurance card, and your medication list.", comment: "Visit day reminder"), systemImage: "checklist")
                             .appFont(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(EditorialPalette.textSecondary)
                         Button {
                             editingDoctorVisit = visit
                         } label: {
@@ -803,27 +885,20 @@ private extension DashboardView {
     }
 
     private func postVisitCaptureCard(visit: DoctorVisit) -> some View {
-        TintedCard(tint: .blue) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "stethoscope.circle.fill")
-                        .font(.system(size: 30, weight: .semibold))
-                        .foregroundStyle(.blue)
-                        .frame(width: 50, height: 50)
-                        .background(Circle().fill(Color.blue.opacity(0.12)))
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(NSLocalizedString("Capture what the doctor said", comment: "Post visit capture title"))
-                            .appFont(.title)
-                            .fontWeight(.bold)
-                        Text(NSLocalizedString("The first 48 hours after a visit are the best time to record instructions, medication changes, and the next appointment.", comment: "Post visit capture subtitle"))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+        TintedCard(tint: EditorialPalette.primary) {
+            VStack(alignment: .leading, spacing: EditorialSpacing.lg) {
+                VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
+                    Text(NSLocalizedString("Capture what the doctor said", comment: "Post visit capture title"))
+                        .appFont(.displayTitle)
+                        .fontWeight(.bold)
+                        .foregroundStyle(EditorialPalette.textPrimary)
+                    Text(NSLocalizedString("The first 48 hours after a visit are the best time to record instructions, medication changes, and the next appointment.", comment: "Post visit capture subtitle"))
+                        .appFont(.caption)
+                        .foregroundStyle(EditorialPalette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
                     readinessRow(
                         title: NSLocalizedString("Doctor instructions", comment: "Post visit checklist"),
                         detail: visit.notes?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
@@ -855,6 +930,7 @@ private extension DashboardView {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(EditorialPalette.primary)
             }
         }
     }
@@ -907,17 +983,17 @@ private extension DashboardView {
     private func readinessRow(title: String, detail: String, isReady: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: isReady ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(isReady ? Color.green : Color.orange)
+                Image(systemName: isReady ? "checkmark" : "exclamationmark")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(isReady ? EditorialPalette.primary : EditorialPalette.warning)
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .appFont(.subheadline)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(EditorialPalette.textPrimary)
                     Text(detail)
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(EditorialPalette.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 6)
@@ -957,26 +1033,18 @@ private extension DashboardView {
 
     private func preVisitPrepCard(priority: VisitPrepPriority) -> some View {
         let visit = store.nextDoctorVisit
-        let tint = visit.map(visitPrepTint) ?? Color.secondary
+        let tint = visit.map(visitPrepTint) ?? EditorialPalette.textSecondary
         return TintedCard(tint: tint) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: visitIconName(for: priority, visit: visit))
-                        .font(.system(size: priority == .pinned ? 24 : 20, weight: .semibold))
-                        .foregroundStyle(tint)
-                        .frame(width: priority == .pinned ? 44 : 36, height: priority == .pinned ? 44 : 36)
-                        .background(Circle().fill(tint.opacity(0.12)))
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(visit.map { visitPrepTitle($0, priority: priority) } ?? NSLocalizedString("Plan your next appointment", comment: ""))
-                            .appFont(priority == .pinned ? .headline : .subheadline)
-                            .fontWeight(priority == .pinned ? .bold : .semibold)
-                            .foregroundStyle(.primary)
-                        Text(visit.map { visitPrepSubtitle($0, priority: priority) } ?? NSLocalizedString("Add a visit date when you know your next appointment.", comment: ""))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+            VStack(alignment: .leading, spacing: EditorialSpacing.lg) {
+                VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
+                    Text(visit.map { visitPrepTitle($0, priority: priority) } ?? NSLocalizedString("Plan your next appointment", comment: ""))
+                        .appFont(priority == .pinned ? .displayTitle : .headline)
+                        .fontWeight(priority == .pinned ? .bold : .semibold)
+                        .foregroundStyle(priority == .pinned ? tint : EditorialPalette.textPrimary)
+                    Text(visit.map { visitPrepSubtitle($0, priority: priority) } ?? NSLocalizedString("Add a visit date when you know your next appointment.", comment: ""))
+                        .appFont(.caption)
+                        .foregroundStyle(EditorialPalette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 HStack(spacing: 10) {
@@ -1073,9 +1141,9 @@ private extension DashboardView {
     }
 
     private func visitPrepTint(_ visit: DoctorVisit) -> Color {
-        guard let days = visit.daysUntil() else { return .secondary }
-        if days < 0 { return .orange }
-        return days <= 3 ? .teal : .secondary
+        guard let days = visit.daysUntil() else { return EditorialPalette.textSecondary }
+        if days < 0 { return EditorialPalette.warning }
+        return days <= 3 ? EditorialPalette.primary : EditorialPalette.textSecondary
     }
 
     private func inactivityWarningCard(daysSince: Int) -> some View {
@@ -1230,39 +1298,40 @@ private extension DashboardView {
         nextUpcomingID: String?,
         limit: Int
     ) -> [MedSchedule] {
-        var result: [MedSchedule] = []
-        var seen = Set<String>()
+        var selectedIDs = Set<String>()
 
-        func append(_ item: MedSchedule?) {
-            guard let item, !seen.contains(item.id), result.count < limit else { return }
-            result.append(item)
-            seen.insert(item.id)
+        func select(_ item: MedSchedule?) {
+            guard let item, selectedIDs.count < limit else { return }
+            selectedIDs.insert(item.id)
         }
 
-        append(schedules.first { $0.id == currentActionID })
-        for item in schedules where result.count < limit {
+        select(schedules.first { $0.id == currentActionID })
+        for item in schedules where selectedIDs.count < limit {
             if case .overdue = statusCache[item.id] ?? .none {
-                append(item)
+                select(item)
             }
         }
-        for item in schedules where result.count < limit {
+        for item in schedules where selectedIDs.count < limit {
             switch statusCache[item.id] ?? .none {
             case .dueSoon, .snoozed:
-                append(item)
+                select(item)
             default:
                 break
             }
         }
-        append(schedules.first { $0.id == nextUpcomingID })
-        for item in schedules where result.count < limit {
+        select(schedules.first { $0.id == nextUpcomingID })
+        for item in schedules where selectedIDs.count < limit {
             if !(statusCache[item.id] ?? .none).isFinal {
-                append(item)
+                select(item)
             }
         }
-        for item in schedules where result.count < limit {
-            append(item)
+        for item in schedules where selectedIDs.count < limit {
+            select(item)
         }
-        return result
+
+        // Keep the visible subset in the same chronological order as the full
+        // schedule so expanding does not reshuffle rows under the user's finger.
+        return schedules.filter { selectedIDs.contains($0.id) }
     }
 
     private func emphasizedPendingRow(item: MedSchedule, status: TodayMedStatus) -> some View {

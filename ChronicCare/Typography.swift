@@ -1,6 +1,8 @@
 import SwiftUI
 
 enum AppFontStyle {
+    case heroNumber
+    case displayTitle
     case largeTitle
     case title
     case headline
@@ -9,9 +11,14 @@ enum AppFontStyle {
     case label
     case footnote
     case caption
+    case micro
 
     fileprivate func font(design: Font.Design) -> Font {
         switch self {
+        case .heroNumber:
+            return .system(size: 44, weight: .bold, design: .rounded)
+        case .displayTitle:
+            return .system(size: 28, weight: .bold, design: .default)
         case .largeTitle:
             return .system(.largeTitle, design: design).weight(.bold)
         case .title:
@@ -28,6 +35,8 @@ enum AppFontStyle {
             return .system(.footnote, design: design)
         case .caption:
             return .system(.caption, design: design).weight(.medium)
+        case .micro:
+            return .system(size: 11, weight: .medium, design: design)
         }
     }
 

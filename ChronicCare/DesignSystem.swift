@@ -1,5 +1,28 @@
 import SwiftUI
 
+enum EditorialPalette {
+    static let primary = Color(red: 0.165, green: 0.420, blue: 0.486) // #2A6B7C
+    static let warning = Color(red: 0.753, green: 0.271, blue: 0.271) // #C04545
+    static let background = Color(red: 0.980, green: 0.980, blue: 0.980) // #FAFAFA
+    static let surface = Color.white
+    static let textPrimary = Color(red: 0.110, green: 0.110, blue: 0.118) // #1C1C1E
+    static let textSecondary = Color(red: 0.420, green: 0.447, blue: 0.502) // #6B7280
+    static let textTertiary = Color(red: 0.631, green: 0.631, blue: 0.667) // #A1A1AA
+    static let divider = Color(red: 0.898, green: 0.906, blue: 0.922) // #E5E7EB
+    static let success = Color(red: 0.180, green: 0.490, blue: 0.310)
+}
+
+enum EditorialSpacing {
+    static let xxs: CGFloat = 2
+    static let xs: CGFloat = 4
+    static let sm: CGFloat = 8
+    static let md: CGFloat = 12
+    static let lg: CGFloat = 16
+    static let xl: CGFloat = 24
+    static let xxl: CGFloat = 32
+    static let xxxl: CGFloat = 48
+}
+
 enum AppSpacing {
     static let micro: CGFloat = 2
     static let xxSmall: CGFloat = 4
@@ -21,10 +44,10 @@ enum AppRadius {
 }
 
 enum AppSemanticColor {
-    static let info = Color.accentColor
-    static let success = Color.green
-    static let warning = Color.orange
-    static let danger = Color.red
+    static let info = EditorialPalette.primary
+    static let success = EditorialPalette.success
+    static let warning = EditorialPalette.warning
+    static let danger = EditorialPalette.warning
 }
 
 struct Card<Content: View>: View {
@@ -32,11 +55,16 @@ struct Card<Content: View>: View {
     init(@ViewBuilder content: () -> Content) { self.content = content() }
     var body: some View {
         content
-            .padding(AppSpacing.large)
+            .padding(EditorialSpacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                    .fill(Color(.secondarySystemGroupedBackground))
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(EditorialPalette.surface)
+                    .shadow(color: .black.opacity(0.04), radius: 10, x: 0, y: 4)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(EditorialPalette.divider.opacity(0.65), lineWidth: 0.8)
             )
     }
 }
@@ -53,15 +81,16 @@ struct TintedCard<Content: View>: View {
     }
     var body: some View {
         content
-            .padding(AppSpacing.large)
+            .padding(EditorialSpacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: AppRadius.hero, style: .continuous)
-                    .fill(tint.opacity(colorScheme == .dark ? 0.12 : 0.07))
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(EditorialPalette.surface)
+                    .shadow(color: .black.opacity(0.04), radius: 10, x: 0, y: 4)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.hero, style: .continuous)
-                    .stroke(tint.opacity(colorScheme == .dark ? 0.22 : 0.16), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(tint.opacity(colorScheme == .dark ? 0.42 : 0.24), lineWidth: 0.9)
             )
     }
 }

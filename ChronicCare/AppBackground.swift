@@ -5,7 +5,7 @@ import SwiftUI
 /// blur orbs. High-contrast trait is handled by the system color.
 struct AppBackground: View {
     var body: some View {
-        Color(.systemGroupedBackground)
+        EditorialPalette.background
             .ignoresSafeArea()
     }
 }
