@@ -87,6 +87,8 @@ struct MedicationsView: View {
                     }
                 }
                 .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
+                .background(AppColor.background)
                 .onAppear { scrollProxy = proxy }
                 .onChange(of: store.medications.count) { _ in scrollProxy = proxy }
             }
@@ -215,13 +217,15 @@ private extension MedicationsView {
     var warningRow: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "bell.slash.fill")
-                .foregroundStyle(.orange)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(AppColor.warning)
             VStack(alignment: .leading, spacing: 6) {
                 Text(NSLocalizedString("Notifications Disabled", comment: ""))
                     .appFont(.subheadline)
+                    .foregroundStyle(AppColor.textPrimary)
                 Text(NSLocalizedString("Turn notifications on in Settings to receive medication reminders.", comment: ""))
                     .appFont(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColor.textSecondary)
             }
         }
     }
@@ -240,10 +244,10 @@ private extension MedicationsView {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(med.name)
                         .appFont(.subheadline)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(AppColor.textPrimary)
                     Text(rowSubtitle(for: med))
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
@@ -259,10 +263,10 @@ private extension MedicationsView {
         if med.isLowSupply, let days = med.daysOfSupplyRemaining {
             AppBadge(
                 text: String(format: NSLocalizedString("%lld days left", comment: "supply badge"), days),
-                tint: days <= 3 ? .red : .orange
+                tint: AppColor.warning
             )
         } else if med.isLowSupply {
-            AppBadge(text: NSLocalizedString("Low supply", comment: ""), tint: .orange)
+            AppBadge(text: NSLocalizedString("Low supply", comment: ""), tint: AppColor.warning)
         }
     }
 
@@ -323,12 +327,16 @@ private extension MedicationsView {
                 .accessibilityLabel(String(format: NSLocalizedString("%@ photo", comment: "Medication thumbnail accessibility"), med.name))
         } else {
             RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-                .fill(Color.accentColor.opacity(0.10))
+                .fill(AppColor.surface)
                 .frame(width: 40, height: 40)
                 .overlay(
-                    Image(systemName: "pills.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
+                    RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                        .stroke(AppColor.divider, lineWidth: 1)
+                )
+                .overlay(
+                    Image(systemName: "pills")
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundStyle(AppColor.textSecondary)
                 )
                 .accessibilityHidden(true)
         }

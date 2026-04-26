@@ -216,6 +216,7 @@ struct MedicationFormView: View {
                 .padding(.top, 12)
                 .padding(.bottom, 28)
             }
+            .background(AppColor.background)
             .navigationTitle(navigationTitleText)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { bodyToolbar }
@@ -342,7 +343,7 @@ struct MedicationFormView: View {
                 if isAsNeeded {
                     Text(NSLocalizedString("As-needed medications skip fixed reminder times. Log each dose from Today only when you actually take it.", comment: ""))
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
                     Picker(NSLocalizedString("Frequency", comment: ""), selection: $schedulePreset) {
@@ -376,7 +377,7 @@ struct MedicationFormView: View {
                                     times.remove(at: idx)
                                 } label: {
                                     Image(systemName: "minus.circle.fill")
-                                        .foregroundStyle(.red)
+                                        .foregroundStyle(AppColor.warning)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -584,7 +585,7 @@ struct MedicationFormView: View {
             } label: {
                 Text(NSLocalizedString("Delete Medication", comment: ""))
                     .appFont(.subheadline)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(AppColor.warning)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
             }
@@ -606,7 +607,7 @@ struct MedicationFormView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(NSLocalizedString("Pills remaining", comment: ""))
                 .appFont(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppColor.textSecondary)
             HStack(spacing: 10) {
                 TextField("30", text: $pillsRemainingText)
                     .keyboardType(.numberPad)
@@ -616,8 +617,12 @@ struct MedicationFormView: View {
                     .frame(width: 80)
                     .padding(12)
                     .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color(.secondarySystemBackground))
+                        RoundedRectangle(cornerRadius: EditorialSpacing.md, style: .continuous)
+                            .fill(AppColor.surface)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: EditorialSpacing.md, style: .continuous)
+                                    .stroke(AppColor.divider, lineWidth: 1)
+                            )
                     )
                     .onChange(of: pillsRemainingText) { newValue in
                         let filtered = newValue.filter { $0.isNumber }
@@ -715,13 +720,13 @@ struct MedicationFormView: View {
         case .valid:
             EmptyView()
         case .warning(let msg):
-            Label(msg, systemImage: "exclamationmark.triangle.fill")
+            Label(msg, systemImage: "exclamationmark.triangle")
                 .appFont(.caption)
-                .foregroundStyle(.orange)
+                .foregroundStyle(AppColor.warning)
         case .error(let msg):
-            Label(msg, systemImage: "xmark.circle.fill")
+            Label(msg, systemImage: "xmark.circle")
                 .appFont(.caption)
-                .foregroundStyle(.red)
+                .foregroundStyle(AppColor.warning)
         }
     }
 
@@ -1025,7 +1030,7 @@ private extension String {
 private extension MedicationFormView {
 
     var scanAssistPanel: some View {
-        InsetPanel(tint: .blue) {
+        InsetPanel(tint: nil) {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(NSLocalizedString("Scan Label", comment: ""))
@@ -1033,7 +1038,7 @@ private extension MedicationFormView {
                         .fontWeight(.semibold)
                     Text(NSLocalizedString("Use the camera if typing from a box or bottle is slower.", comment: ""))
                         .appFont(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 8)
@@ -1058,11 +1063,17 @@ private extension MedicationFormView {
                     .fontWeight(.semibold)
                 if isOCRLoading { ProgressView().controlSize(.small) }
             }
-            .foregroundStyle(Color.accentColor)
+            .foregroundStyle(AppColor.primary)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(Capsule(style: .continuous).fill(Color.accentColor.opacity(0.10)))
-            .overlay(Capsule(style: .continuous).stroke(Color.accentColor.opacity(0.18), lineWidth: 0.8))
+            .background(
+                RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
+                    .fill(AppColor.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
+                            .stroke(AppColor.primary.opacity(0.45), lineWidth: 1)
+                    )
+            )
         }
         .buttonStyle(.plain)
     }
@@ -1079,7 +1090,7 @@ private extension MedicationFormView {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .appFont(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppColor.textSecondary)
 
             TextField(placeholder, text: text, axis: axis)
                 .focused($focusedField, equals: field)
@@ -1090,8 +1101,12 @@ private extension MedicationFormView {
                 .onSubmit { handleSubmit(for: field) }
                 .padding(13)
                 .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color(.secondarySystemBackground))
+                    RoundedRectangle(cornerRadius: EditorialSpacing.md, style: .continuous)
+                        .fill(AppColor.surface)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: EditorialSpacing.md, style: .continuous)
+                                .stroke(AppColor.divider, lineWidth: 1)
+                        )
                 )
         }
     }
@@ -1121,21 +1136,34 @@ private extension MedicationFormView {
                 .fontWeight(.semibold)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 7)
-                .background(Capsule(style: .continuous).fill(Color(.secondarySystemBackground)))
+                .background(
+                    RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
+                        .fill(AppColor.surface)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
+                                .stroke(AppColor.divider, lineWidth: 1)
+                        )
+                )
         }
         .buttonStyle(.plain)
     }
 
     func secondaryActionLabel(_ title: String, systemImage: String) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: systemImage).font(.system(size: 13, weight: .semibold))
+            Image(systemName: systemImage).font(.system(size: 13, weight: .regular))
             Text(title).appFont(.label).fontWeight(.semibold)
         }
-        .foregroundStyle(Color.accentColor)
+        .foregroundStyle(AppColor.primary)
         .frame(maxWidth: .infinity, minHeight: 44)
         .padding(.vertical, 9)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.accentColor.opacity(0.08)))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.accentColor.opacity(0.14), lineWidth: 0.8))
+        .background(
+            RoundedRectangle(cornerRadius: EditorialSpacing.md, style: .continuous)
+                .fill(AppColor.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: EditorialSpacing.md, style: .continuous)
+                        .stroke(AppColor.primary.opacity(0.45), lineWidth: 1)
+                )
+        )
         .contentShape(Rectangle())
     }
 
@@ -1146,10 +1174,17 @@ private extension MedicationFormView {
             Spacer(minLength: 8)
             PhotosPicker(selection: $pickedItem, matching: .images) {
                 Image(systemName: hasPhoto ? "arrow.triangle.2.circlepath" : "photo")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(AppColor.primary)
                     .frame(width: 38, height: 38)
-                    .background(Circle().fill(Color.accentColor.opacity(0.10)))
+                    .background(
+                        RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
+                            .fill(AppColor.surface)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
+                                    .stroke(AppColor.divider, lineWidth: 1)
+                            )
+                    )
             }
             .buttonStyle(.plain)
             .accessibilityLabel(hasPhoto ? NSLocalizedString("Change Photo", comment: "") : NSLocalizedString("Add Photo", comment: ""))
@@ -1169,10 +1204,17 @@ private extension MedicationFormView {
                     removePhoto = true
                 } label: {
                     Image(systemName: "trash")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.red)
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(AppColor.warning)
                         .frame(width: 38, height: 38)
-                        .background(Circle().fill(Color.red.opacity(0.10)))
+                        .background(
+                            RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
+                                .fill(AppColor.surface)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
+                                        .stroke(AppColor.divider, lineWidth: 1)
+                                )
+                        )
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(NSLocalizedString("Remove Photo", comment: ""))
@@ -1180,8 +1222,12 @@ private extension MedicationFormView {
         }
         .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
+            RoundedRectangle(cornerRadius: EditorialSpacing.md, style: .continuous)
+                .fill(AppColor.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: EditorialSpacing.md, style: .continuous)
+                        .stroke(AppColor.divider, lineWidth: 1)
+                )
         )
     }
 
@@ -1199,9 +1245,9 @@ private extension MedicationFormView {
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             } else {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color(.secondarySystemBackground))
+                    .fill(AppColor.surface)
                     .frame(width: 64, height: 64)
-                    .overlay(Image(systemName: "photo").foregroundStyle(.secondary))
+                    .overlay(Image(systemName: "photo").foregroundStyle(AppColor.textTertiary))
             }
         }
     }

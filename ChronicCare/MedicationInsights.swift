@@ -18,21 +18,21 @@ struct MedicationInsight: Identifiable {
 
         var icon: String {
             switch self {
-            case .skippedFrequently: return "exclamationmark.triangle.fill"
+            case .skippedFrequently: return "exclamationmark.triangle"
             case .timeAdjustmentSuggestion: return "clock.arrow.circlepath"
             case .adherenceImprovement: return "chart.line.uptrend.xyaxis"
-            case .reminderNotWorking: return "bell.slash.fill"
+            case .reminderNotWorking: return "bell.slash"
             case .correlationTrend: return "chart.xyaxis.line"
             }
         }
 
         var color: Color {
             switch self {
-            case .skippedFrequently: return .orange
-            case .timeAdjustmentSuggestion: return .blue
-            case .adherenceImprovement: return .purple
-            case .reminderNotWorking: return .gray
-            case .correlationTrend: return .teal
+            case .skippedFrequently: return AppColor.warning
+            case .timeAdjustmentSuggestion: return AppColor.primary
+            case .adherenceImprovement: return AppColor.primary
+            case .reminderNotWorking: return AppColor.textSecondary
+            case .correlationTrend: return AppColor.primary
             }
         }
     }

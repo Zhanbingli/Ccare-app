@@ -55,7 +55,7 @@ struct AdherenceCalendarView: View {
                         Text(sym)
                             .appFont(.caption)
                             .fontWeight(.medium)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppColor.textSecondary)
                             .frame(maxWidth: .infinity)
                     }
                 }
@@ -87,29 +87,33 @@ struct AdherenceCalendarView: View {
                 // Legend + stats in one line
                 if monthStats.totalDays > 0 {
                     HStack(spacing: 8) {
-                        legendItem(color: .green, label: NSLocalizedString("All Taken", comment: ""))
-                        legendItem(color: .orange, label: NSLocalizedString("Partial", comment: ""))
-                        legendItem(color: .red, label: NSLocalizedString("Missed", comment: ""))
+                        legendItem(color: AppColor.primary, label: NSLocalizedString("All Taken", comment: ""))
+                        legendItem(color: AppColor.textSecondary, label: NSLocalizedString("Partial", comment: ""))
+                        legendItem(color: AppColor.warning, label: NSLocalizedString("Missed", comment: ""))
                         Spacer()
                         Text(String(format: "%.0f%%", monthStats.avgPercent * 100))
                             .appFont(.caption)
                             .fontWeight(.bold)
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(AppColor.textPrimary)
                         Text(NSLocalizedString("Avg", comment: ""))
                             .appFont(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppColor.textSecondary)
                     }
                     .padding(.horizontal, AppSpacing.small)
                     .padding(.vertical, AppSpacing.xSmall)
                     .background(
                         RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-                            .fill(Color(.secondarySystemBackground))
+                            .fill(AppColor.surface)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                                    .stroke(AppColor.divider, lineWidth: 1)
+                            )
                     )
                     .padding(.horizontal)
                 } else {
                     Text(NSLocalizedString("No medication data for this month.", comment: ""))
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
                         .padding(.vertical, 12)
                 }
 
@@ -122,6 +126,7 @@ struct AdherenceCalendarView: View {
             }
             .padding(.vertical)
         }
+        .background(AppColor.background)
         .navigationTitle(NSLocalizedString("Adherence Calendar", comment: ""))
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -170,14 +175,14 @@ struct AdherenceCalendarView: View {
             // Today ring
             if isToday {
                 RoundedRectangle(cornerRadius: AppRadius.small)
-                    .strokeBorder(Color.accentColor, lineWidth: 2)
+                    .strokeBorder(AppColor.primary, lineWidth: 2)
                     .frame(height: 44)
             }
 
             // Selected highlight
             if isSelected {
                 RoundedRectangle(cornerRadius: AppRadius.small)
-                    .strokeBorder(Color.primary.opacity(0.4), lineWidth: 1.5)
+                    .strokeBorder(AppColor.textPrimary.opacity(0.4), lineWidth: 1.5)
                     .frame(height: 44)
             }
 
@@ -186,7 +191,7 @@ struct AdherenceCalendarView: View {
                 Text("\(dayNum)")
                     .appFont(.caption)
                     .fontWeight(isToday ? .bold : .regular)
-                    .foregroundStyle(data != nil ? .primary : .tertiary)
+                    .foregroundStyle(data != nil ? AppColor.textPrimary : AppColor.textTertiary)
 
                 // Small dot indicator
                 Circle()
@@ -198,19 +203,19 @@ struct AdherenceCalendarView: View {
     }
 
     private func cellFill(data: (taken: Int, total: Int)?) -> Color {
-        guard let data = data, data.total > 0 else { return Color(.systemBackground) }
+        guard let data = data, data.total > 0 else { return AppColor.surface }
         let pct = Double(data.taken) / Double(data.total)
-        if pct >= 1.0 { return Color.green.opacity(0.18) }
-        if pct > 0 { return Color.orange.opacity(0.16) }
-        return Color.red.opacity(0.14)
+        if pct >= 1.0 { return AppColor.primary.opacity(0.12) }
+        if pct > 0 { return AppColor.textSecondary.opacity(0.10) }
+        return AppColor.warning.opacity(0.10)
     }
 
     private func cellDotColor(data: (taken: Int, total: Int)?) -> Color {
         guard let data = data, data.total > 0 else { return .clear }
         let pct = Double(data.taken) / Double(data.total)
-        if pct >= 1.0 { return .green }
-        if pct > 0 { return .orange }
-        return .red
+        if pct >= 1.0 { return AppColor.primary }
+        if pct > 0 { return AppColor.textSecondary }
+        return AppColor.warning
     }
 
     // MARK: - Legend
@@ -220,7 +225,7 @@ struct AdherenceCalendarView: View {
             Circle().fill(color).frame(width: 8, height: 8)
             Text(label)
                 .appFont(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppColor.textSecondary)
         }
     }
 
@@ -309,15 +314,15 @@ struct AdherenceCalendarView: View {
                         HStack(spacing: 10) {
                             Image(systemName: "minus.circle")
                                 .font(.system(size: 16))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(AppColor.textSecondary)
                                 .frame(width: 20)
                             Text(med.name)
                                 .appFont(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(AppColor.textSecondary)
                             Spacer()
                             Text(NSLocalizedString("No Record", comment: ""))
                                 .appFont(.caption)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(AppColor.textTertiary)
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
@@ -327,7 +332,11 @@ struct AdherenceCalendarView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
+                .fill(AppColor.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                        .stroke(AppColor.divider, lineWidth: 1)
+                )
         )
         .padding(.horizontal)
     }
@@ -348,17 +357,17 @@ struct AdherenceCalendarView: View {
     private func statusIcon(_ status: IntakeStatus) -> some View {
         switch status {
         case .taken:
-            Image(systemName: "checkmark.circle.fill")
+            Image(systemName: "checkmark.circle")
                 .font(.system(size: 16))
-                .foregroundStyle(.green)
+                .foregroundStyle(AppColor.primary)
         case .skipped:
-            Image(systemName: "xmark.circle.fill")
+            Image(systemName: "xmark.circle")
                 .font(.system(size: 16))
-                .foregroundStyle(.orange)
+                .foregroundStyle(AppColor.warning)
         case .snoozed:
             Image(systemName: "zzz")
                 .font(.system(size: 14))
-                .foregroundStyle(.blue)
+                .foregroundStyle(AppColor.textSecondary)
         }
     }
 }

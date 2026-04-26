@@ -74,7 +74,7 @@ struct WeekSparkline: View {
             ZStack {
                 if isToday {
                     Circle()
-                        .strokeBorder(Color.primary.opacity(0.35), lineWidth: 1.5)
+                        .strokeBorder(AppColor.textPrimary.opacity(0.35), lineWidth: 1.5)
                         .frame(width: 22, height: 22)
                 }
 
@@ -87,22 +87,22 @@ struct WeekSparkline: View {
             Text(weekdayLetter(snapshot.date))
                 .font(.caption2)
                 .fontWeight(isToday ? .semibold : .regular)
-                .foregroundStyle(isToday ? .primary : .secondary)
+                .foregroundStyle(isToday ? AppColor.textPrimary : AppColor.textSecondary)
         }
         .frame(maxWidth: .infinity)
     }
 
     private func fillColor(for snapshot: DaySnapshot) -> Color {
         if snapshot.total == 0 {
-            return Color.secondary.opacity(0.18)
+            return AppColor.textTertiary.opacity(0.30)
         }
         if snapshot.percent >= 1.0 {
-            return .green
+            return AppColor.primary
         }
         if snapshot.percent > 0 {
-            return .orange
+            return AppColor.textSecondary
         }
-        return Color(red: 0.76, green: 0.36, blue: 0.32)
+        return AppColor.warning
     }
 
     private func weekdayLetter(_ date: Date) -> String {

@@ -39,7 +39,7 @@ struct OnboardingView: View {
             VStack(spacing: 20) {
                 Image(systemName: "heart.text.clipboard")
                     .font(.system(size: 72))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(AppColor.primary)
                     .symbolRenderingMode(.hierarchical)
 
                 Text(NSLocalizedString("Ccare", comment: "onboarding"))
@@ -47,7 +47,7 @@ struct OnboardingView: View {
 
                 Text(NSLocalizedString("Track medications, log measurements, stay consistent.", comment: "onboarding"))
                     .appFont(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColor.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
             }
@@ -116,7 +116,7 @@ struct OnboardingView: View {
             VStack(spacing: 20) {
                 Image(systemName: "bell.badge.fill")
                     .font(.system(size: 72))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(AppColor.primary)
                     .symbolRenderingMode(.hierarchical)
 
                 Text(NSLocalizedString("Turn on reminders", comment: "onboarding"))
@@ -124,7 +124,7 @@ struct OnboardingView: View {
 
                 Text(NSLocalizedString("So you don't miss a dose.", comment: "onboarding"))
                     .appFont(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColor.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
 
@@ -156,7 +156,7 @@ struct OnboardingView: View {
             VStack(spacing: 20) {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 72))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(AppColor.primary)
                     .symbolRenderingMode(.hierarchical)
 
                 Text(NSLocalizedString("You're all set", comment: "onboarding"))
@@ -164,7 +164,7 @@ struct OnboardingView: View {
 
                 Text(completionSubtitle)
                     .appFont(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColor.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
             }
@@ -193,7 +193,7 @@ struct OnboardingView: View {
                 .appFont(.title)
             Text(subtitle)
                 .appFont(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppColor.textSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
@@ -205,7 +205,7 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .appFont(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppColor.textSecondary)
             TextField(placeholder, text: text)
                 .appFont(.body)
                 .textFieldStyle(.plain)
@@ -215,12 +215,12 @@ struct OnboardingView: View {
     private func grantStatusBadge(granted: Bool) -> some View {
         HStack(spacing: 8) {
             Image(systemName: granted ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .foregroundStyle(granted ? .green : .orange)
+                .foregroundStyle(granted ? AppColor.primary : AppColor.warning)
             Text(granted
                  ? NSLocalizedString("Reminders enabled", comment: "onboarding")
-                 : NSLocalizedString("You can enable reminders later in Settings.", comment: "onboarding"))
+                : NSLocalizedString("You can enable reminders later in Settings.", comment: "onboarding"))
                 .appFont(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppColor.textSecondary)
         }
     }
 
@@ -240,7 +240,7 @@ struct OnboardingView: View {
         } label: {
             Text(NSLocalizedString("Skip for now", comment: "onboarding"))
                 .appFont(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppColor.textSecondary)
         }
         .padding(.vertical, 16)
     }

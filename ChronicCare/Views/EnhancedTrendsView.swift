@@ -62,7 +62,7 @@ struct EnhancedTrendsView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 14) {
+                VStack(spacing: EditorialSpacing.lg) {
                     kpiHeader
                         .padding(.horizontal)
 
@@ -84,11 +84,12 @@ struct EnhancedTrendsView: View {
                 }
                 .padding(.vertical, 12)
             }
+            .background(AppColor.background)
             .safeAreaInset(edge: .top) {
                 pickerSection
                     .padding(.vertical, 8)
-                    .background(.ultraThinMaterial)
-                    .overlay(Divider(), alignment: .bottom)
+                    .background(AppColor.background)
+                    .overlay(AppDivider(), alignment: .bottom)
             }
             .navigationTitle(NSLocalizedString("Trends", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
@@ -119,17 +120,22 @@ struct EnhancedTrendsView: View {
         VStack(spacing: 4) {
             Text(value)
                 .appFontNumeric(.title)
+                .foregroundStyle(AppColor.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
             Text(label)
                 .appFont(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppColor.textSecondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, AppSpacing.small)
         .background(
             RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
+                .fill(AppColor.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                .stroke(AppColor.divider, lineWidth: 1)
         )
     }
 
@@ -156,19 +162,20 @@ struct EnhancedTrendsView: View {
             }
             .appFont(.subheadline)
             .fontWeight(.bold)
+            .foregroundStyle(AppColor.textPrimary)
 
             // Date
             Text(measurement.date, style: .date)
                 .appFont(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppColor.textSecondary)
             Text(measurement.date, style: .time)
                 .appFont(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppColor.textSecondary)
 
             if let note = measurement.note, !note.isEmpty {
                 Text(note)
                     .appFont(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColor.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
             }
@@ -180,14 +187,18 @@ struct EnhancedTrendsView: View {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 20))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColor.textTertiary)
             }
         }
         .padding(.horizontal, AppSpacing.medium)
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
+                .fill(AppColor.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                .stroke(AppColor.divider, lineWidth: 1)
         )
     }
 
@@ -202,11 +213,12 @@ struct EnhancedTrendsView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     HStack(spacing: 6) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.purple)
+                        Image(systemName: "text.magnifyingglass")
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundStyle(AppColor.primary)
                         Text(NSLocalizedString("AI Analysis", comment: ""))
                             .appFont(.subheadline)
+                            .foregroundStyle(AppColor.textPrimary)
                     }
                     Spacer()
                     if !isLoadingInsights {
@@ -217,6 +229,7 @@ struct EnhancedTrendsView: View {
                                 .appFont(.caption)
                         }
                         .buttonStyle(.bordered)
+                        .tint(AppColor.primary)
                         .controlSize(.small)
                     }
                 }
@@ -227,20 +240,24 @@ struct EnhancedTrendsView: View {
                             .controlSize(.small)
                         Text("Analyzing...")
                             .appFont(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppColor.textSecondary)
                     }
                     .padding(.vertical, 12)
                 } else if let insights = aiInsights {
                     Text(insights)
                         .appFont(.caption)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(AppColor.textPrimary)
                         .lineSpacing(5)
                 }
             }
             .padding(AppSpacing.medium)
             .background(
+            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                    .fill(AppColor.surface)
+            )
+            .overlay(
                 RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
-                    .fill(Color(.secondarySystemBackground))
+                    .stroke(AppColor.divider, lineWidth: 1)
             )
         }
     }
@@ -305,18 +322,21 @@ struct EnhancedTrendsView: View {
         return Chart {
             RuleMark(y: .value("Systolic High", thresholds.systolicHigh))
                 .lineStyle(.init(dash: [4, 4]))
-                .foregroundStyle(.red.opacity(0.6))
+                .foregroundStyle(AppColor.warning.opacity(0.6))
                 .annotation(position: .top, alignment: .trailing) {
                     Text(NSLocalizedString("High", comment: "chart annotation"))
                         .appFont(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(AppColor.warning)
                         .padding(4)
-                        .background(Capsule().fill(.red.opacity(0.1)))
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(AppColor.surface)
+                        )
                 }
 
             RuleMark(y: .value("Diastolic High", thresholds.diastolicHigh))
                 .lineStyle(.init(dash: [4, 4]))
-                .foregroundStyle(.red.opacity(0.6))
+                .foregroundStyle(AppColor.warning.opacity(0.6))
 
             ForEach(points.filter { $0.diastolic != nil }) { p in
                 AreaMark(
@@ -326,7 +346,7 @@ struct EnhancedTrendsView: View {
                 )
                 .foregroundStyle(
                     LinearGradient(
-                        colors: [selectedType.tint.opacity(0.3), selectedType.tint.opacity(0.1)],
+                        colors: [AppColor.primary.opacity(0.12), AppColor.primary.opacity(0.03)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
@@ -360,7 +380,7 @@ struct EnhancedTrendsView: View {
                     y: .value("Systolic", p.systolic)
                 )
                 .symbolSize(isSelected ? 120 : 50)
-                .foregroundStyle(.indigo)
+                .foregroundStyle(AppColor.primary)
             }
 
             if let selected = selectedDataPoint {
@@ -434,22 +454,25 @@ struct EnhancedTrendsView: View {
                     yStart: .value("Low", rDisplay.lowerBound),
                     yEnd: .value("High", rDisplay.upperBound)
                 )
-                .foregroundStyle(.green.opacity(0.1))
+                .foregroundStyle(AppColor.primary.opacity(0.06))
 
                 RuleMark(y: .value("High", rDisplay.upperBound))
                     .lineStyle(.init(dash: [4,4]))
-                    .foregroundStyle(.green.opacity(0.6))
+                    .foregroundStyle(AppColor.primary.opacity(0.55))
                     .annotation(position: .top, alignment: .trailing) {
                         Text(NSLocalizedString("Target", comment: "chart annotation"))
                             .appFont(.caption)
-                            .foregroundStyle(.green)
+                            .foregroundStyle(AppColor.primary)
                             .padding(4)
-                            .background(Capsule().fill(.green.opacity(0.1)))
+                            .background(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(AppColor.surface)
+                            )
                     }
 
                 RuleMark(y: .value("Low", rDisplay.lowerBound))
                     .lineStyle(.init(dash: [4,4]))
-                    .foregroundStyle(.green.opacity(0.6))
+                    .foregroundStyle(AppColor.primary.opacity(0.55))
             }
 
             ForEach(filtered) { m in
@@ -461,7 +484,7 @@ struct EnhancedTrendsView: View {
                 )
                 .foregroundStyle(
                     LinearGradient(
-                        colors: [selectedType.tint.opacity(0.25), selectedType.tint.opacity(0.02)],
+                        colors: [AppColor.primary.opacity(0.10), AppColor.primary.opacity(0.02)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
@@ -476,7 +499,7 @@ struct EnhancedTrendsView: View {
                     y: .value("Value", yVal)
                 )
                 .interpolationMethod(.catmullRom)
-                .foregroundStyle(selectedType.tint)
+                .foregroundStyle(AppColor.primary)
                 .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
             }
 
@@ -493,7 +516,7 @@ struct EnhancedTrendsView: View {
                     y: .value("Value", yVal)
                 )
                 .symbolSize(selectedDataPoint?.id == m.id ? 120 : (isOutOfRange ? 80 : 60))
-                .foregroundStyle(isOutOfRange ? .red : selectedType.tint)
+                .foregroundStyle(isOutOfRange ? AppColor.warning : AppColor.primary)
             }
 
             if let selected = selectedDataPoint {

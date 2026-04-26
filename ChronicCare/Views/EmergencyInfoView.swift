@@ -32,7 +32,7 @@ struct EmergencyInfoEditView: View {
                 if contacts.isEmpty {
                     Text(NSLocalizedString("No emergency contact added yet.", comment: ""))
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
                 } else {
                     ForEach(contacts) { contact in
                         emergencyContactEditorRow(contact)
@@ -180,22 +180,27 @@ struct EmergencyInfoEditView: View {
 
     private func emergencyContactEditorRow(_ contact: EmergencyContact) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Circle()
-                .fill(Color.red.opacity(0.14))
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(AppColor.surface)
                 .frame(width: 36, height: 36)
                 .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(AppColor.divider, lineWidth: 1)
+                )
+                .overlay(
                     Image(systemName: "phone.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.red)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(AppColor.warning)
                 )
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(contact.name)
                     .appFont(.subheadline)
                     .fontWeight(.semibold)
+                    .foregroundStyle(AppColor.textPrimary)
                 Text(contact.relationship)
                     .appFont(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColor.textSecondary)
                 contactPhoneLink(contact)
             }
 
@@ -212,13 +217,13 @@ struct EmergencyInfoEditView: View {
             Link(destination: callURL) {
                 Text(contact.phone)
                     .appFont(.caption)
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(AppColor.primary)
             }
             .accessibilityLabel(String(format: NSLocalizedString("Call %@, %@", comment: "Call emergency contact accessibility"), contact.name, contact.phone))
         } else {
             Text(contact.phone)
                 .appFont(.caption)
-                .foregroundStyle(.blue)
+                .foregroundStyle(AppColor.primary)
         }
     }
 }
@@ -294,15 +299,16 @@ struct EmergencyCardView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 14) {
+            VStack(spacing: EditorialSpacing.lg) {
                 summaryHeader
                 emptyEmergencyState
                 coreMedicalInfoCards
                 emergencyContactsCard
                 shareSummaryButton
             }
-            .padding()
+            .padding(EditorialSpacing.lg)
         }
+        .background(AppColor.background)
         .navigationTitle(NSLocalizedString("Emergency Card", comment: ""))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -328,22 +334,21 @@ struct EmergencyCardView: View {
     }
 
     private var summaryHeader: some View {
-        TintedCard(tint: .red) {
+        TintedCard(tint: AppColor.warning) {
             HStack(alignment: .center, spacing: AppSpacing.small) {
-                Image(systemName: "person.text.rectangle.fill")
-                    .font(.system(size: 24, weight: .semibold))
-                    .frame(width: 46, height: 46)
-                    .background(Circle().fill(Color.red.opacity(0.16)))
-                    .foregroundStyle(.red)
+                Image(systemName: "person.text.rectangle")
+                    .font(.system(size: 22, weight: .regular))
+                    .frame(width: 34, height: 34)
+                    .foregroundStyle(AppColor.warning)
 
                 VStack(alignment: .leading, spacing: AppSpacing.xxSmall) {
                     Text(NSLocalizedString("Emergency Card", comment: ""))
                         .appFont(.title)
                         .fontWeight(.bold)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(AppColor.textPrimary)
                     Text(NSLocalizedString("For emergencies: show first responders or ER staff.", comment: ""))
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -394,15 +399,15 @@ struct EmergencyCardView: View {
     @ViewBuilder
     private var coreMedicalInfoCards: some View {
         if let allergy = store.emergencyInfo?.allergies, !allergy.isEmpty {
-            infoCard(title: NSLocalizedString("Allergies", comment: ""), value: allergy, icon: "exclamationmark.triangle.fill", tint: .red)
+            infoCard(title: NSLocalizedString("Allergies", comment: ""), value: allergy, icon: "exclamationmark.triangle", tint: AppColor.warning)
         }
 
         if let cond = store.emergencyInfo?.medicalConditions, !cond.isEmpty {
-            infoCard(title: NSLocalizedString("Medical Conditions", comment: ""), value: cond, icon: "heart.text.square.fill", tint: .blue)
+            infoCard(title: NSLocalizedString("Medical Conditions", comment: ""), value: cond, icon: "heart.text.square", tint: AppColor.primary)
         }
 
         if let bt = store.emergencyInfo?.bloodType, !bt.isEmpty {
-            infoCard(title: NSLocalizedString("Blood Type", comment: ""), value: bt, icon: "drop.fill", tint: .red)
+            infoCard(title: NSLocalizedString("Blood Type", comment: ""), value: bt, icon: "drop", tint: AppColor.warning)
         }
     }
 
@@ -431,7 +436,7 @@ struct EmergencyCardView: View {
                         .appFont(.headline)
                     Text(NSLocalizedString("Use these people in urgent or emergency situations, such as going to the hospital or needing immediate help.", comment: ""))
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     ForEach(contacts) { contact in
                         emergencyContactRow(contact)
@@ -450,7 +455,7 @@ struct EmergencyCardView: View {
                         .appFont(.headline)
                     Text(NSLocalizedString("Caregivers are for routine support and missed-dose follow-up. They are separate from emergency contacts.", comment: ""))
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     ForEach(store.caregivers) { caregiver in
                         caregiverSummaryRow(caregiver)
@@ -470,7 +475,7 @@ struct EmergencyCardView: View {
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
-        .tint(.red)
+        .tint(AppColor.warning)
         .disabled(!hasShareableSummary)
         .opacity(hasShareableSummary ? 1 : 0.6)
     }
@@ -492,17 +497,17 @@ struct EmergencyCardView: View {
                     snapshotMetric(
                         value: "\(store.medications.count)",
                         label: NSLocalizedString("medications", comment: ""),
-                        tint: .blue
+                        tint: AppColor.primary
                     )
                     snapshotMetric(
                         value: allergiesSnapshotText,
                         label: NSLocalizedString("allergies", comment: ""),
-                        tint: allergiesSnapshotText == NSLocalizedString("None", comment: "") ? .green : .red
+                        tint: allergiesSnapshotText == NSLocalizedString("None", comment: "") ? AppColor.textSecondary : AppColor.warning
                     )
                     snapshotMetric(
                         value: adherenceSummaryText,
                         label: NSLocalizedString("7-day adherence", comment: ""),
-                        tint: scheduledMedicationCount > 0 ? .green : .secondary
+                        tint: scheduledMedicationCount > 0 ? AppColor.primary : AppColor.textSecondary
                     )
                 }
             }
@@ -517,7 +522,7 @@ struct EmergencyCardView: View {
     }
 
     private func snapshotMetric(value: String, label: String, tint: Color) -> some View {
-        InsetPanel(tint: tint) {
+        InsetPanel(tint: nil) {
             VStack(alignment: .leading, spacing: AppSpacing.xxSmall) {
                 Text(value)
                     .appFontNumeric(.subheadline)
@@ -526,7 +531,7 @@ struct EmergencyCardView: View {
                     .minimumScaleFactor(0.7)
                 Text(label)
                     .appFont(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColor.textSecondary)
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
             }
@@ -535,7 +540,7 @@ struct EmergencyCardView: View {
     }
 
     private func infoCard(title: String, value: String, icon: String, tint: Color) -> some View {
-        InsetPanel(tint: tint) {
+        InsetPanel(tint: nil) {
             VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
                 Label(title, systemImage: icon)
                     .appFont(.caption)
@@ -543,6 +548,7 @@ struct EmergencyCardView: View {
                 Text(value)
                     .appFont(.body)
                     .fontWeight(.semibold)
+                    .foregroundStyle(AppColor.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -555,16 +561,17 @@ struct EmergencyCardView: View {
                 Text(med.name)
                     .appFont(.subheadline)
                     .fontWeight(.semibold)
+                    .foregroundStyle(AppColor.textPrimary)
                 if !med.timesOfDay.isEmpty {
                     Text(med.timesOfDay.map(timeText).joined(separator: ", "))
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
                 }
             }
             Spacer()
             Text(med.dose)
                 .appFont(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppColor.textSecondary)
                 .multilineTextAlignment(.trailing)
         }
     }
@@ -573,14 +580,16 @@ struct EmergencyCardView: View {
         HStack {
             Text(measurement.type.displayName)
                 .appFont(.subheadline)
+                .foregroundStyle(AppColor.textPrimary)
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
                 Text(measurementValueText(measurement))
                     .appFont(.subheadline)
                     .fontWeight(.semibold)
+                    .foregroundStyle(AppColor.textPrimary)
                 Text(measurement.date, format: .dateTime.month(.abbreviated).day())
                     .appFont(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColor.textSecondary)
             }
         }
     }
@@ -589,7 +598,7 @@ struct EmergencyCardView: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(contact.name).appFont(.subheadline).fontWeight(.semibold)
-                Text(contact.relationship).appFont(.caption).foregroundStyle(.secondary)
+                Text(contact.relationship).appFont(.caption).foregroundStyle(AppColor.textSecondary)
             }
             Spacer()
             let sanitizedPhone = contact.phone.filter { $0.isNumber || $0 == "+" }
@@ -598,11 +607,13 @@ struct EmergencyCardView: View {
                 Link(destination: callURL) {
                     Label(contact.phone, systemImage: "phone.fill")
                         .appFont(.subheadline)
+                        .foregroundStyle(AppColor.primary)
                 }
                 .accessibilityLabel(String(format: NSLocalizedString("Call %@, %@", comment: "Call emergency contact accessibility"), contact.name, contact.phone))
             } else {
                 Label(contact.phone, systemImage: "phone.fill")
                     .appFont(.subheadline)
+                    .foregroundStyle(AppColor.primary)
             }
         }
     }
@@ -616,7 +627,7 @@ struct EmergencyCardView: View {
                 if let phone = caregiver.phone, !phone.isEmpty {
                     Text(phone)
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
                 }
             }
             Spacer()
@@ -624,7 +635,7 @@ struct EmergencyCardView: View {
                  ? NSLocalizedString("Missed-dose alerts on", comment: "")
                  : NSLocalizedString("Saved", comment: ""))
                 .appFont(.caption)
-                .foregroundStyle(caregiver.notifyOnMiss ? .orange : .secondary)
+                .foregroundStyle(caregiver.notifyOnMiss ? AppColor.warning : AppColor.textSecondary)
         }
     }
 

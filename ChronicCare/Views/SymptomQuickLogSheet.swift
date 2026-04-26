@@ -50,7 +50,7 @@ struct SymptomQuickLogSheet: View {
                                 customTag = ""
                             } label: {
                                 Image(systemName: "plus.circle.fill")
-                                    .foregroundStyle(.blue)
+                                    .foregroundStyle(AppColor.primary)
                             }
                             .buttonStyle(.plain)
                         }
@@ -96,7 +96,7 @@ struct SymptomQuickLogSheet: View {
                             Text(NSLocalizedString("Suspected medication", comment: ""))
                             Spacer()
                             Text(relatedMedicationSummary)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(AppColor.textSecondary)
                                 .lineLimit(1)
                         }
                     }
@@ -104,6 +104,8 @@ struct SymptomQuickLogSheet: View {
                     Text(NSLocalizedString("If you think a medication might have caused this, link it here. Optional.", comment: ""))
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(AppColor.background)
             .navigationTitle(editing == nil
                              ? NSLocalizedString("Log Symptom", comment: "")
                              : NSLocalizedString("Edit Symptom", comment: ""))
@@ -157,14 +159,14 @@ struct SymptomQuickLogSheet: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
                 .background(
-                    Capsule()
-                        .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.secondary.opacity(0.08))
+                    RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
+                        .fill(AppColor.surface)
                 )
                 .overlay(
-                    Capsule()
-                        .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
+                        .stroke(isSelected ? AppColor.primary : AppColor.divider, lineWidth: 1)
                 )
-                .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
+                .foregroundStyle(isSelected ? AppColor.primary : AppColor.textPrimary)
         }
         .buttonStyle(.plain)
     }
@@ -177,13 +179,20 @@ struct SymptomQuickLogSheet: View {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColor.textSecondary)
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+        .background(
+            RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
+                .fill(AppColor.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
+                        .stroke(AppColor.divider, lineWidth: 1)
+                )
+        )
     }
 
     @ViewBuilder
@@ -192,13 +201,15 @@ struct SymptomQuickLogSheet: View {
             List {
                 if store.medications.isEmpty {
                     Text(NSLocalizedString("No medications to choose from.", comment: ""))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
                 } else {
                     ForEach(store.medications) { med in
                         medicationPickerRow(med)
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(AppColor.background)
             .navigationTitle(NSLocalizedString("Suspected medication", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -221,16 +232,16 @@ struct SymptomQuickLogSheet: View {
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(med.name).foregroundStyle(.primary)
+                    Text(med.name).foregroundStyle(AppColor.textPrimary)
                     if !med.dose.isEmpty {
                         Text(med.dose)
                             .appFont(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppColor.textSecondary)
                     }
                 }
                 Spacer()
                 if isSelected {
-                    Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
+                    Image(systemName: "checkmark").foregroundStyle(AppColor.primary)
                 }
             }
         }

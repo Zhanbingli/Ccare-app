@@ -46,14 +46,14 @@ struct ProfileView: View {
                         Spacer()
                         Text(permissionHint())
                             .appFont(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppColor.textSecondary)
                         if !notificationsEnabled {
                             permissionButton()
                         }
                     }
                     Text(notificationCoverageSummary)
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
 
                     DisclosureGroup(NSLocalizedString("Reminder Rules", comment: ""), isExpanded: $showReminderRules) {
                         LabeledContent(NSLocalizedString("Overdue Grace Period", comment: "")) {
@@ -99,12 +99,12 @@ struct ProfileView: View {
                                 }
                             }
                         } label: {
-                            Label(NSLocalizedString("Connect Apple Health", comment: ""), systemImage: "heart.fill")
+                            Label(NSLocalizedString("Connect Apple Health", comment: ""), systemImage: "heart")
                         }
                         Button {
                             importFromHealth()
                         } label: {
-                            Label(NSLocalizedString("Import Last 30 Days", comment: ""), systemImage: "arrow.down.doc.fill")
+                            Label(NSLocalizedString("Import Last 30 Days", comment: ""), systemImage: "arrow.down.doc")
                         }
                     }
                 }
@@ -115,7 +115,7 @@ struct ProfileView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(String(format: NSLocalizedString("Unit: %@", comment: ""), glucoseUnitLabel))
                                     .appFont(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(AppColor.textSecondary)
                                 Stepper(value: glucoseLowDisplayBinding, in: glucoseLowDisplayRange, step: glucoseDisplayStep) {
                                     Text(glucoseLowLabel).appFont(.subheadline)
                                 }
@@ -189,22 +189,22 @@ struct ProfileView: View {
 
                             if !aiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                 HStack {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.green)
+                                    Image(systemName: "checkmark.circle")
+                                        .foregroundStyle(AppColor.primary)
                                     Text(NSLocalizedString("AI insights enabled", comment: ""))
                                         .appFont(.caption)
-                                        .foregroundStyle(.green)
+                                        .foregroundStyle(AppColor.primary)
                                 }
                             }
                         }
                         Text(NSLocalizedString("Used for drug interaction analysis and trend insights. Your API key is stored securely in Keychain.", comment: ""))
                             .appFont(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppColor.textSecondary)
                     } label: {
                         settingsSummaryRow(
                             title: NSLocalizedString("AI Analysis", comment: ""),
                             summary: aiSummary,
-                            systemImage: "sparkles"
+                            systemImage: "text.magnifyingglass"
                         )
                     }
                 } header: {
@@ -255,6 +255,8 @@ struct ProfileView: View {
                 // MARK: - About
                 ProfileAboutSection()
             }
+            .scrollContentBackground(.hidden)
+            .background(AppColor.background)
             .navigationTitle(NSLocalizedString("Settings", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
             .alert("Clear all data?", isPresented: $showConfirmClear) {
@@ -531,16 +533,18 @@ struct ProfileView: View {
     private func settingsSummaryRow(title: String, summary: String, systemImage: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: systemImage)
-                .foregroundStyle(Color.accentColor)
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(AppColor.primary)
                 .frame(width: 24, height: 24)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .appFont(.subheadline)
                     .fontWeight(.semibold)
+                    .foregroundStyle(AppColor.textPrimary)
                 Text(summary)
                     .appFont(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColor.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -649,7 +653,7 @@ private struct ExportOptionsSheet: View {
 
                 if let err = errorMessage {
                     Section {
-                        Text(err).foregroundStyle(.red).appFont(.caption)
+                        Text(err).foregroundStyle(AppColor.warning).appFont(.caption)
                     }
                 }
             }

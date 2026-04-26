@@ -45,14 +45,15 @@ struct AddMeasurementView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: EditorialSpacing.lg) {
                     measurementCard
                     timeCard
                     notesCard
                     validationBanner
                 }
-                .padding(16)
+                .padding(EditorialSpacing.lg)
             }
+            .background(AppColor.background)
             .navigationTitle("Add Measurement")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -152,14 +153,15 @@ struct AddMeasurementView: View {
                             Text(NSLocalizedString("Time", comment: ""))
                                 .appFont(.subheadline)
                                 .fontWeight(.semibold)
+                                .foregroundStyle(AppColor.textPrimary)
                             Text(timeDescription)
                                 .appFont(.footnote)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(AppColor.textSecondary)
                         }
                         Spacer()
                         Image(systemName: showTimeEditor ? "chevron.up" : "chevron.down")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppColor.textSecondary)
                             .frame(width: 32, height: 32)
                             .contentShape(Rectangle())
                     }
@@ -205,14 +207,15 @@ struct AddMeasurementView: View {
                             Text(NSLocalizedString("Context Notes", comment: ""))
                                 .appFont(.subheadline)
                                 .fontWeight(.semibold)
+                                .foregroundStyle(AppColor.textPrimary)
                             Text(contextSummary)
                                 .appFont(.footnote)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(AppColor.textSecondary)
                         }
                         Spacer()
                         Image(systemName: showContextNotes ? "chevron.up" : "chevron.down")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppColor.textSecondary)
                             .frame(width: 32, height: 32)
                             .contentShape(Rectangle())
                     }
@@ -230,10 +233,14 @@ struct AddMeasurementView: View {
                         .submitLabel(.done)
                         .onSubmit { focusedField = nil }
                         .padding(.horizontal, AppSpacing.small)
-                        .padding(.vertical, 14)
+                        .padding(.vertical, EditorialSpacing.md)
                         .background(
                             RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
-                                .fill(Color(.secondarySystemBackground))
+                                .fill(AppColor.surface)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                                .stroke(AppColor.divider, lineWidth: 1)
                         )
                 }
             }
@@ -246,11 +253,11 @@ struct AddMeasurementView: View {
             Card {
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: validationIsWarning ? "exclamationmark.triangle.fill" : "info.circle.fill")
-                        .foregroundStyle(validationIsWarning ? .orange : .blue)
-                        .font(.system(size: 20))
+                        .foregroundStyle(validationIsWarning ? AppColor.warning : AppColor.primary)
+                        .font(.system(size: 16, weight: .regular))
                     Text(message)
                         .appFont(.caption)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(AppColor.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -413,27 +420,27 @@ private extension AddMeasurementView {
         } label: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
-                    Circle()
-                        .fill(measurementType.tint)
-                        .frame(width: 8, height: 8)
+                    Image(systemName: selected ? "checkmark.circle" : "circle")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(selected ? AppColor.primary : AppColor.textTertiary)
                     Text(measurementType.displayName)
                         .appFont(.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(AppColor.textPrimary)
                 }
                 Text(measurementType.unit)
                     .appFont(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColor.textSecondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(AppSpacing.small)
             .background(
                 RoundedRectangle(cornerRadius: AppRadius.panel, style: .continuous)
-                    .fill(selected ? Color.accentColor.opacity(0.10) : Color(.secondarySystemBackground))
+                    .fill(AppColor.surface)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: AppRadius.panel, style: .continuous)
-                    .stroke(selected ? Color.accentColor.opacity(0.45) : Color.primary.opacity(0.06), lineWidth: 1)
+                    .stroke(selected ? AppColor.primary.opacity(0.55) : AppColor.divider, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -451,25 +458,30 @@ private extension AddMeasurementView {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .appFont(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppColor.textSecondary)
 
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 TextField(placeholder, text: text)
                     .keyboardType(keyboard)
                     .focused($focusedField, equals: field)
                     .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppColor.textPrimary)
                     .multilineTextAlignment(.leading)
 
                 Text(unit)
                     .appFont(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColor.textSecondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(AppSpacing.medium)
         .background(
             RoundedRectangle(cornerRadius: AppRadius.panel, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
+                .fill(AppColor.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.panel, style: .continuous)
+                .stroke(AppColor.divider, lineWidth: 1)
         )
     }
 
@@ -477,6 +489,7 @@ private extension AddMeasurementView {
     func quickDateButton(title: String, action: @escaping () -> Void) -> some View {
         Button(title, action: action)
             .buttonStyle(.bordered)
+            .tint(AppColor.primary)
             .controlSize(.small)
     }
 

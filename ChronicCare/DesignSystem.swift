@@ -12,6 +12,18 @@ enum EditorialPalette {
     static let success = Color(red: 0.180, green: 0.490, blue: 0.310)
 }
 
+enum AppColor {
+    static let primary = EditorialPalette.primary
+    static let warning = EditorialPalette.warning
+    static let background = EditorialPalette.background
+    static let surface = EditorialPalette.surface
+    static let textPrimary = EditorialPalette.textPrimary
+    static let textSecondary = EditorialPalette.textSecondary
+    static let textTertiary = EditorialPalette.textTertiary
+    static let divider = EditorialPalette.divider
+    static let success = EditorialPalette.success
+}
+
 enum EditorialSpacing {
     static let xxs: CGFloat = 2
     static let xs: CGFloat = 4
@@ -21,6 +33,15 @@ enum EditorialSpacing {
     static let xl: CGFloat = 24
     static let xxl: CGFloat = 32
     static let xxxl: CGFloat = 48
+}
+
+enum AppTypography {
+    static let heroNumber = AppFontStyle.heroNumber
+    static let displayTitle = AppFontStyle.displayTitle
+    static let sectionTitle = AppFontStyle.headline
+    static let body = AppFontStyle.body
+    static let caption = AppFontStyle.caption
+    static let micro = AppFontStyle.micro
 }
 
 enum AppSpacing {
@@ -92,6 +113,195 @@ struct TintedCard<Content: View>: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(tint.opacity(colorScheme == .dark ? 0.42 : 0.24), lineWidth: 0.9)
             )
+    }
+}
+
+struct AppDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(AppColor.divider)
+            .frame(height: 1)
+    }
+}
+
+struct EditorialSection<Content: View>: View {
+    let title: String
+    let trailing: String?
+    let content: Content
+
+    init(_ title: String, trailing: String? = nil, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.trailing = trailing
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .appFont(AppTypography.sectionTitle)
+                    .foregroundStyle(AppColor.textPrimary)
+                Spacer(minLength: EditorialSpacing.md)
+                if let trailing {
+                    Text(trailing)
+                        .appFontNumeric(AppTypography.caption)
+                        .foregroundStyle(AppColor.textSecondary)
+                }
+            }
+
+            AppDivider()
+
+            content
+        }
+    }
+}
+
+struct EditorialRow<Trailing: View>: View {
+    enum Tone {
+        case neutral
+        case primary
+        case warning
+        case success
+
+        var color: Color {
+            switch self {
+            case .neutral: return AppColor.textTertiary
+            case .primary: return AppColor.primary
+            case .warning: return AppColor.warning
+            case .success: return AppColor.success
+            }
+        }
+    }
+
+    let icon: String?
+    let title: String
+    let detail: String?
+    let tone: Tone
+    let trailing: Trailing
+
+    init(
+        icon: String? = nil,
+        title: String,
+        detail: String? = nil,
+        tone: Tone = .neutral,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.icon = icon
+        self.title = title
+        self.detail = detail
+        self.tone = tone
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: EditorialSpacing.sm) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(tone.color)
+                    .frame(width: 18, alignment: .center)
+            }
+
+            VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                Text(title)
+                    .appFont(AppTypography.body)
+                    .foregroundStyle(AppColor.textPrimary)
+                if let detail, !detail.isEmpty {
+                    Text(detail)
+                        .appFont(AppTypography.caption)
+                        .foregroundStyle(AppColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Spacer(minLength: EditorialSpacing.md)
+
+            trailing
+        }
+        .padding(.vertical, EditorialSpacing.xs)
+        .contentShape(Rectangle())
+    }
+}
+
+extension EditorialRow where Trailing == EmptyView {
+    init(icon: String? = nil, title: String, detail: String? = nil, tone: Tone = .neutral) {
+        self.init(icon: icon, title: title, detail: detail, tone: tone) {
+            EmptyView()
+        }
+    }
+}
+
+enum EditorialButtonKind {
+    case primary
+    case secondary
+    case plain
+}
+
+struct EditorialButton: View {
+    let title: String
+    let systemImage: String?
+    let kind: EditorialButtonKind
+    let action: () -> Void
+
+    init(
+        _ title: String,
+        systemImage: String? = nil,
+        kind: EditorialButtonKind = .secondary,
+        action: @escaping () -> Void
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.kind = kind
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: EditorialSpacing.sm) {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 14, weight: .regular))
+                }
+                Text(title)
+                    .appFont(.subheadline)
+                    .fontWeight(.medium)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 42)
+            .foregroundStyle(foreground)
+            .background(background)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(stroke, lineWidth: kind == .plain ? 0 : 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var foreground: Color {
+        switch kind {
+        case .primary: return AppColor.primary
+        case .secondary: return AppColor.textPrimary
+        case .plain: return AppColor.primary
+        }
+    }
+
+    @ViewBuilder
+    private var background: some View {
+        if kind == .plain {
+            Color.clear
+        } else {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(AppColor.surface)
+        }
+    }
+
+    private var stroke: Color {
+        switch kind {
+        case .primary: return AppColor.primary.opacity(0.55)
+        case .secondary: return AppColor.divider
+        case .plain: return .clear
+        }
     }
 }
 
@@ -217,10 +427,10 @@ struct EmptyStateView: View {
 extension MeasurementType {
     var tint: Color {
         switch self {
-        case .bloodPressure: return .indigo // use red only when abnormal
-        case .bloodGlucose:  return .orange
-        case .weight:        return .teal
-        case .heartRate:     return .pink
+        case .bloodPressure: return AppColor.primary
+        case .bloodGlucose:  return AppColor.primary
+        case .weight:        return AppColor.textSecondary
+        case .heartRate:     return AppColor.primary
         }
     }
 }
@@ -228,10 +438,10 @@ extension MeasurementType {
 extension MeasurementType {
     var tintUIColor: UIColor {
         switch self {
-        case .bloodPressure: return .systemIndigo
-        case .bloodGlucose:  return .systemOrange
-        case .weight:        return .systemTeal
-        case .heartRate:     return .systemPink
+        case .bloodPressure: return UIColor(red: 0.165, green: 0.420, blue: 0.486, alpha: 1)
+        case .bloodGlucose:  return UIColor(red: 0.165, green: 0.420, blue: 0.486, alpha: 1)
+        case .weight:        return UIColor(red: 0.420, green: 0.447, blue: 0.502, alpha: 1)
+        case .heartRate:     return UIColor(red: 0.165, green: 0.420, blue: 0.486, alpha: 1)
         }
     }
 }

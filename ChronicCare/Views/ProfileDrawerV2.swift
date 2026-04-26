@@ -16,7 +16,7 @@ struct ProfileDrawerV2: View {
                 Section {
                     quickActionRow(
                         icon: "plus",
-                        tint: .accentColor,
+                        tint: AppColor.primary,
                         title: NSLocalizedString("Log Measurement", comment: ""),
                         subtitle: NSLocalizedString("Blood pressure, glucose, weight, heart rate", comment: ""),
                         action: onLogMeasurement
@@ -24,7 +24,7 @@ struct ProfileDrawerV2: View {
 
                     quickActionRow(
                         icon: "square.and.arrow.up",
-                        tint: .teal,
+                        tint: AppColor.primary,
                         title: NSLocalizedString("Share Health Report", comment: ""),
                         subtitle: NSLocalizedString("PDF for your doctor — last 30 days", comment: ""),
                         action: exportHealthReport
@@ -34,7 +34,7 @@ struct ProfileDrawerV2: View {
                 Section {
                     navRow(
                         icon: "pills.fill",
-                        tint: .indigo,
+                        tint: AppColor.primary,
                         title: NSLocalizedString("My Medications", comment: ""),
                         subtitle: medicationSubtitle
                     ) {
@@ -45,7 +45,7 @@ struct ProfileDrawerV2: View {
                 Section(NSLocalizedString("Review", comment: "")) {
                     navRow(
                         icon: "chart.line.uptrend.xyaxis",
-                        tint: .blue,
+                        tint: AppColor.primary,
                         title: NSLocalizedString("Trends", comment: ""),
                         subtitle: trendsSubtitle
                     ) {
@@ -57,7 +57,7 @@ struct ProfileDrawerV2: View {
                 Section(NSLocalizedString("For Your Doctor", comment: "Drawer section")) {
                     navRow(
                         icon: "calendar.badge.clock",
-                        tint: .teal,
+                        tint: AppColor.primary,
                         title: NSLocalizedString("Visit Prep", comment: ""),
                         subtitle: visitPrepSubtitle
                     ) {
@@ -66,7 +66,7 @@ struct ProfileDrawerV2: View {
 
                     navRow(
                         icon: "stethoscope",
-                        tint: .blue,
+                        tint: AppColor.primary,
                         title: NSLocalizedString("Consultation Snapshot", comment: ""),
                         subtitle: NSLocalizedString("What the hospital doesn't see", comment: "")
                     ) {
@@ -75,7 +75,7 @@ struct ProfileDrawerV2: View {
 
                     navRow(
                         icon: "cross.case.fill",
-                        tint: .red,
+                        tint: AppColor.warning,
                         title: NSLocalizedString("Emergency Card", comment: ""),
                         subtitle: emergencySubtitle
                     ) {
@@ -84,7 +84,7 @@ struct ProfileDrawerV2: View {
 
                     navRow(
                         icon: "person.2.fill",
-                        tint: .orange,
+                        tint: AppColor.textSecondary,
                         title: NSLocalizedString("Caregivers", comment: ""),
                         subtitle: caregiverSubtitle
                     ) {
@@ -104,6 +104,8 @@ struct ProfileDrawerV2: View {
                 }
             }
             .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(AppColor.background)
             .navigationTitle(NSLocalizedString("Profile", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -191,21 +193,14 @@ struct ProfileDrawerV2: View {
     ) -> some View {
         Button(action: action) {
             HStack(spacing: AppSpacing.medium) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(tint.opacity(0.15))
-                        .frame(width: 34, height: 34)
-                    Image(systemName: icon)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(tint)
-                }
+                rowIcon(icon, tint: tint)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .appFont(.body)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(AppColor.textPrimary)
                     Text(subtitle)
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
                 }
                 Spacer()
             }
@@ -227,20 +222,28 @@ struct ProfileDrawerV2: View {
             destination()
         } label: {
             HStack(spacing: AppSpacing.medium) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(tint.opacity(0.15))
-                        .frame(width: 34, height: 34)
-                    Image(systemName: icon)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(tint)
-                }
+                rowIcon(icon, tint: tint)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).appFont(.body).foregroundStyle(.primary)
-                    Text(subtitle).appFont(.caption).foregroundStyle(.secondary)
+                    Text(title).appFont(.body).foregroundStyle(AppColor.textPrimary)
+                    Text(subtitle).appFont(.caption).foregroundStyle(AppColor.textSecondary)
                 }
             }
             .padding(.vertical, 4)
         }
+    }
+
+    private func rowIcon(_ icon: String, tint: Color) -> some View {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(AppColor.surface)
+            .frame(width: 34, height: 34)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(AppColor.divider, lineWidth: 1)
+            )
+            .overlay(
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(tint)
+            )
     }
 }

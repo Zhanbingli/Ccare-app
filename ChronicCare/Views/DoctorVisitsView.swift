@@ -36,7 +36,7 @@ struct DoctorVisitsView: View {
                             Button(NSLocalizedString("Done", comment: "")) {
                                 store.completeDoctorVisit(visit)
                             }
-                            .tint(.green)
+                            .tint(AppColor.success)
                             Button(role: .destructive) {
                                 store.removeDoctorVisit(visit)
                             } label: {
@@ -59,7 +59,7 @@ struct DoctorVisitsView: View {
                             Button(NSLocalizedString("Done", comment: "")) {
                                 store.completeDoctorVisit(visit)
                             }
-                            .tint(.green)
+                            .tint(AppColor.success)
                             Button(role: .destructive) {
                                 store.removeDoctorVisit(visit)
                             } label: {
@@ -90,6 +90,8 @@ struct DoctorVisitsView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(AppColor.background)
         .navigationTitle(NSLocalizedString("Visit Prep", comment: ""))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -110,24 +112,24 @@ struct DoctorVisitsView: View {
     }
 
     private func nextVisitHero(_ visit: DoctorVisit) -> some View {
-        TintedCard(tint: visitTint(visit)) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top, spacing: 12) {
+        Card {
+            VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+                HStack(alignment: .top, spacing: EditorialSpacing.md) {
                     Image(systemName: "stethoscope")
-                        .font(.system(size: 24, weight: .semibold))
+                        .font(.system(size: 22, weight: .regular))
                         .foregroundStyle(visitTint(visit))
-                        .frame(width: 44, height: 44)
-                        .background(Circle().fill(visitTint(visit).opacity(0.12)))
+                        .frame(width: 32, height: 32)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(prepTitle(for: visit))
-                            .appFont(.headline)
+                            .appFont(AppTypography.sectionTitle)
+                            .foregroundStyle(AppColor.textPrimary)
                         Text(visit.displayTitle)
-                            .appFont(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .appFont(AppTypography.body)
+                            .foregroundStyle(AppColor.textSecondary)
                         if let reason = visit.reason, !reason.isEmpty {
                             Text(reason)
-                                .appFont(.caption)
-                                .foregroundStyle(.secondary)
+                                .appFont(AppTypography.caption)
+                                .foregroundStyle(AppColor.textSecondary)
                         }
                     }
                 }
@@ -138,6 +140,7 @@ struct DoctorVisitsView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(AppColor.primary)
             }
         }
     }
@@ -150,11 +153,11 @@ struct DoctorVisitsView: View {
                 Spacer()
                 Text(visit.scheduledDate, format: .dateTime.month().day())
                     .appFontNumeric(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColor.textSecondary)
             }
             Text(visitSubtitle(visit))
                 .appFont(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppColor.textSecondary)
         }
         .padding(.vertical, 2)
     }
@@ -181,8 +184,8 @@ struct DoctorVisitsView: View {
     }
 
     private func visitTint(_ visit: DoctorVisit) -> Color {
-        guard let days = visit.daysUntil() else { return .secondary }
-        if days < 0 { return .orange }
-        return days <= 3 ? .teal : .blue
+        guard let days = visit.daysUntil() else { return AppColor.textSecondary }
+        if days < 0 { return AppColor.warning }
+        return days <= 7 ? AppColor.primary : AppColor.textSecondary
     }
 }

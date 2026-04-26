@@ -41,7 +41,7 @@ struct CaregiversView: View {
                         .appFont(.headline)
                     Text(caregiverSummary)
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
                 }
                 .padding(.vertical, 4)
             }
@@ -58,7 +58,7 @@ struct CaregiversView: View {
                 if missedSupportItems.isEmpty {
                     Text(NSLocalizedString("No medications currently meet the missed-dose support threshold.", comment: ""))
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
                 } else {
                     ForEach(missedSupportItems, id: \.medication.id) { item in
                         VStack(alignment: .leading, spacing: 4) {
@@ -66,7 +66,7 @@ struct CaregiversView: View {
                                 .appFont(.subheadline)
                             Text(String(format: NSLocalizedString("Missed for %lld days. Share reminders should now be active for caregivers with alerts enabled.", comment: ""), item.missedDays))
                                 .appFont(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(AppColor.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         .padding(.vertical, 2)
@@ -100,6 +100,8 @@ struct CaregiversView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(AppColor.background)
         .navigationTitle(NSLocalizedString("Caregivers", comment: ""))
         .toolbar {
             if !store.caregivers.isEmpty {
@@ -195,33 +197,38 @@ struct CaregiversView: View {
 
     private func caregiverRow(_ caregiver: CaregiverContact) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Circle()
-                .fill(Color.blue.opacity(0.14))
+            Image(systemName: "person")
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(AppColor.primary)
                 .frame(width: 36, height: 36)
-                .overlay(
-                    Image(systemName: "person.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.blue)
+                .background(
+                    RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
+                        .fill(AppColor.surface)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
+                                .stroke(AppColor.divider, lineWidth: 1)
+                        )
                 )
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(caregiver.name)
                     .appFont(.subheadline)
                     .fontWeight(.semibold)
+                    .foregroundStyle(AppColor.textPrimary)
                 if let phone = caregiver.phone, !phone.isEmpty {
                     Text(phone)
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
                 }
                 Text(caregiver.notifyOnMiss
                      ? NSLocalizedString("Missed-dose support on", comment: "")
                      : NSLocalizedString("Missed-dose support off", comment: ""))
                     .appFont(.caption)
-                    .foregroundStyle(caregiver.notifyOnMiss ? Color.orange : Color.secondary)
+                    .foregroundStyle(caregiver.notifyOnMiss ? AppColor.warning : AppColor.textSecondary)
                 if caregiver.notifyOnMiss {
                     Text(caregiverSupportLine(for: caregiver))
                         .appFont(.caption)
-                        .foregroundStyle(hasActiveSupport ? Color.red : Color.secondary)
+                        .foregroundStyle(hasActiveSupport ? AppColor.warning : AppColor.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -229,9 +236,9 @@ struct CaregiversView: View {
             Spacer()
 
             if caregiver.notifyOnMiss {
-                Image(systemName: "bell.fill")
+                Image(systemName: "bell")
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(AppColor.warning)
             }
         }
         .padding(.vertical, 2)
@@ -240,13 +247,17 @@ struct CaregiversView: View {
     private var supportOverviewRow: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
-                Circle()
-                    .fill((missedSupportItems.isEmpty ? Color.green : Color.orange).opacity(0.14))
+                Image(systemName: missedSupportItems.isEmpty ? "checkmark.circle" : "exclamationmark.circle")
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(missedSupportItems.isEmpty ? AppColor.primary : AppColor.warning)
                     .frame(width: 36, height: 36)
-                    .overlay(
-                        Image(systemName: missedSupportItems.isEmpty ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(missedSupportItems.isEmpty ? .green : .orange)
+                    .background(
+                        RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
+                            .fill(AppColor.surface)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
+                                    .stroke(AppColor.divider, lineWidth: 1)
+                            )
                     )
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -255,11 +266,12 @@ struct CaregiversView: View {
                          : NSLocalizedString("Support is active", comment: ""))
                         .appFont(.subheadline)
                         .fontWeight(.semibold)
+                        .foregroundStyle(AppColor.textPrimary)
                     Text(missedSupportItems.isEmpty
                          ? NSLocalizedString("No medication currently needs caregiver follow-up.", comment: "")
                          : activeSupportLine)
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -270,7 +282,7 @@ struct CaregiversView: View {
                 if enabledCaregivers.isEmpty {
                     Text(NSLocalizedString("No caregivers currently have missed-dose alerts enabled. Turn alerts on for at least one caregiver to make support useful.", comment: ""))
                         .appFont(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(AppColor.warning)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
                     Button {
@@ -281,7 +293,7 @@ struct CaregiversView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.blue)
+                    .tint(AppColor.primary)
                     .controlSize(.small)
                 }
             }

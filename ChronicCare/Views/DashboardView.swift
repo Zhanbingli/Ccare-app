@@ -66,12 +66,12 @@ struct DashboardView: View {
 
         var tint: Color {
             switch self {
-            case .taken:   return .green
-            case .skipped: return .orange
-            case .snoozed: return .blue
-            case .overdue: return .red
-            case .dueSoon: return .orange
-            case .none:    return .secondary
+            case .taken:   return AppColor.success
+            case .skipped: return AppColor.textSecondary
+            case .snoozed: return AppColor.primary
+            case .overdue: return AppColor.warning
+            case .dueSoon: return AppColor.warning
+            case .none:    return AppColor.textSecondary
             }
         }
 
@@ -142,11 +142,11 @@ struct DashboardView: View {
         var tint: Color {
             switch self {
             case .good:
-                return .green
+                return AppColor.success
             case .okay:
-                return .orange
+                return AppColor.textSecondary
             case .unwell:
-                return .pink
+                return AppColor.warning
             }
         }
 
@@ -244,8 +244,8 @@ struct DashboardView: View {
                     case .lightPrep(let visit, let days):
                         lightPrepHero(visit: visit, daysUntil: days, state: state)
                         visitDataReadinessCard(visit: visit, mode: mode)
-                    case .activePrep(let visit, _):
-                        preVisitPrepCard(priority: .pinned)
+                    case .activePrep(let visit, let days):
+                        lightPrepHero(visit: visit, daysUntil: days, state: state)
                         visitDataReadinessCard(visit: visit, mode: mode)
                     case .visitDay(let visit):
                         visitDayBoardingPass(visit: visit)
@@ -444,7 +444,7 @@ private struct TakenConfirmationOverlay: View {
         VStack(spacing: 16) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 72, weight: .bold))
-                .foregroundStyle(.green)
+                .foregroundStyle(AppColor.success)
                 .symbolRenderingMode(.hierarchical)
             Text(medicationName)
                 .appFont(.headline)
@@ -452,7 +452,7 @@ private struct TakenConfirmationOverlay: View {
             Text(NSLocalizedString("Taken!", comment: ""))
                 .appFont(.title)
                 .fontWeight(.bold)
-                .foregroundStyle(.green)
+                .foregroundStyle(AppColor.success)
         }
         .padding(40)
         .background(
@@ -537,7 +537,7 @@ private extension DashboardView {
                     .foregroundStyle(EditorialPalette.textPrimary)
 
                 HStack(alignment: .firstTextBaseline, spacing: EditorialSpacing.md) {
-                    Text("\(state.takenCount)")
+                    Text("\(state.takenCount + state.skippedCount)")
                         .appFontNumeric(.heroNumber)
                         .foregroundStyle(EditorialPalette.textPrimary)
 
@@ -588,17 +588,13 @@ private extension DashboardView {
 
             if isActionable {
                 HStack(spacing: EditorialSpacing.sm) {
-                    Button(NSLocalizedString("Take", comment: "")) {
+                    EditorialButton(NSLocalizedString("Take", comment: ""), kind: .primary) {
                         beginTakeFlow(for: item)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(EditorialPalette.primary)
 
-                    Button(NSLocalizedString("Skip", comment: "")) {
+                    EditorialButton(NSLocalizedString("Skip", comment: ""), kind: .secondary) {
                         skipDose(for: item)
                     }
-                    .buttonStyle(.bordered)
-                    .tint(EditorialPalette.textSecondary)
                 }
                 .padding(.top, EditorialSpacing.xs)
             }
@@ -607,8 +603,14 @@ private extension DashboardView {
 
     private func dailyMeasurementInlineSection() -> some View {
         VStack(spacing: EditorialSpacing.sm) {
-            measurementPromptRow(title: NSLocalizedString("Blood pressure", comment: "Measurement quick prompt"), value: todayMeasurementCount > 0 ? NSLocalizedString("Logged", comment: "Measurement logged status") : NSLocalizedString("Not measured", comment: "Measurement missing status"))
-            measurementPromptRow(title: NSLocalizedString("Blood glucose", comment: "Measurement quick prompt"), value: NSLocalizedString("Not measured", comment: "Measurement missing status"))
+            measurementPromptRow(
+                title: NSLocalizedString("Blood pressure", comment: "Measurement quick prompt"),
+                value: todayMeasurementStatus(for: .bloodPressure)
+            )
+            measurementPromptRow(
+                title: NSLocalizedString("Blood glucose", comment: "Measurement quick prompt"),
+                value: todayMeasurementStatus(for: .bloodGlucose)
+            )
         }
     }
 
@@ -634,9 +636,7 @@ private extension DashboardView {
     }
 
     private func editorialDivider() -> some View {
-        Rectangle()
-            .fill(EditorialPalette.divider)
-            .frame(height: 1)
+        AppDivider()
     }
 
     private func dailyFeelingCheckIn() -> some View {
@@ -725,6 +725,15 @@ private extension DashboardView {
         store.measurements.filter { Calendar.current.isDateInToday($0.date) }.count
     }
 
+    private func todayMeasurementStatus(for type: MeasurementType) -> String {
+        let hasLogged = store.measurements.contains {
+            $0.type == type && Calendar.current.isDateInToday($0.date)
+        }
+        return hasLogged
+            ? NSLocalizedString("Logged", comment: "Measurement logged status")
+            : NSLocalizedString("Not measured", comment: "Measurement missing status")
+    }
+
     private var todaySymptomCount: Int {
         store.symptomEntries.filter { Calendar.current.isDateInToday($0.date) }.count
     }
@@ -803,42 +812,51 @@ private extension DashboardView {
     }
 
     private func lightPrepHero(visit: DoctorVisit, daysUntil: Int, state: TodayState) -> some View {
-        TintedCard(tint: EditorialPalette.primary) {
-            VStack(alignment: .leading, spacing: EditorialSpacing.lg) {
+        VStack(alignment: .leading, spacing: EditorialSpacing.lg) {
+            editorialDivider()
+
+            VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
                 Text(NSLocalizedString("Appointment countdown", comment: "Visit prep editorial title"))
-                    .appFont(.headline)
-                    .foregroundStyle(EditorialPalette.textPrimary)
+                    .appFont(.micro)
+                    .textCase(.uppercase)
+                    .tracking(0.7)
+                    .foregroundStyle(AppColor.textSecondary)
 
-                VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
-                    Text(String(format: NSLocalizedString("%lld days", comment: "Visit countdown hero number"), daysUntil))
-                        .appFontNumeric(.heroNumber)
-                        .foregroundStyle(EditorialPalette.primary)
-                    Text(visitSupportingLine(visit))
-                        .appFont(.caption)
-                        .foregroundStyle(EditorialPalette.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text(String(format: NSLocalizedString("%lld days", comment: "Visit countdown hero number"), daysUntil))
+                    .appFontNumeric(.heroNumber)
+                    .foregroundStyle(AppColor.primary)
 
-                editorialDivider()
-
-                HStack(spacing: 8) {
-                    dailyMetricPill(
-                        value: state.totalCount == 0 ? "0" : "\(state.takenCount)/\(state.totalCount)",
-                        label: NSLocalizedString("Doses", comment: "Daily metric label"),
-                        tint: .green
-                    )
-                    dailyMetricPill(
-                        value: "\(recentMeasurementCount(days: 30))",
-                        label: NSLocalizedString("30d readings", comment: "Visit prep readiness metric"),
-                        tint: .blue
-                    )
-                    dailyMetricPill(
-                        value: "\(recentSymptomCount(days: 30))",
-                        label: NSLocalizedString("30d feelings", comment: "Visit prep readiness metric"),
-                        tint: .pink
-                    )
-                }
+                Text(visitSupportingLine(visit))
+                    .appFont(.caption)
+                    .foregroundStyle(AppColor.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+
+            Button {
+                showVisitSnapshot = true
+            } label: {
+                HStack {
+                    Text(NSLocalizedString("Open visit summary", comment: "Visit prep summary action"))
+                        .appFont(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(AppColor.textPrimary)
+                    Spacer()
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(AppColor.primary)
+                }
+                .padding(EditorialSpacing.md)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(AppColor.surface)
+                        .shadow(color: .black.opacity(0.04), radius: 10, x: 0, y: 4)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(AppColor.divider.opacity(0.65), lineWidth: 0.8)
+                )
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -936,45 +954,86 @@ private extension DashboardView {
     }
 
     private func visitDataReadinessCard(visit: DoctorVisit, mode: HomeMode) -> some View {
-        let measurementCount = recentMeasurementCount(days: 30)
+        let bloodPressureCount = recentMeasurementCount(type: .bloodPressure, days: 30)
+        let bloodGlucoseCount = recentMeasurementCount(type: .bloodGlucose, days: 30)
         let symptomCount = recentSymptomCount(days: 30)
         let medCount = store.medications.count
+        let readinessCount = [
+            medCount > 0,
+            bloodPressureCount > 0,
+            bloodGlucoseCount > 0,
+            symptomCount > 0,
+            false,
+            true
+        ].filter { $0 }.count
 
-        return Card {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text(NSLocalizedString("Visit prep materials", comment: "Visit prep readiness card title"))
-                        .appFont(.headline)
-                    Spacer()
-                    Text(readinessScoreText(medCount: medCount, measurementCount: measurementCount, symptomCount: symptomCount))
-                        .appFont(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
-                }
+        return VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(NSLocalizedString("Data readiness", comment: "Visit prep readiness card title"))
+                    .appFont(.headline)
+                    .foregroundStyle(AppColor.textPrimary)
+                Spacer()
+                Text(String(format: NSLocalizedString("%lld / 6", comment: "Data readiness score"), readinessCount))
+                    .appFontNumeric(.caption)
+                    .foregroundStyle(AppColor.textSecondary)
+            }
 
+            AppDivider()
+
+            VStack(spacing: EditorialSpacing.sm) {
                 readinessRow(
-                    title: NSLocalizedString("Review current medications", comment: "Visit prep readiness item"),
+                    title: NSLocalizedString("Medication records", comment: "Visit prep readiness item"),
                     detail: medCount == 0
-                        ? NSLocalizedString("No medications yet", comment: "")
-                        : String(format: NSLocalizedString("%lld medications to review", comment: "Visit prep readiness medication count"), medCount),
+                        ? NSLocalizedString("Add current medications", comment: "")
+                        : NSLocalizedString("30 days complete", comment: "Visit prep medication readiness detail"),
                     isReady: medCount > 0,
                     action: { showAddMedication = true }
                 )
+                AppDivider()
+
                 readinessRow(
-                    title: NSLocalizedString("Home measurement records", comment: "Visit prep readiness item"),
-                    detail: measurementCount == 0
-                        ? NSLocalizedString("Record blood pressure, glucose, weight, or heart rate", comment: "Visit prep readiness empty measurement detail")
-                        : String(format: NSLocalizedString("%lld home readings in the last 30 days", comment: "Visit prep readiness readings count"), measurementCount),
-                    isReady: measurementCount > 0,
+                    title: NSLocalizedString("Blood pressure", comment: "Visit prep readiness item"),
+                    detail: bloodPressureCount == 0
+                        ? NSLocalizedString("0 entries", comment: "Visit prep empty count")
+                        : String(format: NSLocalizedString("%lld entries", comment: "Visit prep entries count"), bloodPressureCount),
+                    isReady: bloodPressureCount > 0,
                     action: { onLogMeasurement?() }
                 )
+                AppDivider()
+
                 readinessRow(
-                    title: NSLocalizedString("Body changes and symptoms", comment: "Visit prep readiness item"),
+                    title: NSLocalizedString("Blood glucose", comment: "Visit prep readiness item"),
+                    detail: bloodGlucoseCount == 0
+                        ? NSLocalizedString("0 entries", comment: "Visit prep empty count")
+                        : String(format: NSLocalizedString("%lld entries", comment: "Visit prep entries count"), bloodGlucoseCount),
+                    isReady: bloodGlucoseCount > 0,
+                    action: { onLogMeasurement?() }
+                )
+                AppDivider()
+
+                readinessRow(
+                    title: NSLocalizedString("Symptoms", comment: "Visit prep readiness item"),
                     detail: symptomCount == 0
-                        ? NSLocalizedString("Add discomfort only when something feels different", comment: "Visit prep readiness empty symptom detail")
-                        : String(format: NSLocalizedString("%lld body notes in the last 30 days", comment: "Visit prep readiness symptom count"), symptomCount),
+                        ? NSLocalizedString("0 entries", comment: "Visit prep empty count")
+                        : String(format: NSLocalizedString("%lld entries", comment: "Visit prep entries count"), symptomCount),
                     isReady: symptomCount > 0,
                     action: { showSymptomLog = true }
+                )
+                AppDivider()
+
+                readinessRow(
+                    title: NSLocalizedString("Last dose adjustment", comment: "Visit prep readiness item"),
+                    detail: NSLocalizedString("Unconfirmed", comment: "Visit prep readiness unconfirmed"),
+                    isReady: false,
+                    action: { editingDoctorVisit = visit }
+                )
+                AppDivider()
+
+                readinessRow(
+                    title: NSLocalizedString("Next follow-up booking", comment: "Visit prep readiness item"),
+                    detail: NSLocalizedString("Scheduled", comment: "Visit prep readiness scheduled"),
+                    isReady: true,
+                    action: { editingDoctorVisit = visit }
                 )
             }
         }
@@ -1006,11 +1065,6 @@ private extension DashboardView {
         .buttonStyle(.plain)
     }
 
-    private func readinessScoreText(medCount: Int, measurementCount: Int, symptomCount: Int) -> String {
-        let readyCount = [medCount > 0, measurementCount > 0, symptomCount > 0].filter { $0 }.count
-        return String(format: NSLocalizedString("%lld/3 ready", comment: "Visit prep readiness score"), readyCount)
-    }
-
     private func visitSupportingLine(_ visit: DoctorVisit) -> String {
         let time = visit.scheduledDate.formatted(date: .omitted, time: .shortened)
         let place = [Optional(visit.displayTitle), visit.hospital]
@@ -1024,6 +1078,11 @@ private extension DashboardView {
     private func recentMeasurementCount(days: Int) -> Int {
         let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
         return store.measurements.filter { $0.date >= cutoff }.count
+    }
+
+    private func recentMeasurementCount(type: MeasurementType, days: Int) -> Int {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
+        return store.measurements.filter { $0.type == type && $0.date >= cutoff }.count
     }
 
     private func recentSymptomCount(days: Int) -> Int {
@@ -1147,11 +1206,11 @@ private extension DashboardView {
     }
 
     private func inactivityWarningCard(daysSince: Int) -> some View {
-        TintedCard(tint: .red) {
+        TintedCard(tint: AppColor.warning) {
             HStack(alignment: .center, spacing: 12) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 22))
-                    .foregroundStyle(.red)
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundStyle(AppColor.warning)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(NSLocalizedString("No recent activity", comment: ""))
                         .appFont(.headline)
@@ -1188,7 +1247,7 @@ private extension DashboardView {
                 HStack(spacing: 14) {
                     Image(systemName: "checkmark.seal.fill")
                         .font(.system(size: 36))
-                        .foregroundStyle(.green)
+                        .foregroundStyle(AppColor.success)
                         .symbolRenderingMode(.hierarchical)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(NSLocalizedString("Today complete", comment: ""))
@@ -1281,7 +1340,7 @@ private extension DashboardView {
                             Image(systemName: isCollapsed ? "chevron.down" : "chevron.up")
                                 .font(.system(size: 10, weight: .semibold))
                         }
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(AppColor.primary)
                         .frame(maxWidth: .infinity)
                         .padding(.top, 2)
                     }
@@ -1362,7 +1421,7 @@ private extension DashboardView {
                             if let fi = item.med.foodInstruction {
                                 Label(fi.displayName, systemImage: "fork.knife")
                                     .appFont(.caption)
-                                    .foregroundStyle(.blue)
+                                    .foregroundStyle(AppColor.textSecondary)
                             }
                         }
                         Spacer(minLength: 0)
@@ -1390,7 +1449,7 @@ private extension DashboardView {
                             .frame(maxWidth: .infinity, minHeight: 48)
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.green)
+                    .tint(AppColor.primary)
 
                     HStack(spacing: 8) {
                         Button {
@@ -1465,7 +1524,7 @@ private extension DashboardView {
                     Text(timeUntilText(item.time))
                         .appFont(.caption)
                         .fontWeight(.semibold)
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(AppColor.primary)
                         .monospacedDigit()
                     Text(NSLocalizedString("up next", comment: "Countdown label for the next medication in today's list"))
                         .appFont(.caption)
@@ -1501,7 +1560,7 @@ private extension DashboardView {
                 message: NSLocalizedString("If you are sure this dose was missed, you can log it now. Do not take extra doses beyond the schedule unless your clinician told you to.", comment: "Missed dose recovery guidance"),
                 compactText: NSLocalizedString("Can log late dose", comment: "Compact missed dose recovery guidance"),
                 icon: "arrow.uturn.backward.circle.fill",
-                tint: .orange
+                tint: AppColor.warning
             )
         case .tooCloseToNext(let next):
             let nextText = next.formatted(date: .omitted, time: .shortened)
@@ -1510,7 +1569,7 @@ private extension DashboardView {
                 message: String(format: NSLocalizedString("Next scheduled dose is at %@. Avoid doubling up; skip this missed dose unless your clinician told you otherwise.", comment: "Missed dose recovery guidance"), nextText),
                 compactText: NSLocalizedString("Near next dose; avoid doubling up", comment: "Compact missed dose recovery guidance"),
                 icon: "exclamationmark.triangle.fill",
-                tint: .red
+                tint: AppColor.warning
             )
         case .noNextDose:
             return MissedDoseRecoveryGuidance(
@@ -1518,7 +1577,7 @@ private extension DashboardView {
                 message: NSLocalizedString("No next scheduled dose was found. Log this only if you actually took it.", comment: "Missed dose recovery guidance"),
                 compactText: NSLocalizedString("Confirm before logging", comment: "Compact missed dose recovery guidance"),
                 icon: "questionmark.circle.fill",
-                tint: .orange
+                tint: AppColor.textSecondary
             )
         }
     }
@@ -1576,7 +1635,7 @@ private extension DashboardView {
                             Image(systemName: showAllPRN ? "chevron.up" : "chevron.down")
                                 .font(.system(size: 10, weight: .semibold))
                         }
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(AppColor.primary)
                         .frame(maxWidth: .infinity)
                         .padding(.top, 2)
                     }
@@ -1678,16 +1737,12 @@ private extension DashboardView {
             return NSLocalizedString("Turn On", comment: "")
         }()
 
-        return TintedCard(tint: .orange) {
+        return TintedCard(tint: AppColor.warning) {
             HStack(alignment: .center, spacing: 12) {
-                Image(systemName: "bell.badge.fill")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(.orange)
-                    .frame(width: 44, height: 44)
-                    .background(
-                        Circle()
-                            .fill(Color.orange.opacity(0.12))
-                    )
+                Image(systemName: "bell.badge")
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundStyle(AppColor.warning)
+                    .frame(width: 24, height: 24)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(NSLocalizedString("Reminder Setup Needs Attention", comment: ""))
@@ -1704,7 +1759,7 @@ private extension DashboardView {
                     handleReminderRepair()
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.orange)
+                .tint(AppColor.warning)
                 .controlSize(.small)
             }
         }
@@ -1762,13 +1817,13 @@ private extension DashboardView {
     private func statusBadgeTint(for status: TodayMedStatus) -> Color {
         switch status {
         case .overdue:
-            return .red
+            return AppColor.warning
         case .dueSoon:
-            return .orange
+            return AppColor.warning
         case .snoozed:
-            return .blue
+            return AppColor.primary
         default:
-            return .secondary
+            return AppColor.textSecondary
         }
     }
 
@@ -1853,7 +1908,7 @@ private extension DashboardView {
             if todayCount > 0 {
                 Text(String(format: NSLocalizedString("Taken %lld×", comment: ""), todayCount))
                     .appFont(.caption)
-                    .foregroundStyle(.green)
+                    .foregroundStyle(AppColor.success)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
                     .fixedSize()
@@ -1877,7 +1932,7 @@ private extension DashboardView {
                     .padding(.vertical, 8)
             }
             .buttonStyle(.borderedProminent)
-            .tint(.blue)
+            .tint(AppColor.primary)
             .controlSize(.small)
             .fixedSize()
         }
@@ -1958,24 +2013,24 @@ private extension DashboardView {
         case .taken:
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(.green)
+                .foregroundStyle(AppColor.success)
         case .skipped:
-            Image(systemName: "xmark.circle.fill")
+            Image(systemName: "xmark.circle")
                 .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(.orange)
+                .foregroundStyle(AppColor.textSecondary)
         case .snoozed:
             Image(systemName: "zzz")
                 .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(.blue)
+                .foregroundStyle(AppColor.primary)
                 .frame(width: 24)
         case .overdue:
-            Image(systemName: "exclamationmark.circle.fill")
+            Image(systemName: "exclamationmark.circle")
                 .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(.red)
+                .foregroundStyle(AppColor.warning)
         case .dueSoon:
-            Image(systemName: "clock.fill")
+            Image(systemName: "clock")
                 .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(.orange)
+                .foregroundStyle(AppColor.warning)
                 .frame(width: 24)
         case .none:
             Image(systemName: "circle")
@@ -2005,18 +2060,17 @@ private extension DashboardView {
     @ViewBuilder
     private func safetyNoticeCard(summary: MedicationRules.DailySafetySummary) -> some View {
         let items = summary.missEscalations + summary.timingConflicts
-        let tint: Color = summary.missEscalations.isEmpty ? .orange : .red
+        let tint: Color = AppColor.warning
         let title = summary.missEscalations.isEmpty
             ? NSLocalizedString("Schedule overlap", comment: "")
             : NSLocalizedString("Needs attention", comment: "")
 
         TintedCard(tint: tint) {
             HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 22, weight: .semibold))
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 18, weight: .regular))
                     .foregroundStyle(tint)
-                    .frame(width: 44, height: 44)
-                    .background(Circle().fill(tint.opacity(0.12)))
+                    .frame(width: 24, height: 24)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title).appFont(.headline)
@@ -2059,8 +2113,8 @@ private extension DashboardView {
         let comps = Calendar.current.dateComponents([.hour, .minute], from: item.time)
         let count = NotificationManager.shared.snoozeCount(for: item.med.id, scheduleTime: comps)
         let result = MedicationRules.nextSnooze(for: item.med.id, currentSnoozeCount: count)
-        if result.isExhausted { return .red }
-        return count >= 1 ? .orange : Color(.secondaryLabel)
+        if result.isExhausted { return AppColor.warning }
+        return count >= 1 ? AppColor.warning : Color(.secondaryLabel)
     }
 
 }

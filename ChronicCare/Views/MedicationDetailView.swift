@@ -46,7 +46,7 @@ struct MedicationDetailView: View {
     }
 
     private var modeTint: Color {
-        medication.isAsNeeded == true ? .blue : .green
+        medication.isAsNeeded == true ? AppColor.textSecondary : AppColor.primary
     }
 
     private var reminderStateLabel: String {
@@ -63,14 +63,14 @@ struct MedicationDetailView: View {
     }
 
     private var reminderStateTint: Color {
-        if medication.isAsNeeded == true { return .blue }
-        if !medication.remindersEnabled || medication.timesOfDay.isEmpty { return .orange }
-        return .green
+        if medication.isAsNeeded == true { return AppColor.textSecondary }
+        if !medication.remindersEnabled || medication.timesOfDay.isEmpty { return AppColor.warning }
+        return AppColor.primary
     }
 
     private var detailAccentTint: Color {
         if medication.isLowSupply {
-            return .orange
+            return AppColor.warning
         }
         return reminderStateTint
     }
@@ -299,7 +299,7 @@ struct MedicationDetailView: View {
     private var heroSupplySnippet: HeroSnippet? {
         // Prioritize supply days if available
         if let days = medication.daysOfSupplyRemaining {
-            let tint: Color = days <= 3 ? .red : days <= 7 ? .orange : .green
+            let tint: Color = days <= 7 ? AppColor.warning : AppColor.primary
             return HeroSnippet(
                 value: "\(days)",
                 label: days == 1
@@ -310,7 +310,7 @@ struct MedicationDetailView: View {
         }
         // Fall back to pills count
         if let pills = medication.pillsRemaining {
-            let tint: Color = pills <= 10 ? .orange : .green
+            let tint: Color = pills <= 10 ? AppColor.warning : AppColor.primary
             return HeroSnippet(
                 value: "\(pills)",
                 label: NSLocalizedString("pills", comment: "pill count label"),
@@ -324,16 +324,16 @@ struct MedicationDetailView: View {
                 return HeroSnippet(
                     value: "+\(d)",
                     label: NSLocalizedString("days past", comment: "course ended"),
-                    tint: .red
+                    tint: AppColor.warning
                 )
             case .endsToday:
                 return HeroSnippet(
                     value: NSLocalizedString("Today", comment: ""),
                     label: NSLocalizedString("ends", comment: "course ends today"),
-                    tint: .orange
+                    tint: AppColor.warning
                 )
             case .endingSoon(let d), .scheduled(let d):
-                let tint: Color = d <= 3 ? .orange : .blue
+                let tint: Color = d <= 3 ? AppColor.warning : AppColor.primary
                 return HeroSnippet(
                     value: "\(d)",
                     label: d == 1
@@ -363,13 +363,13 @@ struct MedicationDetailView: View {
             attrs.append(HeroAttribute(
                 icon: "hand.tap",
                 label: NSLocalizedString("As needed — log when taken", comment: ""),
-                tint: .blue
+                tint: AppColor.textSecondary
             ))
         } else if !medication.timesOfDay.isEmpty {
             attrs.append(HeroAttribute(
                 icon: "clock",
                 label: scheduleText,
-                tint: .blue
+                tint: AppColor.primary
             ))
         }
 
@@ -378,7 +378,7 @@ struct MedicationDetailView: View {
             attrs.append(HeroAttribute(
                 icon: "exclamationmark.triangle",
                 label: si,
-                tint: .yellow
+                tint: AppColor.warning
             ))
         }
 
@@ -392,7 +392,7 @@ struct MedicationDetailView: View {
             attrs.append(HeroAttribute(
                 icon: "calendar",
                 label: "\(startStr) → \(endStr)",
-                tint: .purple
+                tint: AppColor.textSecondary
             ))
         }
 
@@ -409,12 +409,16 @@ struct MedicationDetailView: View {
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.panel, style: .continuous))
         } else {
             RoundedRectangle(cornerRadius: AppRadius.panel, style: .continuous)
-                .fill(detailAccentTint.opacity(0.14))
+                .fill(AppColor.surface)
                 .frame(width: 52, height: 52)
                 .overlay(
-                    Image(systemName: medication.isAsNeeded == true ? "cross.case.circle.fill" : "pills.fill")
-                        .font(.system(size: 22, weight: .semibold))
+                    Image(systemName: medication.isAsNeeded == true ? "cross.case.circle" : "pills")
+                        .font(.system(size: 22, weight: .regular))
                         .foregroundStyle(detailAccentTint)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppRadius.panel, style: .continuous)
+                        .stroke(AppColor.divider, lineWidth: 1)
                 )
         }
     }
@@ -423,7 +427,7 @@ struct MedicationDetailView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    TintedCard(tint: detailAccentTint) {
+                    Card {
                         VStack(alignment: .leading, spacing: 14) {
                             // Row 1: Icon + Name/Dose (left) + Supply snapshot (right)
                             HStack(alignment: .top, spacing: 12) {
@@ -435,7 +439,7 @@ struct MedicationDetailView: View {
                                         .lineLimit(2)
                                     Text(medication.dose)
                                         .appFont(.headline)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(AppColor.textSecondary)
                                 }
                                 Spacer(minLength: 4)
                                 // Supply / course countdown on the right
@@ -448,7 +452,7 @@ struct MedicationDetailView: View {
                                             .monospacedDigit()
                                         Text(snippet.label)
                                             .appFont(.caption)
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(AppColor.textSecondary)
                                     }
                                 }
                             }
@@ -464,7 +468,7 @@ struct MedicationDetailView: View {
                                                 .frame(width: 16)
                                             Text(attr.label)
                                                 .appFont(.subheadline)
-                                                .foregroundStyle(.primary)
+                                                .foregroundStyle(AppColor.textPrimary)
                                         }
                                     }
                                 }
@@ -475,7 +479,7 @@ struct MedicationDetailView: View {
                                 reminderBadge(reminderStateLabel, tint: reminderStateTint)
                                 reminderBadge(modeLabel, tint: modeTint)
                                 if let categoryName = medication.displayCategoryName {
-                                    reminderBadge(categoryName, tint: .secondary)
+                                    reminderBadge(categoryName, tint: AppColor.textSecondary)
                                 }
                             }
                         }
@@ -490,8 +494,8 @@ struct MedicationDetailView: View {
                                 reminderBadge(detailStatusLine, tint: reminderStateTint)
                             }
                             LazyVGrid(columns: snapshotColumns, spacing: 10) {
-                                detailMetric(value: nextDoseText, label: NSLocalizedString("Scheduled", comment: ""), tint: .blue)
-                                detailMetric(value: lastTakenText, label: NSLocalizedString("Last taken", comment: ""), tint: .green)
+                                detailMetric(value: nextDoseText, label: NSLocalizedString("Scheduled", comment: ""), tint: AppColor.primary)
+                                detailMetric(value: lastTakenText, label: NSLocalizedString("Last taken", comment: ""), tint: AppColor.textSecondary)
                             }
                             if medication.isAsNeeded != true && (!medication.remindersEnabled || medication.timesOfDay.isEmpty) {
                                 Button(NSLocalizedString("Fix Reminder Setup", comment: "")) {
@@ -508,8 +512,8 @@ struct MedicationDetailView: View {
                             Text(NSLocalizedString("Adherence", comment: ""))
                                 .appFont(.headline)
                             LazyVGrid(columns: snapshotColumns, spacing: 10) {
-                                detailMetric(value: String(format: "%.0f%%", adherence30 * 100), label: NSLocalizedString("30-day", comment: ""), tint: adherence30 >= 0.8 ? .green : adherence30 >= 0.5 ? .orange : .red)
-                                detailMetric(value: "\(streakCount)", label: NSLocalizedString("day streak", comment: ""), tint: .blue)
+                                detailMetric(value: String(format: "%.0f%%", adherence30 * 100), label: NSLocalizedString("30-day", comment: ""), tint: adherence30 >= 0.5 ? AppColor.primary : AppColor.warning)
+                                detailMetric(value: "\(streakCount)", label: NSLocalizedString("day streak", comment: ""), tint: AppColor.textSecondary)
                             }
 
                             NavigationLink {
@@ -522,7 +526,7 @@ struct MedicationDetailView: View {
                                                 .appFont(.headline)
                                             Text(NSLocalizedString("Review daily check-ins and missed doses.", comment: ""))
                                                 .appFont(.caption)
-                                                .foregroundStyle(.secondary)
+                                                .foregroundStyle(AppColor.textSecondary)
                                         }
                                         Spacer()
                                         Image(systemName: "chevron.right")
@@ -544,6 +548,7 @@ struct MedicationDetailView: View {
                 }
                 .padding(16)
             }
+            .background(AppColor.background)
             .navigationTitle(NSLocalizedString("Medication Detail", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -569,24 +574,24 @@ struct MedicationDetailView: View {
                             .appFont(.headline)
                         Text(measurementType.displayName)
                             .appFont(.subheadline)
-                            .foregroundStyle(measurementType.tint)
+                            .foregroundStyle(AppColor.primary)
                     }
                     Spacer()
                     Text(summary)
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
                 }
 
-                InsetPanel(tint: measurementType.tint) {
+                InsetPanel(tint: nil) {
                     relatedMeasurementChart(for: measurementType, data: data)
                 }
 
                 Text(trendText)
                     .appFont(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColor.textSecondary)
                 Text(contextText)
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColor.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -598,14 +603,14 @@ struct MedicationDetailView: View {
                 x: .value("Date", measurement.date),
                 y: .value("Value", measurement.value)
             )
-            .foregroundStyle(measurementType.tint)
+            .foregroundStyle(AppColor.primary)
             .interpolationMethod(.catmullRom)
 
             PointMark(
                 x: .value("Date", measurement.date),
                 y: .value("Value", measurement.value)
             )
-            .foregroundStyle(measurementType.tint)
+            .foregroundStyle(AppColor.primary)
             .symbolSize(18)
         }
         .frame(height: 120)
@@ -625,7 +630,7 @@ struct MedicationDetailView: View {
                     .minimumScaleFactor(0.8)
                 Text(label)
                     .appFont(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColor.textSecondary)
             }
             .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
         }
