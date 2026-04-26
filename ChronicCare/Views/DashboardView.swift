@@ -6,7 +6,7 @@ struct DashboardView: View {
     // reflection card is appended below today's actionable content that
     // opens the adherence calendar directly.
     var onOpenCalendar: (() -> Void)? = nil
-    var onLogMeasurement: (() -> Void)? = nil
+    var onLogMeasurement: ((MeasurementType) -> Void)? = nil
     var onOpenProfile: (() -> Void)? = nil
 
     @EnvironmentObject var store: DataStore
@@ -471,6 +471,36 @@ private extension DashboardView {
         case secondary
     }
 
+    private enum ReadinessStatus {
+        case ready
+        case needsAction
+        case optional
+
+        var iconName: String {
+            switch self {
+            case .ready: return "checkmark"
+            case .needsAction: return "exclamationmark"
+            case .optional: return "minus"
+            }
+        }
+
+        var tint: Color {
+            switch self {
+            case .ready: return EditorialPalette.primary
+            case .needsAction: return EditorialPalette.warning
+            case .optional: return EditorialPalette.textTertiary
+            }
+        }
+    }
+
+    private struct VisitReadinessItem {
+        let title: String
+        let detail: String
+        let status: ReadinessStatus
+        let countsTowardScore: Bool
+        let action: () -> Void
+    }
+
     private var untimedScheduledMeds: [Medication] {
         store.medications.filter { $0.isAsNeeded != true && $0.timesOfDay.isEmpty }
     }
@@ -605,18 +635,21 @@ private extension DashboardView {
         VStack(spacing: EditorialSpacing.sm) {
             measurementPromptRow(
                 title: NSLocalizedString("Blood pressure", comment: "Measurement quick prompt"),
-                value: todayMeasurementStatus(for: .bloodPressure)
+                value: todayMeasurementStatus(for: .bloodPressure),
+                type: .bloodPressure
             )
             measurementPromptRow(
                 title: NSLocalizedString("Blood glucose", comment: "Measurement quick prompt"),
-                value: todayMeasurementStatus(for: .bloodGlucose)
+                value: todayMeasurementStatus(for: .bloodGlucose),
+                type: .bloodGlucose
             )
         }
     }
 
-    private func measurementPromptRow(title: String, value: String) -> some View {
+    private func measurementPromptRow(title: String, value: String, type: MeasurementType) -> some View {
         Button {
-            onLogMeasurement?()
+            Haptics.impact(.light)
+            onLogMeasurement?(type)
         } label: {
             HStack {
                 Text(title)
@@ -627,8 +660,13 @@ private extension DashboardView {
                     .appFont(.caption)
                     .foregroundStyle(EditorialPalette.textSecondary)
                 Image(systemName: "plus")
-                    .font(.system(size: 13, weight: .regular))
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(EditorialPalette.primary)
+                    .frame(width: 32, height: 32)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(EditorialPalette.divider, lineWidth: 1)
+                    )
             }
             .contentShape(Rectangle())
         }
@@ -649,30 +687,34 @@ private extension DashboardView {
 
                 Spacer()
 
-                if todaySymptomCount > 0 {
-                    Text(NSLocalizedString("Logged today", comment: "Quick feeling logged status"))
-                        .appFont(.micro)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(EditorialPalette.textSecondary)
+                HStack(spacing: EditorialSpacing.sm) {
+                    if todaySymptomCount > 0 {
+                        Text(NSLocalizedString("Logged today", comment: "Quick feeling logged status"))
+                            .appFont(.caption)
+                            .foregroundStyle(EditorialPalette.textSecondary)
+                    }
+
+                    Button {
+                        Haptics.impact(.light)
+                        showSymptomLog = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(EditorialPalette.primary)
+                            .frame(width: 34, height: 34)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .stroke(EditorialPalette.divider, lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(NSLocalizedString("Add symptom detail", comment: "Body check-in detail action"))
                 }
             }
 
-            HStack(spacing: EditorialSpacing.lg) {
+            HStack(spacing: EditorialSpacing.sm) {
                 ForEach(QuickFeeling.allCases) { feeling in
                     quickFeelingButton(feeling)
-                }
-
-                if let onLogMeasurement {
-                    Button {
-                        onLogMeasurement()
-                    } label: {
-                        Image(systemName: "waveform.path.ecg")
-                            .font(.system(size: 14, weight: .regular))
-                            .frame(width: 28, height: 28)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(EditorialPalette.primary)
-                    .accessibilityLabel(NSLocalizedString("Log Measurement", comment: ""))
                 }
             }
 
@@ -687,18 +729,24 @@ private extension DashboardView {
 
     private func quickFeelingButton(_ feeling: QuickFeeling) -> some View {
         Button {
+            Haptics.impact(.light)
             handleQuickFeeling(feeling)
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: EditorialSpacing.sm) {
                 Image(systemName: "circle")
-                    .font(.system(size: 12, weight: .regular))
+                    .font(.system(size: 16, weight: .regular))
                 Text(feeling.title)
-                    .appFont(.subheadline)
-                    .fontWeight(.regular)
+                    .appFont(.body)
+                    .fontWeight(.medium)
                     .lineLimit(1)
             }
             .foregroundStyle(EditorialPalette.textPrimary)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 46, alignment: .center)
+            .padding(.horizontal, EditorialSpacing.sm)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(EditorialPalette.divider, lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
         .accessibilityLabel(feeling.title)
@@ -954,18 +1002,10 @@ private extension DashboardView {
     }
 
     private func visitDataReadinessCard(visit: DoctorVisit, mode: HomeMode) -> some View {
-        let bloodPressureCount = recentMeasurementCount(type: .bloodPressure, days: 30)
-        let bloodGlucoseCount = recentMeasurementCount(type: .bloodGlucose, days: 30)
-        let symptomCount = recentSymptomCount(days: 30)
-        let medCount = store.medications.count
-        let readinessCount = [
-            medCount > 0,
-            bloodPressureCount > 0,
-            bloodGlucoseCount > 0,
-            symptomCount > 0,
-            false,
-            true
-        ].filter { $0 }.count
+        let items = visitReadinessItems(for: visit)
+        let requiredItems = items.filter(\.countsTowardScore)
+        let readinessCount = requiredItems.filter { $0.status == .ready }.count
+        let readinessTotal = requiredItems.count
 
         return VStack(alignment: .leading, spacing: EditorialSpacing.md) {
             HStack(alignment: .firstTextBaseline) {
@@ -973,7 +1013,7 @@ private extension DashboardView {
                     .appFont(.headline)
                     .foregroundStyle(AppColor.textPrimary)
                 Spacer()
-                Text(String(format: NSLocalizedString("%lld / 6", comment: "Data readiness score"), readinessCount))
+                Text(String(format: NSLocalizedString("%lld / %lld", comment: "Data readiness score"), readinessCount, readinessTotal))
                     .appFontNumeric(.caption)
                     .foregroundStyle(AppColor.textSecondary)
             }
@@ -981,70 +1021,139 @@ private extension DashboardView {
             AppDivider()
 
             VStack(spacing: EditorialSpacing.sm) {
-                readinessRow(
-                    title: NSLocalizedString("Medication records", comment: "Visit prep readiness item"),
-                    detail: medCount == 0
-                        ? NSLocalizedString("Add current medications", comment: "")
-                        : NSLocalizedString("30 days complete", comment: "Visit prep medication readiness detail"),
-                    isReady: medCount > 0,
-                    action: { showAddMedication = true }
-                )
-                AppDivider()
-
-                readinessRow(
-                    title: NSLocalizedString("Blood pressure", comment: "Visit prep readiness item"),
-                    detail: bloodPressureCount == 0
-                        ? NSLocalizedString("0 entries", comment: "Visit prep empty count")
-                        : String(format: NSLocalizedString("%lld entries", comment: "Visit prep entries count"), bloodPressureCount),
-                    isReady: bloodPressureCount > 0,
-                    action: { onLogMeasurement?() }
-                )
-                AppDivider()
-
-                readinessRow(
-                    title: NSLocalizedString("Blood glucose", comment: "Visit prep readiness item"),
-                    detail: bloodGlucoseCount == 0
-                        ? NSLocalizedString("0 entries", comment: "Visit prep empty count")
-                        : String(format: NSLocalizedString("%lld entries", comment: "Visit prep entries count"), bloodGlucoseCount),
-                    isReady: bloodGlucoseCount > 0,
-                    action: { onLogMeasurement?() }
-                )
-                AppDivider()
-
-                readinessRow(
-                    title: NSLocalizedString("Symptoms", comment: "Visit prep readiness item"),
-                    detail: symptomCount == 0
-                        ? NSLocalizedString("0 entries", comment: "Visit prep empty count")
-                        : String(format: NSLocalizedString("%lld entries", comment: "Visit prep entries count"), symptomCount),
-                    isReady: symptomCount > 0,
-                    action: { showSymptomLog = true }
-                )
-                AppDivider()
-
-                readinessRow(
-                    title: NSLocalizedString("Last dose adjustment", comment: "Visit prep readiness item"),
-                    detail: NSLocalizedString("Unconfirmed", comment: "Visit prep readiness unconfirmed"),
-                    isReady: false,
-                    action: { editingDoctorVisit = visit }
-                )
-                AppDivider()
-
-                readinessRow(
-                    title: NSLocalizedString("Next follow-up booking", comment: "Visit prep readiness item"),
-                    detail: NSLocalizedString("Scheduled", comment: "Visit prep readiness scheduled"),
-                    isReady: true,
-                    action: { editingDoctorVisit = visit }
-                )
+                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                    readinessRow(
+                        title: item.title,
+                        detail: item.detail,
+                        status: item.status,
+                        action: item.action
+                    )
+                    if index < items.count - 1 {
+                        AppDivider()
+                    }
+                }
             }
         }
     }
 
+    private func visitReadinessItems(for visit: DoctorVisit) -> [VisitReadinessItem] {
+        var items: [VisitReadinessItem] = []
+        let medCount = store.medications.count
+        let needsBloodPressure = store.medications.contains { $0.category == .antihypertensive }
+        let needsBloodGlucose = store.medications.contains { $0.category == .antidiabetic }
+        let bloodPressureCount = recentMeasurementCount(type: .bloodPressure, days: 30)
+        let bloodGlucoseCount = recentMeasurementCount(type: .bloodGlucose, days: 30)
+        let symptomCount = recentSymptomCount(days: 30)
+
+        items.append(
+            VisitReadinessItem(
+                title: NSLocalizedString("Medication records", comment: "Visit prep readiness item"),
+                detail: medCount == 0
+                    ? NSLocalizedString("Add current medications", comment: "")
+                    : String(format: NSLocalizedString("%lld current medications", comment: "Visit prep medication readiness detail"), medCount),
+                status: medCount > 0 ? .ready : .needsAction,
+                countsTowardScore: true,
+                action: { showAddMedication = true }
+            )
+        )
+
+        if needsBloodPressure {
+            items.append(measurementReadinessItem(
+                title: NSLocalizedString("Blood pressure", comment: "Visit prep readiness item"),
+                type: .bloodPressure,
+                count: bloodPressureCount,
+                emptyDetail: NSLocalizedString("Needed for blood pressure medications", comment: "Visit prep measurement reason")
+            ))
+        }
+
+        if needsBloodGlucose {
+            items.append(measurementReadinessItem(
+                title: NSLocalizedString("Blood glucose", comment: "Visit prep readiness item"),
+                type: .bloodGlucose,
+                count: bloodGlucoseCount,
+                emptyDetail: NSLocalizedString("Needed for diabetes medications", comment: "Visit prep measurement reason")
+            ))
+        }
+
+        if !needsBloodPressure && !needsBloodGlucose {
+            items.append(
+                VisitReadinessItem(
+                    title: NSLocalizedString("Home measurements", comment: "Visit prep readiness item"),
+                    detail: NSLocalizedString("Add only if your doctor asked you to track a value.", comment: "Visit prep optional measurement detail"),
+                    status: .optional,
+                    countsTowardScore: false,
+                    action: { onLogMeasurement?(.bloodPressure) }
+                )
+            )
+        }
+
+        items.append(
+            VisitReadinessItem(
+                title: NSLocalizedString("Symptoms or concerns", comment: "Visit prep readiness item"),
+                detail: symptomCount == 0
+                    ? NSLocalizedString("No concerns recorded; fine if nothing changed.", comment: "Visit prep optional symptom detail")
+                    : String(format: NSLocalizedString("%lld entries in last 30 days", comment: "Visit prep entries count"), symptomCount),
+                status: symptomCount > 0 ? .ready : .optional,
+                countsTowardScore: false,
+                action: { showSymptomLog = true }
+            )
+        )
+
+        let previousVisit = latestCompletedVisit(before: visit.scheduledDate)
+        let previousChangeSaved = previousVisit?.medicationChangesSummary?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        items.append(
+            VisitReadinessItem(
+                title: NSLocalizedString("Last dose adjustment", comment: "Visit prep readiness item"),
+                detail: previousChangeSaved
+                    ? NSLocalizedString("Saved from last visit", comment: "Visit prep prior medication change detail")
+                    : NSLocalizedString("No prior adjustment recorded.", comment: "Visit prep prior medication change detail"),
+                status: previousChangeSaved ? .ready : .optional,
+                countsTowardScore: false,
+                action: { editingDoctorVisit = previousVisit ?? visit }
+            )
+        )
+
+        items.append(
+            VisitReadinessItem(
+                title: NSLocalizedString("Appointment details", comment: "Visit prep readiness item"),
+                detail: visit.displayTitle,
+                status: .ready,
+                countsTowardScore: true,
+                action: { editingDoctorVisit = visit }
+            )
+        )
+
+        return items
+    }
+
+    private func measurementReadinessItem(title: String, type: MeasurementType, count: Int, emptyDetail: String) -> VisitReadinessItem {
+        VisitReadinessItem(
+            title: title,
+            detail: count == 0
+                ? emptyDetail
+                : String(format: NSLocalizedString("%lld entries in last 30 days", comment: "Visit prep entries count"), count),
+            status: count > 0 ? .ready : .needsAction,
+            countsTowardScore: true,
+            action: { onLogMeasurement?(type) }
+        )
+    }
+
+    private func latestCompletedVisit(before date: Date) -> DoctorVisit? {
+        store.completedDoctorVisits.first { visit in
+            (visit.completedDate ?? visit.scheduledDate) < date
+        }
+    }
+
     private func readinessRow(title: String, detail: String, isReady: Bool, action: @escaping () -> Void) -> some View {
+        readinessRow(title: title, detail: detail, status: isReady ? .ready : .needsAction, action: action)
+    }
+
+    private func readinessRow(title: String, detail: String, status: ReadinessStatus, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: isReady ? "checkmark" : "exclamationmark")
+                Image(systemName: status.iconName)
                     .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(isReady ? EditorialPalette.primary : EditorialPalette.warning)
+                    .foregroundStyle(status.tint)
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
@@ -1294,58 +1403,64 @@ private extension DashboardView {
             )
         let isCollapsed = visibleSchedules.count < schedules.count
 
-        return Card {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(NSLocalizedString("Today schedule", comment: "Unified schedule section title"))
-                        .appFont(.headline)
-                    Spacer()
-                    if schedules.count > collapsedLimit {
-                        Text(String(format: NSLocalizedString("%lld total", comment: "Schedule total count"), schedules.count))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+        return VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+            AppDivider()
 
-                VStack(spacing: 10) {
-                    ForEach(Array(visibleSchedules.enumerated()), id: \.element.id) { index, item in
-                        let status = statusCache[item.id] ?? .none
-                        let isCurrent = item.id == currentActionID
-                        let isNextUpcoming = item.id == nextUpcomingID
-
-                        if isCurrent {
-                            emphasizedPendingRow(item: item, status: status)
-                        } else {
-                            compactUnifiedRow(item: item, status: status, isNextUpcoming: isNextUpcoming)
-                        }
-
-                        if index < visibleSchedules.count - 1 {
-                            Divider()
-                        }
-                    }
-                }
-
+            HStack(alignment: .firstTextBaseline) {
+                Text(NSLocalizedString("Today schedule", comment: "Unified schedule section title"))
+                    .appFont(.headline)
+                    .foregroundStyle(EditorialPalette.textPrimary)
+                Spacer()
                 if schedules.count > collapsedLimit {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            showFullTodaySchedule.toggle()
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(isCollapsed
-                                 ? NSLocalizedString("Show full schedule", comment: "")
-                                 : NSLocalizedString("Show key items only", comment: ""))
-                                .appFont(.footnote)
-                                .fontWeight(.medium)
-                            Image(systemName: isCollapsed ? "chevron.down" : "chevron.up")
-                                .font(.system(size: 10, weight: .semibold))
-                        }
-                        .foregroundStyle(AppColor.primary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 2)
-                    }
-                    .buttonStyle(.plain)
+                    Text(String(format: NSLocalizedString("%lld total", comment: "Schedule total count"), schedules.count))
+                        .appFont(.caption)
+                        .foregroundStyle(EditorialPalette.textSecondary)
                 }
+            }
+
+            VStack(spacing: 0) {
+                ForEach(Array(visibleSchedules.enumerated()), id: \.element.id) { index, item in
+                    let status = statusCache[item.id] ?? .none
+                    let isCurrent = item.id == currentActionID
+                    let isNextUpcoming = item.id == nextUpcomingID
+
+                    if isCurrent {
+                        emphasizedPendingRow(item: item, status: status)
+                            .padding(.vertical, EditorialSpacing.sm)
+                    } else {
+                        compactUnifiedRow(item: item, status: status, isNextUpcoming: isNextUpcoming)
+                            .padding(.vertical, EditorialSpacing.sm)
+                    }
+
+                    if index < visibleSchedules.count - 1 {
+                        AppDivider()
+                    }
+                }
+            }
+
+            if schedules.count > collapsedLimit {
+                AppDivider()
+
+                Button {
+                    Haptics.impact(.light)
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        showFullTodaySchedule.toggle()
+                    }
+                } label: {
+                    HStack(spacing: EditorialSpacing.sm) {
+                        Text(isCollapsed
+                             ? NSLocalizedString("Show full schedule", comment: "")
+                             : NSLocalizedString("Show key items only", comment: ""))
+                            .appFont(.footnote)
+                            .fontWeight(.medium)
+                        Image(systemName: isCollapsed ? "chevron.down" : "chevron.up")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundStyle(AppColor.primary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, EditorialSpacing.xs)
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -1476,7 +1591,6 @@ private extension DashboardView {
             }
         }
         .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
     }
 
     private func compactUnifiedRow(

@@ -6,11 +6,45 @@ struct DoctorVisitsView: View {
     @EnvironmentObject var store: DataStore
     @State private var showNewVisit = false
 
+    private var highlightedVisitID: UUID? {
+        store.nextDoctorVisit?.id
+    }
+
+    private var secondaryUpcomingVisits: [DoctorVisit] {
+        store.upcomingDoctorVisits.filter { $0.id != highlightedVisitID }
+    }
+
+    private var secondaryOverdueVisits: [DoctorVisit] {
+        store.overdueDoctorVisits.filter { $0.id != highlightedVisitID }
+    }
+
     var body: some View {
         List {
             Section {
                 if let visit = store.nextDoctorVisit {
-                    nextVisitHero(visit)
+                    nextVisitHeader(visit)
+
+                    NavigationLink {
+                        ConsultationSnapshotView(visit: visit)
+                    } label: {
+                        visitActionRow(
+                            title: NSLocalizedString("Review Snapshot", comment: ""),
+                            subtitle: NSLocalizedString("Doctor-facing summary for the appointment", comment: ""),
+                            systemImage: "doc.text.magnifyingglass",
+                            tint: AppColor.primary
+                        )
+                    }
+
+                    NavigationLink {
+                        DoctorVisitFormView(editing: visit, showsCancelButton: false)
+                    } label: {
+                        visitActionRow(
+                            title: NSLocalizedString("Edit Visit", comment: "Edit doctor visit details"),
+                            subtitle: NSLocalizedString("Time, doctor, department, and reason", comment: ""),
+                            systemImage: "square.and.pencil",
+                            tint: AppColor.textSecondary
+                        )
+                    }
                 } else {
                     EmptyStateView(
                         systemImage: "calendar.badge.plus",
@@ -21,14 +55,14 @@ struct DoctorVisitsView: View {
                     )
                 }
             }
-            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+            .listRowBackground(AppColor.surface)
 
-            if !store.upcomingDoctorVisits.isEmpty {
+            if !secondaryUpcomingVisits.isEmpty {
                 Section(NSLocalizedString("Upcoming", comment: "")) {
-                    ForEach(store.upcomingDoctorVisits) { visit in
+                    ForEach(secondaryUpcomingVisits) { visit in
                         NavigationLink {
-                            DoctorVisitFormView(editing: visit)
+                            DoctorVisitFormView(editing: visit, showsCancelButton: false)
                         } label: {
                             visitRow(visit)
                         }
@@ -47,11 +81,11 @@ struct DoctorVisitsView: View {
                 }
             }
 
-            if !store.overdueDoctorVisits.isEmpty {
+            if !secondaryOverdueVisits.isEmpty {
                 Section(NSLocalizedString("Overdue", comment: "")) {
-                    ForEach(store.overdueDoctorVisits) { visit in
+                    ForEach(secondaryOverdueVisits) { visit in
                         NavigationLink {
-                            DoctorVisitFormView(editing: visit)
+                            DoctorVisitFormView(editing: visit, showsCancelButton: false)
                         } label: {
                             visitRow(visit)
                         }
@@ -74,7 +108,7 @@ struct DoctorVisitsView: View {
                 Section(NSLocalizedString("Completed", comment: "")) {
                     ForEach(Array(store.completedDoctorVisits.prefix(8))) { visit in
                         NavigationLink {
-                            DoctorVisitFormView(editing: visit)
+                            DoctorVisitFormView(editing: visit, showsCancelButton: false)
                         } label: {
                             visitRow(visit)
                         }
@@ -111,38 +145,55 @@ struct DoctorVisitsView: View {
         }
     }
 
-    private func nextVisitHero(_ visit: DoctorVisit) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: EditorialSpacing.md) {
-                HStack(alignment: .top, spacing: EditorialSpacing.md) {
-                    Image(systemName: "stethoscope")
-                        .font(.system(size: 22, weight: .regular))
-                        .foregroundStyle(visitTint(visit))
-                        .frame(width: 32, height: 32)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(prepTitle(for: visit))
-                            .appFont(AppTypography.sectionTitle)
-                            .foregroundStyle(AppColor.textPrimary)
-                        Text(visit.displayTitle)
-                            .appFont(AppTypography.body)
-                            .foregroundStyle(AppColor.textSecondary)
-                        if let reason = visit.reason, !reason.isEmpty {
-                            Text(reason)
-                                .appFont(AppTypography.caption)
-                                .foregroundStyle(AppColor.textSecondary)
-                        }
-                    }
+    private func nextVisitHeader(_ visit: DoctorVisit) -> some View {
+        VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
+            Text(NSLocalizedString("Next visit", comment: ""))
+                .appFont(.micro)
+                .foregroundStyle(AppColor.textTertiary)
+                .textCase(.uppercase)
+
+            Text(prepTitle(for: visit))
+                .appFontNumeric(.heroNumber)
+                .foregroundStyle(visitTint(visit))
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+
+            VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                Text(visit.displayTitle)
+                    .appFont(.body)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(AppColor.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let reason = visit.reason, !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(reason)
+                        .appFont(.caption)
+                        .foregroundStyle(AppColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                NavigationLink {
-                    ConsultationSnapshotView(visit: visit)
-                } label: {
-                    Label(NSLocalizedString("Review Snapshot", comment: ""), systemImage: "doc.text.magnifyingglass")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(AppColor.primary)
             }
         }
+        .padding(.vertical, EditorialSpacing.sm)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func visitActionRow(title: String, subtitle: String, systemImage: String, tint: Color) -> some View {
+        HStack(spacing: EditorialSpacing.md) {
+            Image(systemName: systemImage)
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(tint)
+                .frame(width: 22)
+
+            VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                Text(title)
+                    .appFont(.body)
+                    .foregroundStyle(AppColor.textPrimary)
+                Text(subtitle)
+                    .appFont(.caption)
+                    .foregroundStyle(AppColor.textSecondary)
+            }
+        }
+        .padding(.vertical, EditorialSpacing.xs)
     }
 
     private func visitRow(_ visit: DoctorVisit) -> some View {

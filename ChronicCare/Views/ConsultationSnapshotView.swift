@@ -15,6 +15,7 @@ struct ConsultationSnapshotView: View {
     @State private var showEmergencyEdit = false
     @State private var showSymptomEditor: SymptomEntry?
     @State private var showNewSymptom = false
+    @State private var showMeasurementManager = false
     @State private var shareText: String = ""
     @State private var showShare = false
 
@@ -66,6 +67,12 @@ struct ConsultationSnapshotView: View {
         }
         .sheet(isPresented: $showNewSymptom) {
             SymptomQuickLogSheet().environmentObject(store)
+        }
+        .sheet(isPresented: $showMeasurementManager) {
+            NavigationStack {
+                MeasurementsManagementView()
+                    .environmentObject(store)
+            }
         }
         .sheet(item: $showSymptomEditor) { entry in
             SymptomQuickLogSheet(editing: entry).environmentObject(store)
@@ -327,9 +334,23 @@ struct ConsultationSnapshotView: View {
 
     private var measurementsSection: some View {
         VStack(alignment: .leading, spacing: EditorialSpacing.md) {
-            Text(String(format: NSLocalizedString("Home measurements · last %lld days", comment: ""), daysWindow))
-                .appFont(.headline)
-                .foregroundStyle(AppColor.textPrimary)
+            HStack(alignment: .firstTextBaseline) {
+                Text(String(format: NSLocalizedString("Home measurements · last %lld days", comment: ""), daysWindow))
+                    .appFont(.headline)
+                    .foregroundStyle(AppColor.textPrimary)
+                Spacer()
+                if !store.measurements.isEmpty {
+                    Button {
+                        Haptics.impact(.light)
+                        showMeasurementManager = true
+                    } label: {
+                        Text(NSLocalizedString("Manage", comment: ""))
+                            .appFont(.caption)
+                            .foregroundStyle(AppColor.primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
 
             AppDivider()
 
@@ -769,4 +790,122 @@ struct ConsultationSnapshotView: View {
         }
         return lines.joined(separator: "\n")
     }
+}
+
+private struct MeasurementsManagementView: View {
+    @EnvironmentObject var store: DataStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var editingMeasurement: Measurement?
+
+    private var sortedMeasurements: [Measurement] {
+        store.measurements.sorted { $0.date > $1.date }
+    }
+
+    var body: some View {
+        Group {
+            if sortedMeasurements.isEmpty {
+                VStack(spacing: EditorialSpacing.md) {
+                    Image(systemName: "waveform.path.ecg")
+                        .font(.system(size: 28, weight: .regular))
+                        .foregroundStyle(AppColor.textTertiary)
+                    Text(NSLocalizedString("No measurements recorded.", comment: ""))
+                        .appFont(.body)
+                        .foregroundStyle(AppColor.textPrimary)
+                    Text(NSLocalizedString("New blood pressure and glucose readings will appear here.", comment: ""))
+                        .appFont(.caption)
+                        .foregroundStyle(AppColor.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(EditorialSpacing.xl)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(AppColor.background)
+            } else {
+                List {
+                    ForEach(sortedMeasurements) { measurement in
+                        Button {
+                            Haptics.impact(.light)
+                            editingMeasurement = measurement
+                        } label: {
+                            measurementRow(measurement)
+                        }
+                        .buttonStyle(EditorialRowButtonStyle())
+                    }
+                    .onDelete(perform: deleteMeasurements)
+                }
+                .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
+                .background(AppColor.background)
+            }
+        }
+        .sheet(item: $editingMeasurement) { measurement in
+            AddMeasurementView(editing: measurement) { updated in
+                store.updateMeasurement(updated)
+            }
+            .environmentObject(store)
+        }
+        .navigationTitle(NSLocalizedString("Manage Measurements", comment: ""))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if !sortedMeasurements.isEmpty {
+                ToolbarItem(placement: .topBarLeading) {
+                    EditButton()
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(NSLocalizedString("Done", comment: "")) { dismiss() }
+            }
+        }
+    }
+
+    private func measurementRow(_ measurement: Measurement) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: EditorialSpacing.md) {
+            VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                Text(measurement.type.displayName)
+                    .appFont(.body)
+                    .foregroundStyle(AppColor.textPrimary)
+                Text(Self.dateFormatter.string(from: measurement.date))
+                    .appFont(.caption)
+                    .foregroundStyle(AppColor.textSecondary)
+            }
+
+            Spacer()
+
+            Text(formattedValue(measurement))
+                .appFontNumeric(.body)
+                .fontWeight(.semibold)
+                .foregroundStyle(AppColor.textPrimary)
+                .multilineTextAlignment(.trailing)
+        }
+        .padding(.vertical, EditorialSpacing.xs)
+    }
+
+    private func deleteMeasurements(at offsets: IndexSet) {
+        let items = offsets.map { sortedMeasurements[$0] }
+        items.forEach(store.removeMeasurement)
+        Haptics.success()
+    }
+
+    private func formattedValue(_ measurement: Measurement) -> String {
+        if measurement.type == .bloodPressure, let diastolic = measurement.diastolic {
+            return "\(Int(measurement.value))/\(Int(diastolic)) \(measurement.type.unit)"
+        }
+        if measurement.type == .bloodGlucose {
+            let value = UnitPreferences.mgdlToPreferred(measurement.value)
+            let formatted = UnitPreferences.glucoseUnit == .mgdL
+                ? String(format: "%.0f", value)
+                : String(format: "%.1f", value)
+            return "\(formatted) \(UnitPreferences.glucoseUnit.rawValue)"
+        }
+        if measurement.type == .heartRate {
+            return "\(Int(measurement.value)) \(measurement.type.unit)"
+        }
+        return "\(String(format: "%.1f", measurement.value)) \(measurement.type.unit)"
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
 }

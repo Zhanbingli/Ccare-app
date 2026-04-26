@@ -65,15 +65,6 @@ struct ProfileDrawerV2: View {
                     }
 
                     navRow(
-                        icon: "stethoscope",
-                        tint: AppColor.primary,
-                        title: NSLocalizedString("Consultation Snapshot", comment: ""),
-                        subtitle: NSLocalizedString("What the hospital doesn't see", comment: "")
-                    ) {
-                        ConsultationSnapshotView()
-                    }
-
-                    navRow(
                         icon: "cross.case.fill",
                         tint: AppColor.warning,
                         title: NSLocalizedString("Emergency Card", comment: ""),
@@ -191,7 +182,10 @@ struct ProfileDrawerV2: View {
         subtitle: String,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
+        Button {
+            Haptics.impact(.light)
+            action()
+        } label: {
             HStack(spacing: AppSpacing.medium) {
                 rowIcon(icon, tint: tint)
                 VStack(alignment: .leading, spacing: 2) {
@@ -207,7 +201,7 @@ struct ProfileDrawerV2: View {
             .padding(.vertical, 4)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(EditorialRowButtonStyle())
     }
 
     @ViewBuilder

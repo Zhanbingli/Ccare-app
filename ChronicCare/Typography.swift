@@ -16,27 +16,27 @@ enum AppFontStyle {
     fileprivate func font(design: Font.Design) -> Font {
         switch self {
         case .heroNumber:
-            return .system(size: 44, weight: .bold, design: .rounded)
+            return .system(size: 48, weight: .bold, design: .rounded)
         case .displayTitle:
-            return .system(size: 28, weight: .bold, design: .default)
+            return .system(size: 30, weight: .bold, design: .default)
         case .largeTitle:
             return .system(.largeTitle, design: design).weight(.bold)
         case .title:
             return .system(.title2, design: design).weight(.semibold)
         case .headline:
-            return .system(.headline, design: design).weight(.semibold)
+            return .system(size: 18, weight: .semibold, design: design)
         case .subheadline:
-            return .system(.subheadline, design: design).weight(.medium)
+            return .system(size: 16, weight: .medium, design: design)
         case .body:
-            return .system(.body, design: design)
+            return .system(size: 17, weight: .regular, design: design)
         case .label:
-            return .system(.callout, design: design).weight(.semibold)
+            return .system(size: 16, weight: .semibold, design: design)
         case .footnote:
-            return .system(.footnote, design: design)
+            return .system(size: 14, weight: .regular, design: design)
         case .caption:
-            return .system(.caption, design: design).weight(.medium)
+            return .system(size: 14, weight: .regular, design: design)
         case .micro:
-            return .system(size: 11, weight: .medium, design: design)
+            return .system(size: 12, weight: .medium, design: design)
         }
     }
 

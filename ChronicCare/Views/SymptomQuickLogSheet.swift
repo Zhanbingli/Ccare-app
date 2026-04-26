@@ -16,6 +16,8 @@ struct SymptomQuickLogSheet: View {
     @State private var date: Date = Date()
     @State private var relatedMedicationIDs: Set<UUID> = []
     @State private var showMedicationPicker = false
+    @State private var showDeleteConfirmation = false
+    @State private var didPopulateEditingState = false
 
     private static let presetTags: [String] = [
         NSLocalizedString("Dizziness", comment: "Symptom: 头晕"),
@@ -27,7 +29,7 @@ struct SymptomQuickLogSheet: View {
     ]
 
     private var canSave: Bool {
-        !selectedTags.isEmpty || !customTag.trimmingCharacters(in: .whitespaces).isEmpty
+        !selectedTags.isEmpty || !customTag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var body: some View {
@@ -45,7 +47,8 @@ struct SymptomQuickLogSheet: View {
                         TextField(NSLocalizedString("Other (type here)", comment: "Custom symptom input"), text: $customTag)
                         if !customTag.trimmingCharacters(in: .whitespaces).isEmpty {
                             Button {
-                                let trimmed = customTag.trimmingCharacters(in: .whitespaces)
+                                Haptics.impact(.light)
+                                let trimmed = customTag.trimmingCharacters(in: .whitespacesAndNewlines)
                                 if !trimmed.isEmpty { selectedTags.insert(trimmed) }
                                 customTag = ""
                             } label: {
@@ -57,7 +60,7 @@ struct SymptomQuickLogSheet: View {
                     }
                     if !selectedTags.isEmpty {
                         FlowLayout(spacing: 6) {
-                            ForEach(Array(selectedTags), id: \.self) { tag in
+                            ForEach(Array(selectedTags).sorted(), id: \.self) { tag in
                                 selectedChip(tag)
                             }
                         }
@@ -90,6 +93,7 @@ struct SymptomQuickLogSheet: View {
 
                 Section {
                     Button {
+                        Haptics.impact(.light)
                         showMedicationPicker = true
                     } label: {
                         HStack {
@@ -102,6 +106,18 @@ struct SymptomQuickLogSheet: View {
                     }
                 } footer: {
                     Text(NSLocalizedString("If you think a medication might have caused this, link it here. Optional.", comment: ""))
+                }
+
+                if editing != nil {
+                    Section {
+                        Button(role: .destructive) {
+                            Haptics.notification(.warning)
+                            showDeleteConfirmation = true
+                        } label: {
+                            Text(NSLocalizedString("Delete Symptom Entry", comment: ""))
+                                .frame(maxWidth: .infinity, alignment: .center)
+                        }
+                    }
                 }
             }
             .scrollContentBackground(.hidden)
@@ -120,16 +136,22 @@ struct SymptomQuickLogSheet: View {
                 }
             }
             .onAppear {
-                if let editing {
-                    selectedTags = Set(editing.tags)
-                    severity = editing.severity
-                    note = editing.note ?? ""
-                    date = editing.date
-                    relatedMedicationIDs = Set(editing.relatedMedicationIDs ?? [])
-                }
+                populateEditingStateIfNeeded()
             }
             .sheet(isPresented: $showMedicationPicker) {
                 medicationPickerSheet
+            }
+            .confirmationDialog(
+                NSLocalizedString("Delete this symptom entry?", comment: ""),
+                isPresented: $showDeleteConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button(NSLocalizedString("Delete", comment: ""), role: .destructive) {
+                    deleteEntry()
+                }
+                Button(NSLocalizedString("Cancel", comment: ""), role: .cancel) {}
+            } message: {
+                Text(NSLocalizedString("This symptom note will be removed from future visit summaries.", comment: ""))
             }
         }
     }
@@ -145,6 +167,7 @@ struct SymptomQuickLogSheet: View {
     }
 
     private func toggleTag(_ tag: String) {
+        Haptics.impact(.light)
         if selectedTags.contains(tag) {
             selectedTags.remove(tag)
         } else {
@@ -168,20 +191,21 @@ struct SymptomQuickLogSheet: View {
                 )
                 .foregroundStyle(isSelected ? AppColor.primary : AppColor.textPrimary)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(EditorialRowButtonStyle())
     }
 
     private func selectedChip(_ tag: String) -> some View {
         HStack(spacing: 4) {
             Text(tag).appFont(.caption)
             Button {
+                Haptics.impact(.light)
                 selectedTags.remove(tag)
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 12))
                     .foregroundStyle(AppColor.textSecondary)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(EditorialRowButtonStyle())
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -224,6 +248,7 @@ struct SymptomQuickLogSheet: View {
     private func medicationPickerRow(_ med: Medication) -> some View {
         let isSelected = relatedMedicationIDs.contains(med.id)
         Button {
+            Haptics.impact(.light)
             if isSelected {
                 relatedMedicationIDs.remove(med.id)
             } else {
@@ -245,11 +270,12 @@ struct SymptomQuickLogSheet: View {
                 }
             }
         }
+        .buttonStyle(EditorialRowButtonStyle())
     }
 
     private func save() {
-        let trimmedCustom = customTag.trimmingCharacters(in: .whitespaces)
-        var tags = Array(selectedTags)
+        let trimmedCustom = customTag.trimmingCharacters(in: .whitespacesAndNewlines)
+        var tags = Array(selectedTags).sorted()
         if !trimmedCustom.isEmpty && !tags.contains(trimmedCustom) {
             tags.append(trimmedCustom)
         }
@@ -269,6 +295,24 @@ struct SymptomQuickLogSheet: View {
         } else {
             store.addSymptomEntry(entry)
         }
+        Haptics.success()
+        dismiss()
+    }
+
+    private func populateEditingStateIfNeeded() {
+        guard !didPopulateEditingState, let editing else { return }
+        selectedTags = Set(editing.tags)
+        severity = editing.severity
+        note = editing.note ?? ""
+        date = min(editing.date, Date())
+        relatedMedicationIDs = Set(editing.relatedMedicationIDs ?? [])
+        didPopulateEditingState = true
+    }
+
+    private func deleteEntry() {
+        guard let editing else { return }
+        store.removeSymptomEntry(editing)
+        Haptics.success()
         dismiss()
     }
 }

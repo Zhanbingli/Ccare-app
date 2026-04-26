@@ -237,6 +237,7 @@ private extension MedicationsView {
     @ViewBuilder
     private func medicationManagementRow(for med: Medication) -> some View {
         Button {
+            Haptics.impact(.light)
             detailTarget = med
         } label: {
             HStack(alignment: .center, spacing: 12) {
@@ -254,8 +255,9 @@ private extension MedicationsView {
                 Spacer(minLength: 8)
                 supplyBadge(for: med)
             }
+            .padding(.vertical, 4)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(EditorialRowButtonStyle())
     }
 
     @ViewBuilder

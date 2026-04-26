@@ -9,6 +9,7 @@ struct DoctorVisitFormView: View {
     @Environment(\.dismiss) private var dismiss
 
     var editing: DoctorVisit?
+    var showsCancelButton: Bool
 
     @State private var scheduledDate: Date
     @State private var hospital: String
@@ -22,8 +23,9 @@ struct DoctorVisitFormView: View {
     @State private var hasNextVisitDate: Bool
     @State private var showDeleteConfirm = false
 
-    init(editing: DoctorVisit? = nil) {
+    init(editing: DoctorVisit? = nil, showsCancelButton: Bool = true) {
         self.editing = editing
+        self.showsCancelButton = showsCancelButton
         let defaultScheduled = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
         _scheduledDate = State(initialValue: editing?.scheduledDate ?? defaultScheduled)
         _hospital = State(initialValue: editing?.hospital ?? "")
@@ -71,8 +73,10 @@ struct DoctorVisitFormView: View {
         .navigationTitle(editing == nil ? NSLocalizedString("Add Visit", comment: "") : NSLocalizedString("Edit Visit", comment: ""))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button(NSLocalizedString("Cancel", comment: "")) { dismiss() }
+            if showsCancelButton {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(NSLocalizedString("Cancel", comment: "")) { dismiss() }
+                }
             }
             ToolbarItem(placement: .confirmationAction) {
                 Button(NSLocalizedString("Save", comment: "")) {

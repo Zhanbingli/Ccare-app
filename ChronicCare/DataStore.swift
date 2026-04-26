@@ -95,6 +95,18 @@ final class DataStore: ObservableObject {
         }
     }
     func removeMeasurement(at offsets: IndexSet) { measurements.remove(atOffsets: offsets) }
+    func removeMeasurement(_ item: Measurement) {
+        measurements.removeAll { $0.id == item.id }
+    }
+    func updateMeasurement(_ item: Measurement) {
+        let updated = item.clampedToNow()
+        measurements.removeAll { $0.id == updated.id }
+        if let idx = measurements.firstIndex(where: { updated.date > $0.date }) {
+            measurements.insert(updated, at: idx)
+        } else {
+            measurements.append(updated)
+        }
+    }
 
     /// Returns nil on success, or a validation error message.
     @discardableResult
@@ -359,6 +371,9 @@ final class DataStore: ObservableObject {
         }
     }
     func removeSymptomEntry(at offsets: IndexSet) { symptomEntries.remove(atOffsets: offsets) }
+    func removeSymptomEntry(_ entry: SymptomEntry) {
+        symptomEntries.removeAll { $0.id == entry.id }
+    }
     func updateSymptomEntry(_ entry: SymptomEntry) {
         if let idx = symptomEntries.firstIndex(where: { $0.id == entry.id }) {
             symptomEntries[idx] = entry

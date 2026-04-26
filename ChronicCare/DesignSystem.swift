@@ -231,6 +231,17 @@ extension EditorialRow where Trailing == EmptyView {
     }
 }
 
+struct EditorialRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
+                    .fill(configuration.isPressed ? AppColor.divider.opacity(0.42) : Color.clear)
+            )
+    }
+}
+
 enum EditorialButtonKind {
     case primary
     case secondary

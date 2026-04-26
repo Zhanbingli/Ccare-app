@@ -426,118 +426,10 @@ struct MedicationDetailView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Card {
-                        VStack(alignment: .leading, spacing: 14) {
-                            // Row 1: Icon + Name/Dose (left) + Supply snapshot (right)
-                            HStack(alignment: .top, spacing: 12) {
-                                heroMedicationThumbnail
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(medication.name)
-                                        .appFont(.title)
-                                        .fontWeight(.bold)
-                                        .lineLimit(2)
-                                    Text(medication.dose)
-                                        .appFont(.headline)
-                                        .foregroundStyle(AppColor.textSecondary)
-                                }
-                                Spacer(minLength: 4)
-                                // Supply / course countdown on the right
-                                if let snippet = heroSupplySnippet {
-                                    VStack(alignment: .trailing, spacing: 2) {
-                                        Text(snippet.value)
-                                            .appFont(.title)
-                                            .fontWeight(.bold)
-                                            .foregroundStyle(snippet.tint)
-                                            .monospacedDigit()
-                                        Text(snippet.label)
-                                            .appFont(.caption)
-                                            .foregroundStyle(AppColor.textSecondary)
-                                    }
-                                }
-                            }
-
-                            // Row 2: Key attributes (compact info rows)
-                            if !heroAttributes.isEmpty {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    ForEach(heroAttributes, id: \.label) { attr in
-                                        HStack(spacing: 6) {
-                                            Image(systemName: attr.icon)
-                                                .font(.system(size: 12, weight: .medium))
-                                                .foregroundStyle(attr.tint)
-                                                .frame(width: 16)
-                                            Text(attr.label)
-                                                .appFont(.subheadline)
-                                                .foregroundStyle(AppColor.textPrimary)
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Row 3: Tags
-                            FlowLayout(spacing: 6) {
-                                reminderBadge(reminderStateLabel, tint: reminderStateTint)
-                                reminderBadge(modeLabel, tint: modeTint)
-                                if let categoryName = medication.displayCategoryName {
-                                    reminderBadge(categoryName, tint: AppColor.textSecondary)
-                                }
-                            }
-                        }
-                    }
-
-                    Card {
-                        VStack(alignment: .leading, spacing: 14) {
-                            HStack {
-                                Text(NSLocalizedString("Next Dose", comment: ""))
-                                    .appFont(.headline)
-                                Spacer()
-                                reminderBadge(detailStatusLine, tint: reminderStateTint)
-                            }
-                            LazyVGrid(columns: snapshotColumns, spacing: 10) {
-                                detailMetric(value: nextDoseText, label: NSLocalizedString("Scheduled", comment: ""), tint: AppColor.primary)
-                                detailMetric(value: lastTakenText, label: NSLocalizedString("Last taken", comment: ""), tint: AppColor.textSecondary)
-                            }
-                            if medication.isAsNeeded != true && (!medication.remindersEnabled || medication.timesOfDay.isEmpty) {
-                                Button(NSLocalizedString("Fix Reminder Setup", comment: "")) {
-                                    onEdit(medication)
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                            }
-                        }
-                    }
-
-                    Card {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text(NSLocalizedString("Adherence", comment: ""))
-                                .appFont(.headline)
-                            LazyVGrid(columns: snapshotColumns, spacing: 10) {
-                                detailMetric(value: String(format: "%.0f%%", adherence30 * 100), label: NSLocalizedString("30-day", comment: ""), tint: adherence30 >= 0.5 ? AppColor.primary : AppColor.warning)
-                                detailMetric(value: "\(streakCount)", label: NSLocalizedString("day streak", comment: ""), tint: AppColor.textSecondary)
-                            }
-
-                            NavigationLink {
-                                AdherenceCalendarView(medicationID: medication.id)
-                            } label: {
-                                InsetPanel {
-                                    HStack {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text(NSLocalizedString("Adherence History", comment: ""))
-                                                .appFont(.headline)
-                                            Text(NSLocalizedString("Review daily check-ins and missed doses.", comment: ""))
-                                                .appFont(.caption)
-                                                .foregroundStyle(AppColor.textSecondary)
-                                        }
-                                        Spacer()
-                                        Image(systemName: "chevron.right")
-                                            .font(.system(size: 12, weight: .semibold))
-                                            .foregroundStyle(.tertiary)
-                                    }
-                                }
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
+                VStack(alignment: .leading, spacing: EditorialSpacing.xl) {
+                    medicationOverviewSection
+                    nextDoseSection
+                    adherenceSection
 
                     ForEach(correlatedTypes, id: \.self) { measurementType in
                         if let data = relatedMeasurements(for: measurementType) {
@@ -561,40 +453,189 @@ struct MedicationDetailView: View {
         }
     }
 
+    private var medicationOverviewSection: some View {
+        VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+            HStack(alignment: .top, spacing: EditorialSpacing.md) {
+                heroMedicationThumbnail
+
+                VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                    Text(medication.name)
+                        .appFont(.displayTitle)
+                        .foregroundStyle(AppColor.textPrimary)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(medication.dose)
+                        .appFont(.headline)
+                        .foregroundStyle(AppColor.textSecondary)
+                }
+
+                Spacer(minLength: EditorialSpacing.sm)
+
+                if let snippet = heroSupplySnippet {
+                    VStack(alignment: .trailing, spacing: EditorialSpacing.xs) {
+                        Text(snippet.value)
+                            .appFontNumeric(.title)
+                            .fontWeight(.bold)
+                            .foregroundStyle(snippet.tint)
+                        Text(snippet.label)
+                            .appFont(.caption)
+                            .foregroundStyle(AppColor.textSecondary)
+                    }
+                }
+            }
+
+            if !heroAttributes.isEmpty {
+                AppDivider()
+
+                VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
+                    ForEach(heroAttributes, id: \.label) { attr in
+                        HStack(spacing: EditorialSpacing.sm) {
+                            Image(systemName: attr.icon)
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundStyle(attr.tint)
+                                .frame(width: 18)
+                            Text(attr.label)
+                                .appFont(.body)
+                                .foregroundStyle(AppColor.textPrimary)
+                        }
+                    }
+                }
+            }
+
+            FlowLayout(spacing: EditorialSpacing.sm) {
+                reminderBadge(reminderStateLabel, tint: reminderStateTint)
+                reminderBadge(modeLabel, tint: modeTint)
+                if let categoryName = medication.displayCategoryName {
+                    reminderBadge(categoryName, tint: AppColor.textSecondary)
+                }
+            }
+        }
+    }
+
+    private var nextDoseSection: some View {
+        VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+            sectionHeader(
+                title: NSLocalizedString("Next Dose", comment: ""),
+                trailing: detailStatusLine,
+                trailingTint: reminderStateTint
+            )
+
+            AppDivider()
+
+            LazyVGrid(columns: snapshotColumns, spacing: EditorialSpacing.md) {
+                detailMetric(value: nextDoseText, label: NSLocalizedString("Scheduled", comment: ""), tint: AppColor.primary)
+                detailMetric(value: lastTakenText, label: NSLocalizedString("Last taken", comment: ""), tint: AppColor.textSecondary)
+            }
+
+            if medication.isAsNeeded != true && (!medication.remindersEnabled || medication.timesOfDay.isEmpty) {
+                Button {
+                    Haptics.impact(.light)
+                    onEdit(medication)
+                } label: {
+                    Label(NSLocalizedString("Fix Reminder Setup", comment: ""), systemImage: "bell.badge")
+                        .appFont(.body)
+                        .foregroundStyle(AppColor.primary)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(AppColor.divider, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var adherenceSection: some View {
+        VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+            sectionHeader(title: NSLocalizedString("Adherence", comment: ""))
+
+            AppDivider()
+
+            LazyVGrid(columns: snapshotColumns, spacing: EditorialSpacing.md) {
+                detailMetric(
+                    value: String(format: "%.0f%%", adherence30 * 100),
+                    label: NSLocalizedString("30-day", comment: ""),
+                    tint: adherence30 >= 0.5 ? AppColor.primary : AppColor.warning
+                )
+                detailMetric(
+                    value: "\(streakCount)",
+                    label: NSLocalizedString("day streak", comment: ""),
+                    tint: AppColor.textSecondary
+                )
+            }
+
+            NavigationLink {
+                AdherenceCalendarView(medicationID: medication.id)
+            } label: {
+                HStack(spacing: EditorialSpacing.md) {
+                    VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                        Text(NSLocalizedString("Adherence History", comment: ""))
+                            .appFont(.body)
+                            .foregroundStyle(AppColor.textPrimary)
+                        Text(NSLocalizedString("Review daily check-ins and missed doses.", comment: ""))
+                            .appFont(.caption)
+                            .foregroundStyle(AppColor.textSecondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppColor.textTertiary)
+                }
+                .padding(.vertical, EditorialSpacing.sm)
+            }
+            .buttonStyle(EditorialRowButtonStyle())
+        }
+    }
+
+    private func sectionHeader(title: String, trailing: String? = nil, trailingTint: Color = AppColor.textSecondary) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .appFont(.headline)
+                .foregroundStyle(AppColor.textPrimary)
+            Spacer()
+            if let trailing {
+                Text(trailing)
+                    .appFont(.caption)
+                    .foregroundStyle(trailingTint)
+            }
+        }
+    }
+
     private func relatedMeasurementCard(for measurementType: MeasurementType, data: [Measurement]) -> some View {
         let summary = relatedMeasurementSummary(for: measurementType, data: data)
         let trendText = relatedMeasurementTrendText(for: measurementType, data: data)
         let contextText = outcomeLinkageContextText(for: measurementType)
 
-        return Card {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(NSLocalizedString("Related Measurements", comment: ""))
-                            .appFont(.headline)
-                        Text(measurementType.displayName)
-                            .appFont(.subheadline)
-                            .foregroundStyle(AppColor.primary)
-                    }
-                    Spacer()
-                    Text(summary)
+        return VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                    Text(NSLocalizedString("Related Measurements", comment: ""))
+                        .appFont(.headline)
+                        .foregroundStyle(AppColor.textPrimary)
+                    Text(measurementType.displayName)
                         .appFont(.caption)
-                        .foregroundStyle(AppColor.textSecondary)
+                        .foregroundStyle(AppColor.primary)
                 }
-
-                InsetPanel(tint: nil) {
-                    relatedMeasurementChart(for: measurementType, data: data)
-                }
-
-                Text(trendText)
+                Spacer()
+                Text(summary)
                     .appFont(.caption)
                     .foregroundStyle(AppColor.textSecondary)
-                Text(contextText)
-                    .font(.caption2)
-                    .foregroundStyle(AppColor.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
-        }
+
+            AppDivider()
+
+            relatedMeasurementChart(for: measurementType, data: data)
+                .padding(.vertical, EditorialSpacing.sm)
+
+            Text(trendText)
+                .appFont(.caption)
+                .foregroundStyle(AppColor.textSecondary)
+            Text(contextText)
+                .font(.caption2)
+                .foregroundStyle(AppColor.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
     }
 
     private func relatedMeasurementChart(for measurementType: MeasurementType, data: [Measurement]) -> some View {
@@ -621,19 +662,17 @@ struct MedicationDetailView: View {
     }
 
     private func detailMetric(value: String, label: String, tint: Color) -> some View {
-        InsetPanel(tint: tint) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(value)
-                    .appFontNumeric(.headline)
-                    .foregroundStyle(tint)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Text(label)
-                    .appFont(.caption)
-                    .foregroundStyle(AppColor.textSecondary)
-            }
-            .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+        VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+            Text(value)
+                .appFontNumeric(.headline)
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Text(label)
+                .appFont(.caption)
+                .foregroundStyle(AppColor.textSecondary)
         }
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
     }
 
     private func reminderBadge(_ text: String, tint: Color) -> some View {

@@ -204,7 +204,7 @@ struct MedicationFormView: View {
     var body: some View {
         NavigationStack {
             ScrollView(.vertical) {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: EditorialSpacing.xxl) {
                     medicationSection
                     scheduleSection
                     moreDetailsSection
@@ -212,9 +212,9 @@ struct MedicationFormView: View {
                         deleteSection
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 28)
+                .padding(.horizontal, EditorialSpacing.lg)
+                .padding(.top, EditorialSpacing.xl)
+                .padding(.bottom, EditorialSpacing.xxl)
             }
             .background(AppColor.background)
             .navigationTitle(navigationTitleText)
@@ -297,11 +297,8 @@ struct MedicationFormView: View {
     // MARK: - Sections
 
     private var medicationSection: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 14) {
-                Text(NSLocalizedString("Medication", comment: ""))
-                    .appFont(.headline)
-
+        EditorialSection(NSLocalizedString("Medication", comment: "")) {
+            VStack(alignment: .leading, spacing: EditorialSpacing.md) {
                 if !isEditing { scanAssistPanel }
 
                 textInputCard(
@@ -322,18 +319,15 @@ struct MedicationFormView: View {
                 if isOCRLoading {
                     Text(NSLocalizedString("Reading label...", comment: ""))
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
                 }
             }
         }
     }
 
     private var scheduleSection: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 14) {
-                Text(NSLocalizedString("Schedule", comment: ""))
-                    .appFont(.headline)
-
+        EditorialSection(NSLocalizedString("Schedule", comment: "")) {
+            VStack(alignment: .leading, spacing: EditorialSpacing.md) {
                 Picker("", selection: intakeModeSelection) {
                     Text(NSLocalizedString("Scheduled", comment: "")).tag(IntakeMode.scheduled)
                     Text(NSLocalizedString("As Needed", comment: "")).tag(IntakeMode.asNeeded)
@@ -353,33 +347,11 @@ struct MedicationFormView: View {
                     }
                     .pickerStyle(.segmented)
 
-                    ForEach(Array(times.indices), id: \.self) { idx in
-                        HStack {
-                            Text(times.count == 1
-                                 ? NSLocalizedString("Time", comment: "Single reminder time label")
-                                 : String(format: NSLocalizedString("Time %lld", comment: ""), idx + 1))
-                                .appFont(.subheadline)
-                            Spacer()
-                            DatePicker(
-                                "",
-                                selection: Binding(
-                                    get: { times[idx] },
-                                    set: { newValue in
-                                        schedulePreset = .custom
-                                        times[idx] = newValue
-                                    }
-                                ),
-                                displayedComponents: .hourAndMinute
-                            )
-                            .labelsHidden()
-                            if schedulePreset == .custom && times.count > 1 {
-                                Button(role: .destructive) {
-                                    times.remove(at: idx)
-                                } label: {
-                                    Image(systemName: "minus.circle.fill")
-                                        .foregroundStyle(AppColor.warning)
-                                }
-                                .buttonStyle(.plain)
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(times.indices), id: \.self) { idx in
+                            scheduleTimeRow(index: idx)
+                            if idx != times.indices.last {
+                                AppDivider()
                             }
                         }
                     }
@@ -388,6 +360,7 @@ struct MedicationFormView: View {
 
                     if schedulePreset == .custom {
                         Button {
+                            Haptics.impact(.light)
                             times.append(defaultCustomTime(after: times.last))
                         } label: {
                             secondaryActionLabel(NSLocalizedString("Add Time", comment: ""), systemImage: "plus.circle.fill")
@@ -395,7 +368,7 @@ struct MedicationFormView: View {
                         .buttonStyle(.plain)
                     }
 
-                    Divider()
+                    AppDivider()
 
                     HStack {
                         Text(NSLocalizedString("Reminders", comment: ""))
@@ -408,7 +381,7 @@ struct MedicationFormView: View {
                     if !remindersEnabled {
                         Text(NSLocalizedString("Times saved, but notifications won't fire.", comment: ""))
                             .appFont(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppColor.textSecondary)
                     }
                 }
             }
@@ -419,42 +392,44 @@ struct MedicationFormView: View {
     /// add/edit path short; power-user fields (photo, category, instructions,
     /// supply, course end) live behind one chevron.
     private var moreDetailsSection: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 14) {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.18)) { showMoreDetails.toggle() }
-                } label: {
-                    HStack(alignment: .center, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(NSLocalizedString("More Details", comment: ""))
-                                .appFont(.headline)
-                            Text(moreDetailsSummary)
-                                .appFont(.footnote)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .multilineTextAlignment(.leading)
-                        }
-                        Spacer()
-                        Image(systemName: showMoreDetails ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+            Button {
+                Haptics.impact(.light)
+                withAnimation(.easeInOut(duration: 0.18)) { showMoreDetails.toggle() }
+            } label: {
+                HStack(alignment: .center, spacing: EditorialSpacing.md) {
+                    VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                        Text(NSLocalizedString("More Details", comment: ""))
+                            .appFont(AppTypography.sectionTitle)
+                            .foregroundStyle(AppColor.textPrimary)
+                        Text(moreDetailsSummary)
+                            .appFont(.footnote)
+                            .foregroundStyle(AppColor.textSecondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .multilineTextAlignment(.leading)
                     }
-                    .contentShape(Rectangle())
+                    Spacer()
+                    Image(systemName: showMoreDetails ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(AppColor.textSecondary)
                 }
-                .buttonStyle(.plain)
+                .padding(.vertical, EditorialSpacing.xs)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(EditorialRowButtonStyle())
 
-                if showMoreDetails {
-                    Divider()
-                    moreDetailsContent
-                }
+            AppDivider()
+
+            if showMoreDetails {
+                moreDetailsContent
             }
         }
     }
 
     @ViewBuilder
     private var moreDetailsContent: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: EditorialSpacing.xl) {
             sourceBlock
             instructionsBlock
             inventoryBlock
@@ -463,7 +438,7 @@ struct MedicationFormView: View {
     }
 
     private var sourceBlock: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: EditorialSpacing.md) {
             Text(NSLocalizedString("Who prescribed this?", comment: "Medication source header"))
                 .appFont(.subheadline)
                 .fontWeight(.semibold)
@@ -482,13 +457,13 @@ struct MedicationFormView: View {
             }
             Text(NSLocalizedString("Helps your doctor see at a glance which meds come from other clinics, OTC, or supplements.", comment: ""))
                 .appFont(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppColor.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private var instructionsBlock: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: EditorialSpacing.md) {
             Text(NSLocalizedString("Instructions", comment: ""))
                 .appFont(.subheadline)
                 .fontWeight(.semibold)
@@ -518,7 +493,7 @@ struct MedicationFormView: View {
     }
 
     private var inventoryBlock: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: EditorialSpacing.md) {
             Text(NSLocalizedString("Inventory & Course", comment: ""))
                 .appFont(.subheadline)
                 .fontWeight(.semibold)
@@ -532,11 +507,11 @@ struct MedicationFormView: View {
                 if let estimatedSupplyDays {
                     Text(String(format: NSLocalizedString("About %lld days of supply at your current schedule.", comment: ""), estimatedSupplyDays))
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
                 }
                 Text(String(format: NSLocalizedString("Refill reminders start when about %lld days remain.", comment: ""), refillThresholdDays))
                     .appFont(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColor.textSecondary)
             }
 
             Toggle(NSLocalizedString("Has Course End Date", comment: ""), isOn: $hasCourseEnd)
@@ -547,17 +522,17 @@ struct MedicationFormView: View {
                 if let courseDaysRemaining {
                     Text(String(format: NSLocalizedString("Course ends in %lld days.", comment: ""), max(courseDaysRemaining, 0)))
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
                 }
                 Text(String(format: NSLocalizedString("Course reminders start %lld days before the end date.", comment: ""), courseReminderThresholdDays))
                     .appFont(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColor.textSecondary)
             }
         }
     }
 
     private var categoryPhotoBlock: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: EditorialSpacing.md) {
             Text(NSLocalizedString("Category & Photo", comment: ""))
                 .appFont(.subheadline)
                 .fontWeight(.semibold)
@@ -579,43 +554,90 @@ struct MedicationFormView: View {
     }
 
     private var deleteSection: some View {
-        Card {
-            Button(role: .destructive) {
-                showDeleteConfirm = true
-            } label: {
-                Text(NSLocalizedString("Delete Medication", comment: ""))
-                    .appFont(.subheadline)
-                    .foregroundStyle(AppColor.warning)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
+        Button(role: .destructive) {
+            Haptics.notification(.warning)
+            showDeleteConfirm = true
+        } label: {
+            Text(NSLocalizedString("Delete Medication", comment: ""))
+                .appFont(.subheadline)
+                .fontWeight(.medium)
+                .foregroundStyle(AppColor.warning)
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: 44)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(AppColor.surface)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(AppColor.warning.opacity(0.35), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .alert(NSLocalizedString("Delete Medication", comment: ""), isPresented: $showDeleteConfirm) {
+            Button(NSLocalizedString("Delete", comment: ""), role: .destructive) {
+                onDelete?()
+                dismiss()
             }
-            .alert(NSLocalizedString("Delete Medication", comment: ""), isPresented: $showDeleteConfirm) {
-                Button(NSLocalizedString("Delete", comment: ""), role: .destructive) {
-                    onDelete?()
-                    dismiss()
+            Button(NSLocalizedString("Cancel", comment: ""), role: .cancel) { }
+        } message: {
+            Text(String(format: NSLocalizedString("Are you sure you want to delete \"%@\"? This cannot be undone.", comment: ""), name))
+        }
+    }
+
+    private func scheduleTimeRow(index: Int) -> some View {
+        HStack {
+            Text(times.count == 1
+                 ? NSLocalizedString("Time", comment: "Single reminder time label")
+                 : String(format: NSLocalizedString("Time %lld", comment: ""), index + 1))
+                .appFont(.subheadline)
+                .foregroundStyle(AppColor.textPrimary)
+            Spacer()
+            DatePicker(
+                "",
+                selection: Binding(
+                    get: { times[index] },
+                    set: { newValue in
+                        schedulePreset = .custom
+                        times[index] = newValue
+                    }
+                ),
+                displayedComponents: .hourAndMinute
+            )
+            .labelsHidden()
+            if schedulePreset == .custom && times.count > 1 {
+                Button(role: .destructive) {
+                    Haptics.impact(.light)
+                    times.remove(at: index)
+                } label: {
+                    Image(systemName: "minus.circle")
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundStyle(AppColor.warning)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
                 }
-                Button(NSLocalizedString("Cancel", comment: ""), role: .cancel) { }
-            } message: {
-                Text(String(format: NSLocalizedString("Are you sure you want to delete \"%@\"? This cannot be undone.", comment: ""), name))
+                .buttonStyle(EditorialRowButtonStyle())
+                .accessibilityLabel(NSLocalizedString("Remove Time", comment: ""))
             }
         }
+        .padding(.vertical, EditorialSpacing.sm)
     }
 
     // MARK: - Pills remaining text field (replaces stepper)
 
     private var pillsRemainingField: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
             Text(NSLocalizedString("Pills remaining", comment: ""))
                 .appFont(.caption)
                 .foregroundStyle(AppColor.textSecondary)
-            HStack(spacing: 10) {
+            HStack(spacing: EditorialSpacing.sm) {
                 TextField("30", text: $pillsRemainingText)
                     .keyboardType(.numberPad)
                     .focused($focusedField, equals: .pillsRemaining)
                     .textFieldStyle(.plain)
                     .appFont(.subheadline)
                     .frame(width: 80)
-                    .padding(12)
+                    .padding(EditorialSpacing.md)
                     .background(
                         RoundedRectangle(cornerRadius: EditorialSpacing.md, style: .continuous)
                             .fill(AppColor.surface)
@@ -641,11 +663,11 @@ struct MedicationFormView: View {
     // MARK: - Quick buttons
 
     private var quickPillButtons: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
             Text(NSLocalizedString("Quick fill", comment: ""))
                 .appFont(.caption)
-                .foregroundStyle(.secondary)
-            HStack(spacing: 8) {
+                .foregroundStyle(AppColor.textSecondary)
+            HStack(spacing: EditorialSpacing.sm) {
                 if isEditing {
                     ForEach([30, 60, 90], id: \.self) { value in
                         quickButton(title: "+\(value)") {
@@ -664,11 +686,11 @@ struct MedicationFormView: View {
     }
 
     private var quickCourseButtons: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
             Text(isEditing ? NSLocalizedString("Quick extend", comment: "") : NSLocalizedString("Quick duration", comment: ""))
                 .appFont(.caption)
-                .foregroundStyle(.secondary)
-            HStack(spacing: 8) {
+                .foregroundStyle(AppColor.textSecondary)
+            HStack(spacing: EditorialSpacing.sm) {
                 if isEditing {
                     quickButton(title: NSLocalizedString("+7 d", comment: "")) {
                         courseEndDate = Calendar.current.date(byAdding: .day, value: 7, to: courseEndDate) ?? courseEndDate
@@ -1031,8 +1053,8 @@ private extension MedicationFormView {
 
     var scanAssistPanel: some View {
         InsetPanel(tint: nil) {
-            HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .center, spacing: EditorialSpacing.md) {
+                VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
                     Text(NSLocalizedString("Scan Label", comment: ""))
                         .appFont(.subheadline)
                         .fontWeight(.semibold)
@@ -1049,23 +1071,24 @@ private extension MedicationFormView {
 
     var scanLabelButton: some View {
         Button {
+            Haptics.impact(.light)
             if UIImagePickerController.isSourceTypeAvailable(.camera) {
                 showOCRCamera = true
             } else {
                 showCameraUnavailableAlert = true
             }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: EditorialSpacing.sm) {
                 Image(systemName: "camera.viewfinder")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 14, weight: .regular))
                 Text(NSLocalizedString("Scan Label", comment: ""))
                     .appFont(.caption)
                     .fontWeight(.semibold)
                 if isOCRLoading { ProgressView().controlSize(.small) }
             }
             .foregroundStyle(AppColor.primary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.horizontal, EditorialSpacing.md)
+            .padding(.vertical, EditorialSpacing.sm)
             .background(
                 RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
                     .fill(AppColor.surface)
@@ -1099,7 +1122,7 @@ private extension MedicationFormView {
                 .appFont(field == .name || field == .dose ? .subheadline : .body)
                 .submitLabel(submitLabel(for: field))
                 .onSubmit { handleSubmit(for: field) }
-                .padding(13)
+                .padding(EditorialSpacing.md)
                 .background(
                     RoundedRectangle(cornerRadius: EditorialSpacing.md, style: .continuous)
                         .fill(AppColor.surface)
@@ -1130,12 +1153,15 @@ private extension MedicationFormView {
     }
 
     func quickButton(title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button {
+            Haptics.impact(.light)
+            action()
+        } label: {
             Text(title)
                 .appFont(.caption)
                 .fontWeight(.semibold)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 7)
+                .padding(.vertical, EditorialSpacing.sm)
                 .background(
                     RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
                         .fill(AppColor.surface)
@@ -1149,13 +1175,13 @@ private extension MedicationFormView {
     }
 
     func secondaryActionLabel(_ title: String, systemImage: String) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: EditorialSpacing.sm) {
             Image(systemName: systemImage).font(.system(size: 13, weight: .regular))
             Text(title).appFont(.label).fontWeight(.semibold)
         }
         .foregroundStyle(AppColor.primary)
         .frame(maxWidth: .infinity, minHeight: 44)
-        .padding(.vertical, 9)
+        .padding(.vertical, EditorialSpacing.sm)
         .background(
             RoundedRectangle(cornerRadius: EditorialSpacing.md, style: .continuous)
                 .fill(AppColor.surface)
@@ -1169,7 +1195,7 @@ private extension MedicationFormView {
 
     @ViewBuilder
     var photoAttachmentRow: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: EditorialSpacing.md) {
             photoPreview
             Spacer(minLength: 8)
             PhotosPicker(selection: $pickedItem, matching: .images) {
@@ -1200,6 +1226,7 @@ private extension MedicationFormView {
 
             if hasPhoto {
                 Button(role: .destructive) {
+                    Haptics.impact(.light)
                     pickedImage = nil
                     removePhoto = true
                 } label: {
@@ -1220,7 +1247,7 @@ private extension MedicationFormView {
                 .accessibilityLabel(NSLocalizedString("Remove Photo", comment: ""))
             }
         }
-        .padding(12)
+        .padding(EditorialSpacing.md)
         .background(
             RoundedRectangle(cornerRadius: EditorialSpacing.md, style: .continuous)
                 .fill(AppColor.surface)

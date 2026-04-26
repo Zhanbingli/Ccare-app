@@ -19,7 +19,7 @@ struct MedicationRuleConfig: Codable, Equatable {
     static let defaults = MedicationRuleConfig(
         duplicateGuardMinutes: 30,
         makeupWindowFraction: 0.5,
-        timingConflictMinutes: 15,
+        timingConflictMinutes: 0,
         snoozeEscalation: [10, 30, 60],
         missEscalationThresholds: [2, 3]
     )
@@ -226,6 +226,7 @@ enum MedicationRules {
                 let configA = MedicationRuleStore.shared.rules(for: a.medID)
                 let configB = MedicationRuleStore.shared.rules(for: b.medID)
                 let threshold = max(configA.timingConflictMinutes, configB.timingConflictMinutes)
+                guard threshold > 0 else { continue }
                 if gap < threshold {
                     conflicts.append(.tooClose(med1: a.medName, med2: b.medName, gapMinutes: gap))
                 }

@@ -13,6 +13,7 @@ struct RootViewV2: View {
     @State private var showAdherenceCalendar = false
     @State private var showInsightsSheet = false
     @State private var showMedicationSheet = false
+    @State private var pendingMeasurementType: MeasurementType = .bloodPressure
     @State private var deepLinkMedicationID: UUID? = nil
 
     var body: some View {
@@ -32,7 +33,10 @@ struct RootViewV2: View {
             AppBackground()
             DashboardView(
                 onOpenCalendar: { showAdherenceCalendar = true },
-                onLogMeasurement: { showLogSheet = true },
+                onLogMeasurement: { type in
+                    pendingMeasurementType = type
+                    showLogSheet = true
+                },
                 onOpenProfile: { showProfileDrawer = true }
             )
         }
@@ -41,13 +45,14 @@ struct RootViewV2: View {
             ProfileDrawerV2(onLogMeasurement: {
                 showProfileDrawer = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    pendingMeasurementType = .bloodPressure
                     showLogSheet = true
                 }
             })
             .environmentObject(store)
         }
         .sheet(isPresented: $showLogSheet) {
-            AddMeasurementView { measurement in
+            AddMeasurementView(initialType: pendingMeasurementType) { measurement in
                 store.addMeasurement(measurement)
                 Haptics.success()
             }

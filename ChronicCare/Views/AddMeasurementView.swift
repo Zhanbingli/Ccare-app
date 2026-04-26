@@ -3,9 +3,10 @@ import UIKit
 
 struct AddMeasurementView: View {
     var onSave: (Measurement) -> Void
+    private let editing: Measurement?
     @Environment(\.dismiss) private var dismiss
 
-    @State private var type: MeasurementType = .bloodPressure
+    @State private var type: MeasurementType
     @State private var systolicInput: String = ""
     @State private var diastolicInput: String = ""
     @State private var valueInput: String = ""
@@ -27,6 +28,31 @@ struct AddMeasurementView: View {
         case note
     }
 
+    init(initialType: MeasurementType = .bloodPressure, editing: Measurement? = nil, onSave: @escaping (Measurement) -> Void) {
+        self.onSave = onSave
+        self.editing = editing
+        let resolvedType = editing?.type ?? initialType
+        _type = State(initialValue: resolvedType)
+        _note = State(initialValue: editing?.note ?? "")
+        _date = State(initialValue: min(editing?.date ?? Date(), Date()))
+        _timeManuallySet = State(initialValue: editing != nil)
+        if let editing {
+            switch editing.type {
+            case .bloodPressure:
+                _systolicInput = State(initialValue: Self.inputString(editing.value, decimals: 0))
+                _diastolicInput = State(initialValue: Self.inputString(editing.diastolic ?? 0, decimals: 0))
+            case .bloodGlucose:
+                let unit = UnitPreferences.glucoseUnit
+                _glucoseUnit = State(initialValue: unit)
+                _valueInput = State(initialValue: Self.inputString(UnitPreferences.mgdlToPreferred(editing.value), decimals: unit == .mgdL ? 0 : 1))
+            case .weight:
+                _valueInput = State(initialValue: Self.inputString(editing.value, decimals: 1))
+            case .heartRate:
+                _valueInput = State(initialValue: Self.inputString(editing.value, decimals: 0))
+            }
+        }
+    }
+
     private var contextSummary: String {
         let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
@@ -45,16 +71,19 @@ struct AddMeasurementView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: EditorialSpacing.lg) {
-                    measurementCard
-                    timeCard
-                    notesCard
+                VStack(alignment: .leading, spacing: EditorialSpacing.xxl) {
+                    measurementSection
+                    timeSection
+                    notesSection
                     validationBanner
                 }
-                .padding(EditorialSpacing.lg)
+                .padding(.horizontal, EditorialSpacing.lg)
+                .padding(.vertical, EditorialSpacing.xl)
             }
             .background(AppColor.background)
-            .navigationTitle("Add Measurement")
+            .navigationTitle(editing == nil
+                             ? NSLocalizedString("Add Measurement", comment: "")
+                             : NSLocalizedString("Edit Measurement", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -73,14 +102,14 @@ struct AddMeasurementView: View {
                     }
                 }
             }
-            .alert(validationIsWarning ? "Warning" : "Error", isPresented: $showValidationAlert) {
+            .alert(validationIsWarning ? NSLocalizedString("Warning", comment: "") : NSLocalizedString("Error", comment: ""), isPresented: $showValidationAlert) {
                 if validationIsWarning {
-                    Button("Save Anyway") {
+                    Button(NSLocalizedString("Save Anyway", comment: "")) {
                         saveWithoutValidation()
                     }
-                    Button("Cancel", role: .cancel) { }
+                    Button(NSLocalizedString("Cancel", comment: ""), role: .cancel) { }
                 } else {
-                    Button("OK", role: .cancel) { }
+                    Button(NSLocalizedString("OK", comment: ""), role: .cancel) { }
                 }
             } message: {
                 if let message = validationMessage {
@@ -108,49 +137,54 @@ struct AddMeasurementView: View {
         }
     }
 
-    private var measurementCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 14) {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+    private var measurementSection: some View {
+        VStack(alignment: .leading, spacing: EditorialSpacing.xl) {
+            EditorialSection(NSLocalizedString("Measurement Type", comment: "")) {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: EditorialSpacing.sm) {
                     ForEach(MeasurementType.allCases) { measurementType in
                         measurementTypeButton(for: measurementType)
                     }
                 }
+            }
 
+            EditorialSection(NSLocalizedString("Reading", comment: "")) {
                 if type == .bloodPressure {
                     bloodPressureEntryLayout
                 } else {
-                    measurementInputCard(
-                        title: NSLocalizedString("Value", comment: ""),
-                        text: $valueInput,
-                        placeholder: suggestedPlaceholder,
-                        unit: displayedUnitLabel,
-                        field: .value,
-                        keyboard: .decimalPad
-                    )
+                    VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+                        measurementInputCard(
+                            title: NSLocalizedString("Value", comment: ""),
+                            text: $valueInput,
+                            placeholder: suggestedPlaceholder,
+                            unit: displayedUnitLabel,
+                            field: .value,
+                            keyboard: .decimalPad
+                        )
 
-                    if type == .bloodGlucose {
-                        Picker(NSLocalizedString("Unit", comment: ""), selection: $glucoseUnit) {
-                            ForEach(GlucoseUnit.allCases) { unit in
-                                Text(unit.rawValue).tag(unit)
+                        if type == .bloodGlucose {
+                            Picker(NSLocalizedString("Unit", comment: ""), selection: $glucoseUnit) {
+                                ForEach(GlucoseUnit.allCases) { unit in
+                                    Text(unit.rawValue).tag(unit)
+                                }
                             }
+                            .pickerStyle(.segmented)
                         }
-                        .pickerStyle(.segmented)
                     }
                 }
             }
         }
     }
 
-    private var timeCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 12) {
+    private var timeSection: some View {
+        EditorialSection(NSLocalizedString("Time", comment: "")) {
+            VStack(alignment: .leading, spacing: EditorialSpacing.md) {
                 Button {
+                    Haptics.impact(.light)
                     withAnimation(.easeInOut(duration: 0.18)) { showTimeEditor.toggle() }
                 } label: {
-                    HStack(alignment: .center, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(NSLocalizedString("Time", comment: ""))
+                    HStack(alignment: .center, spacing: EditorialSpacing.md) {
+                        VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                            Text(NSLocalizedString("Recorded Time", comment: ""))
                                 .appFont(.subheadline)
                                 .fontWeight(.semibold)
                                 .foregroundStyle(AppColor.textPrimary)
@@ -165,13 +199,13 @@ struct AddMeasurementView: View {
                             .frame(width: 32, height: 32)
                             .contentShape(Rectangle())
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, EditorialSpacing.xs)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(EditorialRowButtonStyle())
 
                 if showTimeEditor {
-                    HStack(spacing: 8) {
+                    HStack(spacing: EditorialSpacing.sm) {
                         quickDateButton(title: NSLocalizedString("Now", comment: "")) {
                             date = Date()
                             timeManuallySet = true
@@ -196,14 +230,15 @@ struct AddMeasurementView: View {
         }
     }
 
-    private var notesCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 12) {
+    private var notesSection: some View {
+        EditorialSection(NSLocalizedString("Context", comment: "")) {
+            VStack(alignment: .leading, spacing: EditorialSpacing.md) {
                 Button {
+                    Haptics.impact(.light)
                     withAnimation(.easeInOut(duration: 0.18)) { showContextNotes.toggle() }
                 } label: {
-                    HStack(alignment: .center, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .center, spacing: EditorialSpacing.md) {
+                        VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
                             Text(NSLocalizedString("Context Notes", comment: ""))
                                 .appFont(.subheadline)
                                 .fontWeight(.semibold)
@@ -219,10 +254,10 @@ struct AddMeasurementView: View {
                             .frame(width: 32, height: 32)
                             .contentShape(Rectangle())
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, EditorialSpacing.xs)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(EditorialRowButtonStyle())
 
                 if showContextNotes {
                     TextField(NSLocalizedString("Symptoms, meals, activity...", comment: ""), text: $note, axis: .vertical)
@@ -250,17 +285,22 @@ struct AddMeasurementView: View {
     @ViewBuilder
     private var validationBanner: some View {
         if let message = validationMessage {
-            Card {
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: validationIsWarning ? "exclamationmark.triangle.fill" : "info.circle.fill")
-                        .foregroundStyle(validationIsWarning ? AppColor.warning : AppColor.primary)
-                        .font(.system(size: 16, weight: .regular))
-                    Text(message)
-                        .appFont(.caption)
-                        .foregroundStyle(AppColor.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+            HStack(alignment: .top, spacing: EditorialSpacing.md) {
+                Rectangle()
+                    .fill(validationIsWarning ? AppColor.warning : AppColor.primary)
+                    .frame(width: 2)
+                    .clipShape(Capsule())
+
+                Image(systemName: validationIsWarning ? "exclamationmark.triangle" : "info.circle")
+                    .foregroundStyle(validationIsWarning ? AppColor.warning : AppColor.primary)
+                    .font(.system(size: 14, weight: .regular))
+
+                Text(message)
+                    .appFont(.caption)
+                    .foregroundStyle(AppColor.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .padding(.vertical, EditorialSpacing.sm)
         }
     }
 
@@ -351,12 +391,12 @@ struct AddMeasurementView: View {
 private extension AddMeasurementView {
     var bloodPressureEntryLayout: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: 10) {
+            HStack(spacing: EditorialSpacing.sm) {
                 systolicEntryCard
                 diastolicEntryCard
             }
 
-            VStack(spacing: 10) {
+            VStack(spacing: EditorialSpacing.sm) {
                 systolicEntryCard
                 diastolicEntryCard
             }
@@ -416,10 +456,11 @@ private extension AddMeasurementView {
     func measurementTypeButton(for measurementType: MeasurementType) -> some View {
         let selected = type == measurementType
         Button {
+            Haptics.impact(.light)
             type = measurementType
         } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
+                HStack(spacing: EditorialSpacing.sm) {
                     Image(systemName: selected ? "checkmark.circle" : "circle")
                         .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(selected ? AppColor.primary : AppColor.textTertiary)
@@ -433,15 +474,17 @@ private extension AddMeasurementView {
                     .foregroundStyle(AppColor.textSecondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(AppSpacing.small)
+            .frame(minHeight: 64, alignment: .center)
+            .padding(EditorialSpacing.md)
             .background(
-                RoundedRectangle(cornerRadius: AppRadius.panel, style: .continuous)
+                RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                     .fill(AppColor.surface)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.panel, style: .continuous)
+                RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                     .stroke(selected ? AppColor.primary.opacity(0.55) : AppColor.divider, lineWidth: 1)
             )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -487,7 +530,12 @@ private extension AddMeasurementView {
 
     @ViewBuilder
     func quickDateButton(title: String, action: @escaping () -> Void) -> some View {
-        Button(title, action: action)
+        Button {
+            Haptics.impact(.light)
+            action()
+        } label: {
+            Text(title)
+        }
             .buttonStyle(.bordered)
             .tint(AppColor.primary)
             .controlSize(.small)
@@ -499,11 +547,19 @@ private extension AddMeasurementView {
         }
     }
 
+    static func inputString(_ value: Double, decimals: Int) -> String {
+        if decimals == 0 {
+            return String(format: "%.0f", value)
+        }
+        return String(format: "%.\(decimals)f", value)
+    }
+
     func makeMeasurement() -> Measurement? {
         switch type {
         case .bloodPressure:
             guard let systolic = Double(systolicInput), let dia = Double(diastolicInput) else { return nil }
             return Measurement(
+                id: editing?.id ?? UUID(),
                 type: .bloodPressure,
                 value: systolic,
                 diastolic: dia,
@@ -515,6 +571,7 @@ private extension AddMeasurementView {
             let unitToUse = glucoseUnit
             let mgdl = UnitPreferences.convertToMgdl(input, from: unitToUse)
             return Measurement(
+                id: editing?.id ?? UUID(),
                 type: .bloodGlucose,
                 value: mgdl,
                 diastolic: nil,
@@ -524,6 +581,7 @@ private extension AddMeasurementView {
         default:
             guard let val = Double(valueInput) else { return nil }
             return Measurement(
+                id: editing?.id ?? UUID(),
                 type: type,
                 value: val,
                 diastolic: nil,
