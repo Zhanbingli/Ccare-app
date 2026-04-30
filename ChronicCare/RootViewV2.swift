@@ -13,6 +13,8 @@ struct RootViewV2: View {
     @State private var showAdherenceCalendar = false
     @State private var showInsightsSheet = false
     @State private var showMedicationSheet = false
+    @State private var showVisitSnapshot = false
+    @State private var deepLinkVisitID: UUID? = nil
     @State private var pendingMeasurementType: MeasurementType = .bloodPressure
     @State private var deepLinkMedicationID: UUID? = nil
 
@@ -96,6 +98,21 @@ struct RootViewV2: View {
                                 showMedicationSheet = false
                             }
                         }
+                }
+            }
+        }
+        .sheet(isPresented: $showVisitSnapshot, onDismiss: {
+            deepLinkVisitID = nil
+        }) {
+            NavigationStack {
+                ConsultationSnapshotView(visit: selectedDeepLinkVisit)
+                    .environmentObject(store)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button(NSLocalizedString("Done", comment: "")) {
+                                showVisitSnapshot = false
+                            }
+                        }
                     }
             }
         }
@@ -111,9 +128,22 @@ struct RootViewV2: View {
                 showMedicationSheet = true
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("openVisitSnapshot"))) { notification in
+            if let visitID = notification.object as? UUID {
+                deepLinkVisitID = visitID
+                showProfileDrawer = false
+                showMedicationSheet = false
+                showVisitSnapshot = true
+            }
+        }
         .onOpenURL { url in
             handleDeepLink(url)
         }
+    }
+
+    private var selectedDeepLinkVisit: DoctorVisit? {
+        guard let deepLinkVisitID else { return store.nextDoctorVisit }
+        return store.doctorVisits.first { $0.id == deepLinkVisitID } ?? store.nextDoctorVisit
     }
 
     private func handleDeepLink(_ url: URL) {
@@ -140,6 +170,12 @@ struct RootViewV2: View {
             showAdherenceCalendar = false
             showMedicationSheet = false
             showInsightsSheet = true
+        case "visit", "snapshot":
+            let candidate = pathComponents.first ?? url.lastPathComponent
+            deepLinkVisitID = UUID(uuidString: candidate)
+            showProfileDrawer = false
+            showMedicationSheet = false
+            showVisitSnapshot = true
         default:
             break
         }

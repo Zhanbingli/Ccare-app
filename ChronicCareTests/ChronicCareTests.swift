@@ -190,6 +190,41 @@ struct ChronicCareTests {
         }
     }
 
+    @MainActor
+    @Test func dailySafetyCheckDoesNotWarnForCloseMedicationSchedules() {
+        let first = Medication(
+            name: "Amlodipine",
+            dose: "5mg",
+            timesOfDay: [DateComponents(hour: 8, minute: 0)],
+            remindersEnabled: true
+        )
+        let second = Medication(
+            name: "Metformin",
+            dose: "500mg",
+            timesOfDay: [DateComponents(hour: 8, minute: 15)],
+            remindersEnabled: true
+        )
+        var rule = MedicationRuleConfig.defaults
+        rule.timingConflictMinutes = 60
+        MedicationRuleStore.shared.setOverride(rule, for: first.id)
+        MedicationRuleStore.shared.setOverride(rule, for: second.id)
+        defer {
+            MedicationRuleStore.shared.removeOverride(for: first.id)
+            MedicationRuleStore.shared.removeOverride(for: second.id)
+        }
+
+        let rawConflicts = MedicationRules.checkTimingConflicts(medications: [first, second])
+        let dailySummary = MedicationRules.dailySafetyCheck(
+            medications: [first, second],
+            intakeLogs: [],
+            consecutiveMissedDaysProvider: { _ in 0 }
+        )
+
+        #expect(rawConflicts.isEmpty == false)
+        #expect(dailySummary.timingConflicts.isEmpty)
+        #expect(dailySummary.hasIssues == false)
+    }
+
     @Test func measurementClampsFutureDateToNow() {
         let now = Date()
         let future = now.addingTimeInterval(60 * 60 * 24)

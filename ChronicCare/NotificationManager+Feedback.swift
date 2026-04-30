@@ -14,8 +14,8 @@ extension NotificationManager {
     func sendStreakMilestone(streak: Int, medicationName: String) {
         guard streak > 0 && (streak == 3 || streak == 7 || streak == 14 || streak == 30 || streak % 30 == 0) else { return }
         let content = UNMutableNotificationContent()
-        content.title = "🔥 \(streak) " + NSLocalizedString("day streak", comment: "")
-        content.body = String(format: NSLocalizedString("Great job taking %@ consistently!", comment: ""), medicationName)
+        content.title = NSLocalizedString("Medication routine maintained", comment: "Calm adherence milestone notification title")
+        content.body = String(format: NSLocalizedString("%@ has been logged consistently for %lld days.", comment: "Calm adherence milestone notification body"), medicationName, streak)
         content.sound = .default
         if #available(iOS 15.0, *) { content.interruptionLevel = .passive }
         let id = "streak_\(streak)_\(todayKey())"

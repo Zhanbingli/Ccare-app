@@ -542,7 +542,12 @@ final class NotificationManager {
 
         let content = UNMutableNotificationContent()
         content.title = NSLocalizedString("Snoozed Reminder", comment: "")
-        content.body = NSLocalizedString("Time to take your medication", comment: "")
+        if let timeText = formattedScheduleTime(scheduleTime) {
+            content.subtitle = NSLocalizedString("Snoozed dose", comment: "Notification subtitle for a snoozed dose")
+            content.body = String(format: NSLocalizedString("Original time %@", comment: "Notification body with original scheduled time"), timeText)
+        } else {
+            content.body = NSLocalizedString("Time to take your medication", comment: "")
+        }
         content.sound = .default
         content.categoryIdentifier = Self.categoryId
         var info: [String: Any] = ["medicationID": medicationID.uuidString]
@@ -602,15 +607,14 @@ final class NotificationManager {
     ) -> UNMutableNotificationContent {
         let content = UNMutableNotificationContent()
         content.title = medication.name
-        let urgency: String
+        let subtitle: String
         switch attempt {
-        case 1:  urgency = NSLocalizedString("Haven't taken it yet?",              comment: "follow-up reminder")
-        case 2:  urgency = NSLocalizedString("Reminder: still not taken",          comment: "follow-up reminder")
-        default: urgency = NSLocalizedString("Urgent: please take your medication", comment: "follow-up reminder")
+        case 1:  subtitle = NSLocalizedString("Dose still pending", comment: "follow-up reminder")
+        case 2:  subtitle = NSLocalizedString("Second reminder", comment: "follow-up reminder")
+        default: subtitle = NSLocalizedString("Final reminder", comment: "follow-up reminder")
         }
-        var bodyText = "\(urgency) — \(medication.dose)"
-        if let fi = medication.foodInstruction { bodyText += " · \(fi.shortLabel)" }
-        content.body = bodyText
+        content.subtitle = subtitle
+        content.body = doseReminderBody(for: medication, scheduleTime: scheduleTime)
         content.sound = .default
         content.categoryIdentifier = Self.categoryId
         var info: [String: Any] = ["medicationID": medication.id.uuidString]
@@ -635,20 +639,21 @@ final class NotificationManager {
     ) -> UNMutableNotificationContent {
         let content = UNMutableNotificationContent()
         content.title = medication.name
-        var bodyText: String
+
         if isSnooze {
-            bodyText = String(format: NSLocalizedString("Snoozed: %@", comment: ""), medication.dose)
-        } else if let comps = scheduleTime, let h = comps.hour, let m = comps.minute,
-                  let timeDate = Calendar.current.date(bySettingHour: h, minute: m, second: 0, of: Date()) {
-            let formatter = DateFormatter()
-            formatter.timeStyle = .short
-            let timeStr = formatter.string(from: timeDate)
-            bodyText = String(format: NSLocalizedString("%@ — scheduled for %@", comment: "dose — scheduled for time"), medication.dose, timeStr)
+            content.subtitle = NSLocalizedString("Snoozed dose", comment: "Notification subtitle for a snoozed dose")
+            if let timeText = formattedScheduleTime(scheduleTime) {
+                content.body = "\(doseInstructionText(for: medication)) · \(String(format: NSLocalizedString("original time %@", comment: "Notification body with original scheduled time, lowercase"), timeText))"
+            } else {
+                content.body = doseInstructionText(for: medication)
+            }
+        } else if let timeText = formattedScheduleTime(scheduleTime) {
+            content.subtitle = String(format: NSLocalizedString("Scheduled %@", comment: "Notification subtitle with scheduled time"), timeText)
+            content.body = doseInstructionText(for: medication)
         } else {
-            bodyText = String(format: NSLocalizedString("Dose: %@", comment: ""), medication.dose)
+            content.subtitle = NSLocalizedString("Medication reminder", comment: "Notification subtitle without schedule time")
+            content.body = doseInstructionText(for: medication)
         }
-        if let fi = medication.foodInstruction { content.subtitle = "⚠ \(fi.displayName)" }
-        content.body = bodyText
         content.sound = .default
         content.categoryIdentifier = Self.categoryId
         var info: [String: Any] = ["medicationID": medication.id.uuidString]
@@ -662,6 +667,33 @@ final class NotificationManager {
         if #available(iOS 15.0, *) { content.interruptionLevel = riskLevel == .low ? .active : .timeSensitive }
         if #available(iOS 15.0, *) { content.relevanceScore = baseRelevanceScore(for: riskLevel) }
         return content
+    }
+
+    private func doseInstructionText(for medication: Medication) -> String {
+        var parts = [medication.dose]
+        if let instruction = medication.foodInstruction {
+            parts.append(instruction.shortLabel)
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func doseReminderBody(for medication: Medication, scheduleTime: DateComponents?) -> String {
+        var parts = [doseInstructionText(for: medication)]
+        if let timeText = formattedScheduleTime(scheduleTime) {
+            parts.append(String(format: NSLocalizedString("scheduled %@", comment: "Notification body scheduled time, lowercase"), timeText))
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func formattedScheduleTime(_ scheduleTime: DateComponents?) -> String? {
+        guard let hour = scheduleTime?.hour,
+              let minute = scheduleTime?.minute,
+              let timeDate = Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: Date()) else {
+            return nil
+        }
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: timeDate)
     }
 
     private func baseRelevanceScore(for riskLevel: AdaptiveReminderStrategy.RiskLevel) -> Double {

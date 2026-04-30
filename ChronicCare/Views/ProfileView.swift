@@ -214,7 +214,7 @@ struct ProfileView: View {
                 Section {
                     DisclosureGroup(isExpanded: $showDataSection) {
                         Button { showExportSheet = true } label: {
-                            Label(NSLocalizedString("Export Reports", comment: ""), systemImage: "doc.richtext")
+                            Label(NSLocalizedString("Export Data Files", comment: ""), systemImage: "folder")
                         }
                         Button { exportBackup() } label: {
                             Label(NSLocalizedString("Export Backup", comment: ""), systemImage: "externaldrive.fill")
@@ -337,18 +337,6 @@ struct ProfileView: View {
     }
 
     // MARK: - Actions
-
-    @MainActor
-    private func exportPDF() {
-        do {
-            let url = try PDFGenerator.generateReport(store: store)
-            self.shareURL = url
-            self.showShare = true
-        } catch {
-            errorMessage = String(format: NSLocalizedString("Could not create report: %@", comment: ""), error.localizedDescription)
-            showErrorAlert = true
-        }
-    }
 
     private func refreshNotificationConfiguration() {
         store.syncNotifications()
@@ -526,7 +514,7 @@ struct ProfileView: View {
     }
 
     private var dataSummary: String {
-        NSLocalizedString("Export reports, create backups, or restore this device from a backup.", comment: "")
+        NSLocalizedString("Back up this device or export raw data files for your own records.", comment: "")
     }
 
     @ViewBuilder
@@ -633,11 +621,6 @@ private struct ExportOptionsSheet: View {
 
                 Section {
                     Button {
-                        exportPDF()
-                    } label: {
-                        Label(NSLocalizedString("Export PDF Report", comment: ""), systemImage: "doc.richtext")
-                    }
-                    Button {
                         exportIntakeCSV()
                     } label: {
                         Label(NSLocalizedString("Export Intake Log (CSV)", comment: ""), systemImage: "tablecells")
@@ -657,7 +640,7 @@ private struct ExportOptionsSheet: View {
                     }
                 }
             }
-            .navigationTitle(NSLocalizedString("Export Reports", comment: ""))
+            .navigationTitle(NSLocalizedString("Export Data Files", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -669,20 +652,6 @@ private struct ExportOptionsSheet: View {
                     ShareSheet(activityItems: [url])
                 }
             }
-        }
-    }
-
-    private func exportPDF() {
-        do {
-            let days = useCustomRange
-                ? max(1, Calendar.current.dateComponents([.day], from: customStart, to: customEnd).day ?? 30)
-                : exportDays
-            let url = try PDFGenerator.generateReport(store: store, days: days)
-            shareURL = url
-            showShare = true
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 

@@ -14,6 +14,7 @@ final class DataStore: ObservableObject {
     @Published private(set) var caregivers: [CaregiverContact] = []
     @Published private(set) var symptomEntries: [SymptomEntry] = []
     @Published private(set) var doctorVisits: [DoctorVisit] = []
+    @Published private(set) var reportDataRevision: Int = 0
 
     private var cancellables: Set<AnyCancellable> = []
 
@@ -93,10 +94,15 @@ final class DataStore: ObservableObject {
         } else {
             measurements.append(item)
         }
+        markReportDataChanged()
     }
-    func removeMeasurement(at offsets: IndexSet) { measurements.remove(atOffsets: offsets) }
+    func removeMeasurement(at offsets: IndexSet) {
+        measurements.remove(atOffsets: offsets)
+        markReportDataChanged()
+    }
     func removeMeasurement(_ item: Measurement) {
         measurements.removeAll { $0.id == item.id }
+        markReportDataChanged()
     }
     func updateMeasurement(_ item: Measurement) {
         let updated = item.clampedToNow()
@@ -106,6 +112,7 @@ final class DataStore: ObservableObject {
         } else {
             measurements.append(updated)
         }
+        markReportDataChanged()
     }
 
     /// Returns nil on success, or a validation error message.
@@ -113,6 +120,7 @@ final class DataStore: ObservableObject {
     func addMedication(_ item: Medication) -> String? {
         if let error = validateMedication(item) { return error }
         medications.append(item)
+        markReportDataChanged()
         return nil
     }
     func removeMedication(at offsets: IndexSet) {
@@ -121,6 +129,7 @@ final class DataStore: ObservableObject {
         for id in removedIDs {
             MedicationRuleStore.shared.removeOverride(for: id)
         }
+        markReportDataChanged()
     }
     @discardableResult
     func updateMedication(_ item: Medication) -> String? {
@@ -143,6 +152,7 @@ final class DataStore: ObservableObject {
                 }
             }
             medications[idx] = item
+            markReportDataChanged()
         }
         return nil
     }
@@ -188,6 +198,7 @@ final class DataStore: ObservableObject {
                 recordedAt: recordedAt
             )
         )
+        markReportDataChanged()
 
         // Behavioral feedback — fire after state is committed
         let medName = medications.first(where: { $0.id == medicationID })?.name ?? ""
@@ -344,12 +355,14 @@ final class DataStore: ObservableObject {
         doctorVisits.removeAll()
         saveEmergencyInfo()
         saveDoctorVisits()
+        markReportDataChanged()
     }
 
     // MARK: - Emergency Info
     func updateEmergencyInfo(_ info: EmergencyInfo) {
         emergencyInfo = info
         saveEmergencyInfo()
+        markReportDataChanged()
     }
 
     // MARK: - Caregivers
@@ -369,14 +382,20 @@ final class DataStore: ObservableObject {
         } else {
             symptomEntries.append(entry)
         }
+        markReportDataChanged()
     }
-    func removeSymptomEntry(at offsets: IndexSet) { symptomEntries.remove(atOffsets: offsets) }
+    func removeSymptomEntry(at offsets: IndexSet) {
+        symptomEntries.remove(atOffsets: offsets)
+        markReportDataChanged()
+    }
     func removeSymptomEntry(_ entry: SymptomEntry) {
         symptomEntries.removeAll { $0.id == entry.id }
+        markReportDataChanged()
     }
     func updateSymptomEntry(_ entry: SymptomEntry) {
         if let idx = symptomEntries.firstIndex(where: { $0.id == entry.id }) {
             symptomEntries[idx] = entry
+            markReportDataChanged()
         }
     }
 
@@ -407,6 +426,7 @@ final class DataStore: ObservableObject {
         doctorVisits.append(visit)
         sortDoctorVisits()
         NotificationManager.shared.syncVisitPrepReminders(visits: doctorVisits)
+        markReportDataChanged()
     }
 
     func updateDoctorVisit(_ visit: DoctorVisit) {
@@ -414,6 +434,7 @@ final class DataStore: ObservableObject {
             doctorVisits[idx] = visit
             sortDoctorVisits()
             NotificationManager.shared.syncVisitPrepReminders(visits: doctorVisits)
+            markReportDataChanged()
         }
     }
 
@@ -424,12 +445,14 @@ final class DataStore: ObservableObject {
             NotificationManager.shared.cancelVisitPrepReminder(for: id)
         }
         NotificationManager.shared.syncVisitPrepReminders(visits: doctorVisits)
+        markReportDataChanged()
     }
 
     func removeDoctorVisit(_ visit: DoctorVisit) {
         doctorVisits.removeAll { $0.id == visit.id }
         NotificationManager.shared.cancelVisitPrepReminder(for: visit.id)
         NotificationManager.shared.syncVisitPrepReminders(visits: doctorVisits)
+        markReportDataChanged()
     }
 
     func completeDoctorVisit(_ visit: DoctorVisit, completedDate: Date = Date()) {
@@ -476,6 +499,7 @@ final class DataStore: ObservableObject {
         caregivers = backup.caregivers ?? []
         symptomEntries = (backup.symptomEntries ?? []).sorted(by: { $0.date > $1.date })
         doctorVisits = (backup.doctorVisits ?? []).sorted(by: { $0.scheduledDate < $1.scheduledDate })
+        markReportDataChanged()
     }
 
     // MARK: - Load/Save
@@ -564,6 +588,10 @@ final class DataStore: ObservableObject {
         Task {
             await Self.writer.write(payload, to: url, label: label)
         }
+    }
+
+    private func markReportDataChanged() {
+        reportDataRevision &+= 1
     }
 
     private func inferredScheduledDate(from scheduleTime: DateComponents?, relativeTo date: Date) -> Date? {

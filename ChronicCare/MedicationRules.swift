@@ -268,11 +268,14 @@ enum MedicationRules {
     // MARK: - Daily Safety Summary
 
     struct DailySafetySummary {
+        /// Timing conflicts are intentionally not surfaced in the daily dashboard.
+        /// Many chronic-care regimens require taking multiple medications together;
+        /// low-confidence spacing warnings create noise and reduce trust.
         let timingConflicts: [String]
         let missEscalations: [String]
 
         var hasIssues: Bool {
-            !timingConflicts.isEmpty || !missEscalations.isEmpty
+            !missEscalations.isEmpty
         }
     }
 
@@ -294,16 +297,8 @@ enum MedicationRules {
             }
         }
 
-        let conflicts = checkTimingConflicts(medications: medications)
-        let conflictMessages = conflicts.compactMap { result -> String? in
-            if case .tooClose(let m1, let m2, let gap) = result {
-                return String(format: NSLocalizedString("%@ and %@ are only %lld minutes apart", comment: ""), m1, m2, gap)
-            }
-            return nil
-        }
-
         return DailySafetySummary(
-            timingConflicts: conflictMessages,
+            timingConflicts: [],
             missEscalations: missEscalations
         )
     }

@@ -232,11 +232,9 @@ extension NotificationManager {
             for visit in upcoming.prefix(8) {
                 guard let fireDate = self.visitPrepFireDate(for: visit, now: now) else { continue }
                 let content = UNMutableNotificationContent()
-                content.title = NSLocalizedString("Prepare for your doctor visit", comment: "")
-                content.body = String(
-                    format: NSLocalizedString("%@ is coming up. Review your medication, symptoms, and measurements before the appointment.", comment: ""),
-                    visit.displayTitle
-                )
+                content.title = NSLocalizedString("Visit preparation", comment: "Doctor visit notification title")
+                content.subtitle = visit.displayTitle
+                content.body = NSLocalizedString("Open the doctor snapshot and review medication, symptoms, and measurements.", comment: "Doctor visit notification body")
                 content.sound = .default
                 content.categoryIdentifier = Self.visitPrepCategoryId
                 content.userInfo = ["doctorVisitID": visit.id.uuidString]
