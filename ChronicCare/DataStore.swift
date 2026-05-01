@@ -12,6 +12,9 @@ final class DataStore: ObservableObject {
     @Published private(set) var intakeLogs: [IntakeLog] = []
     @Published private(set) var emergencyInfo: EmergencyInfo?
     @Published private(set) var caregivers: [CaregiverContact] = []
+    @Published private(set) var symptomEntries: [SymptomEntry] = []
+    @Published private(set) var doctorVisits: [DoctorVisit] = []
+    @Published private(set) var reportDataRevision: Int = 0
 
     private var cancellables: Set<AnyCancellable> = []
 
@@ -20,6 +23,8 @@ final class DataStore: ObservableObject {
     private let intakeLogsURL: URL
     private let emergencyInfoURL: URL
     private let caregiversURL: URL
+    private let symptomEntriesURL: URL
+    private let doctorVisitsURL: URL
     private let goalsDefaults = UserDefaults.standard
 
     init() {
@@ -30,6 +35,8 @@ final class DataStore: ObservableObject {
         self.intakeLogsURL = docs.appendingPathComponent("intake_logs.json")
         self.emergencyInfoURL = docs.appendingPathComponent("emergency_info.json")
         self.caregiversURL = docs.appendingPathComponent("caregivers.json")
+        self.symptomEntriesURL = docs.appendingPathComponent("symptom_entries.json")
+        self.doctorVisitsURL = docs.appendingPathComponent("doctor_visits.json")
 
         load()
 
@@ -64,6 +71,18 @@ final class DataStore: ObservableObject {
             .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.saveCaregivers() }
             .store(in: &cancellables)
+
+        $symptomEntries
+            .dropFirst()
+            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+            .sink { [weak self] _ in self?.saveSymptomEntries() }
+            .store(in: &cancellables)
+
+        $doctorVisits
+            .dropFirst()
+            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+            .sink { [weak self] _ in self?.saveDoctorVisits() }
+            .store(in: &cancellables)
     }
 
     // MARK: - Public Mutations
@@ -75,14 +94,33 @@ final class DataStore: ObservableObject {
         } else {
             measurements.append(item)
         }
+        markReportDataChanged()
     }
-    func removeMeasurement(at offsets: IndexSet) { measurements.remove(atOffsets: offsets) }
+    func removeMeasurement(at offsets: IndexSet) {
+        measurements.remove(atOffsets: offsets)
+        markReportDataChanged()
+    }
+    func removeMeasurement(_ item: Measurement) {
+        measurements.removeAll { $0.id == item.id }
+        markReportDataChanged()
+    }
+    func updateMeasurement(_ item: Measurement) {
+        let updated = item.clampedToNow()
+        measurements.removeAll { $0.id == updated.id }
+        if let idx = measurements.firstIndex(where: { updated.date > $0.date }) {
+            measurements.insert(updated, at: idx)
+        } else {
+            measurements.append(updated)
+        }
+        markReportDataChanged()
+    }
 
     /// Returns nil on success, or a validation error message.
     @discardableResult
     func addMedication(_ item: Medication) -> String? {
         if let error = validateMedication(item) { return error }
         medications.append(item)
+        markReportDataChanged()
         return nil
     }
     func removeMedication(at offsets: IndexSet) {
@@ -91,6 +129,7 @@ final class DataStore: ObservableObject {
         for id in removedIDs {
             MedicationRuleStore.shared.removeOverride(for: id)
         }
+        markReportDataChanged()
     }
     @discardableResult
     func updateMedication(_ item: Medication) -> String? {
@@ -113,6 +152,7 @@ final class DataStore: ObservableObject {
                 }
             }
             medications[idx] = item
+            markReportDataChanged()
         }
         return nil
     }
@@ -143,8 +183,12 @@ final class DataStore: ObservableObject {
         let cal = Calendar.current
         let dayStart = cal.startOfDay(for: effectiveDate)
         guard let dayEnd = cal.date(byAdding: .day, value: 1, to: dayStart) else { return }
-        intakeLogs.removeAll { log in
-            log.medicationID == medicationID && log.date >= dayStart && log.date < dayEnd && log.scheduleKey == key
+        let replacedLogs = intakeLogs.filter {
+            isMatchingIntakeLog($0, medicationID: medicationID, dayStart: dayStart, dayEnd: dayEnd, scheduleKey: key)
+        }
+        let hadTakenLog = replacedLogs.contains { $0.status == .taken }
+        intakeLogs.removeAll {
+            isMatchingIntakeLog($0, medicationID: medicationID, dayStart: dayStart, dayEnd: dayEnd, scheduleKey: key)
         }
         let trimmedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         intakeLogs.append(
@@ -158,6 +202,8 @@ final class DataStore: ObservableObject {
                 recordedAt: recordedAt
             )
         )
+        reconcilePillSupplyAfterIntakeChange(medicationID: medicationID, oldHadTakenLog: hadTakenLog, newStatus: status)
+        markReportDataChanged()
 
         // Behavioral feedback — fire after state is committed
         let medName = medications.first(where: { $0.id == medicationID })?.name ?? ""
@@ -175,6 +221,38 @@ final class DataStore: ObservableObject {
                     NotificationManager.shared.sendCaregiverReminder(caregiverID: cg.id, caregiverName: cg.name, medicationName: medName, missedDays: missed)
                 }
             }
+        }
+    }
+
+    func removeIntakeLog(_ log: IntakeLog) {
+        let removedLogs = intakeLogs.filter { $0.id == log.id }
+        guard !removedLogs.isEmpty else { return }
+        intakeLogs.removeAll { $0.id == log.id }
+        if removedLogs.contains(where: { $0.status == .taken }) {
+            restorePills(for: log.medicationID)
+        }
+        markReportDataChanged()
+    }
+
+    private func isMatchingIntakeLog(
+        _ log: IntakeLog,
+        medicationID: UUID,
+        dayStart: Date,
+        dayEnd: Date,
+        scheduleKey: String?
+    ) -> Bool {
+        log.medicationID == medicationID && log.date >= dayStart && log.date < dayEnd && log.scheduleKey == scheduleKey
+    }
+
+    private func reconcilePillSupplyAfterIntakeChange(
+        medicationID: UUID,
+        oldHadTakenLog: Bool,
+        newStatus: IntakeStatus
+    ) {
+        if oldHadTakenLog && newStatus != .taken {
+            restorePills(for: medicationID)
+        } else if !oldHadTakenLog && newStatus == .taken {
+            decrementPills(for: medicationID)
         }
     }
 
@@ -204,7 +282,6 @@ final class DataStore: ObservableObject {
             scheduleKeyOverride: scheduleKeyOverride,
             note: note
         )
-        decrementPills(for: medicationID)
     }
 
     /// Decrement pill supply when a dose is taken
@@ -213,6 +290,14 @@ final class DataStore: ObservableObject {
               let remaining = medications[idx].pillsRemaining else { return }
         let perDose = medications[idx].pillsPerDose ?? 1
         medications[idx].pillsRemaining = max(0, remaining - perDose)
+        NotificationManager.shared.scheduleRefillReminder(for: medications[idx])
+    }
+
+    func restorePills(for medicationID: UUID) {
+        guard let idx = medications.firstIndex(where: { $0.id == medicationID }),
+              let remaining = medications[idx].pillsRemaining else { return }
+        let perDose = medications[idx].pillsPerDose ?? 1
+        medications[idx].pillsRemaining = max(0, remaining + perDose)
         NotificationManager.shared.scheduleRefillReminder(for: medications[idx])
     }
 
@@ -296,6 +381,7 @@ final class DataStore: ObservableObject {
     /// Sync all notification schedules and update the badge in one call.
     func syncNotifications(now: Date = Date()) {
         NotificationManager.shared.syncAll(medications: medications, intakeLogs: intakeLogs, now: now)
+        NotificationManager.shared.syncVisitPrepReminders(visits: doctorVisits, now: now)
         NotificationManager.shared.updateBadge(store: self)
     }
 
@@ -309,13 +395,18 @@ final class DataStore: ObservableObject {
         intakeLogs.removeAll()
         emergencyInfo = nil
         caregivers.removeAll()
+        symptomEntries.removeAll()
+        doctorVisits.removeAll()
         saveEmergencyInfo()
+        saveDoctorVisits()
+        markReportDataChanged()
     }
 
     // MARK: - Emergency Info
     func updateEmergencyInfo(_ info: EmergencyInfo) {
         emergencyInfo = info
         saveEmergencyInfo()
+        markReportDataChanged()
     }
 
     // MARK: - Caregivers
@@ -324,6 +415,105 @@ final class DataStore: ObservableObject {
     func updateCaregiver(_ c: CaregiverContact) {
         if let idx = caregivers.firstIndex(where: { $0.id == c.id }) {
             caregivers[idx] = c
+        }
+    }
+
+    // MARK: - Symptom Entries
+    func addSymptomEntry(_ entry: SymptomEntry) {
+        // Keep sorted by date desc so the consultation view doesn't need to resort.
+        if let idx = symptomEntries.firstIndex(where: { entry.date > $0.date }) {
+            symptomEntries.insert(entry, at: idx)
+        } else {
+            symptomEntries.append(entry)
+        }
+        markReportDataChanged()
+    }
+    func removeSymptomEntry(at offsets: IndexSet) {
+        symptomEntries.remove(atOffsets: offsets)
+        markReportDataChanged()
+    }
+    func removeSymptomEntry(_ entry: SymptomEntry) {
+        symptomEntries.removeAll { $0.id == entry.id }
+        markReportDataChanged()
+    }
+    func updateSymptomEntry(_ entry: SymptomEntry) {
+        if let idx = symptomEntries.firstIndex(where: { $0.id == entry.id }) {
+            symptomEntries[idx] = entry
+            markReportDataChanged()
+        }
+    }
+
+    // MARK: - Doctor Visits
+    var upcomingDoctorVisits: [DoctorVisit] {
+        doctorVisits
+            .filter { $0.isUpcoming() }
+            .sorted { $0.scheduledDate < $1.scheduledDate }
+    }
+
+    var overdueDoctorVisits: [DoctorVisit] {
+        doctorVisits
+            .filter { $0.isOverdue() }
+            .sorted { $0.scheduledDate > $1.scheduledDate }
+    }
+
+    var completedDoctorVisits: [DoctorVisit] {
+        doctorVisits
+            .filter(\.isCompleted)
+            .sorted { ($0.completedDate ?? $0.scheduledDate) > ($1.completedDate ?? $1.scheduledDate) }
+    }
+
+    var nextDoctorVisit: DoctorVisit? {
+        upcomingDoctorVisits.first ?? overdueDoctorVisits.first
+    }
+
+    func addDoctorVisit(_ visit: DoctorVisit) {
+        doctorVisits.append(visit)
+        sortDoctorVisits()
+        NotificationManager.shared.syncVisitPrepReminders(visits: doctorVisits)
+        markReportDataChanged()
+    }
+
+    func updateDoctorVisit(_ visit: DoctorVisit) {
+        if let idx = doctorVisits.firstIndex(where: { $0.id == visit.id }) {
+            doctorVisits[idx] = visit
+            sortDoctorVisits()
+            NotificationManager.shared.syncVisitPrepReminders(visits: doctorVisits)
+            markReportDataChanged()
+        }
+    }
+
+    func removeDoctorVisit(at offsets: IndexSet) {
+        let removedIDs = offsets.map { doctorVisits[$0].id }
+        doctorVisits.remove(atOffsets: offsets)
+        for id in removedIDs {
+            NotificationManager.shared.cancelVisitPrepReminder(for: id)
+        }
+        NotificationManager.shared.syncVisitPrepReminders(visits: doctorVisits)
+        markReportDataChanged()
+    }
+
+    func removeDoctorVisit(_ visit: DoctorVisit) {
+        doctorVisits.removeAll { $0.id == visit.id }
+        NotificationManager.shared.cancelVisitPrepReminder(for: visit.id)
+        NotificationManager.shared.syncVisitPrepReminders(visits: doctorVisits)
+        markReportDataChanged()
+    }
+
+    func completeDoctorVisit(_ visit: DoctorVisit, completedDate: Date = Date()) {
+        var updated = visit
+        updated.completedDate = completedDate
+        updateDoctorVisit(updated)
+    }
+
+    func hasDoctorVisit(on date: Date, calendar: Calendar = .current) -> Bool {
+        let day = calendar.startOfDay(for: date)
+        return doctorVisits.contains { calendar.startOfDay(for: $0.scheduledDate) == day }
+    }
+
+    private func sortDoctorVisits() {
+        doctorVisits.sort { lhs, rhs in
+            if lhs.isCompleted != rhs.isCompleted { return !lhs.isCompleted }
+            return lhs.scheduledDate < rhs.scheduledDate
         }
     }
 
@@ -351,6 +541,9 @@ final class DataStore: ObservableObject {
         emergencyInfo = backup.emergencyInfo
         saveEmergencyInfo()
         caregivers = backup.caregivers ?? []
+        symptomEntries = (backup.symptomEntries ?? []).sorted(by: { $0.date > $1.date })
+        doctorVisits = (backup.doctorVisits ?? []).sorted(by: { $0.scheduledDate < $1.scheduledDate })
+        markReportDataChanged()
     }
 
     // MARK: - Load/Save
@@ -363,6 +556,8 @@ final class DataStore: ObservableObject {
             self.emergencyInfo = try JSONDecoder().decode(EmergencyInfo.self, from: data)
         } catch { /* first launch or no data */ }
         self.caregivers = loadResilient(from: caregiversURL, label: "caregivers")
+        self.symptomEntries = loadResilient(from: symptomEntriesURL, label: "symptom entries").sorted(by: { $0.date > $1.date })
+        self.doctorVisits = loadResilient(from: doctorVisitsURL, label: "doctor visits").sorted(by: { $0.scheduledDate < $1.scheduledDate })
         updateWidgetData()
     }
 
@@ -414,6 +609,16 @@ final class DataStore: ObservableObject {
         persist(snapshot, to: caregiversURL, label: "caregivers")
     }
 
+    private func saveSymptomEntries() {
+        let snapshot = symptomEntries
+        persist(snapshot, to: symptomEntriesURL, label: "symptom entries")
+    }
+
+    private func saveDoctorVisits() {
+        let snapshot = doctorVisits
+        persist(snapshot, to: doctorVisitsURL, label: "doctor visits")
+    }
+
     private func saveIntakeLogs() {
         let snapshot = intakeLogs
         persist(snapshot, to: intakeLogsURL, label: "intake logs")
@@ -427,6 +632,10 @@ final class DataStore: ObservableObject {
         Task {
             await Self.writer.write(payload, to: url, label: label)
         }
+    }
+
+    private func markReportDataChanged() {
+        reportDataRevision &+= 1
     }
 
     private func inferredScheduledDate(from scheduleTime: DateComponents?, relativeTo date: Date) -> Date? {

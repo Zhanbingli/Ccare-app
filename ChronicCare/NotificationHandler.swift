@@ -5,6 +5,14 @@ import UserNotifications
     weak var store: DataStore?
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        if let visitIDString = response.notification.request.content.userInfo["doctorVisitID"] as? String,
+           let visitID = UUID(uuidString: visitIDString) {
+            await MainActor.run {
+                NotificationCenter.default.post(name: Notification.Name("openVisitSnapshot"), object: visitID)
+            }
+            return
+        }
+
         guard let idStr = response.notification.request.content.userInfo["medicationID"] as? String,
               let medID = UUID(uuidString: idStr) else { return }
         let actionTimestamp = Date()
@@ -38,16 +46,16 @@ import UserNotifications
             return cal.date(from: components) ?? fallback
         }
 
-        // Cancel follow-up reminders whenever user acts on a notification
-        if let comps = scheduleComps {
-            NotificationManager.shared.cancelFollowUps(for: medID, timeComponents: comps, scheduledDate: scheduledDate)
-        }
-
         // Ignore actions for medications that have been deleted
         let medExists = await MainActor.run { store?.medications.contains(where: { $0.id == medID }) ?? false }
         guard medExists else { return }
 
         switch response.actionIdentifier {
+        case UNNotificationDefaultActionIdentifier:
+            await MainActor.run {
+                NotificationCenter.default.post(name: Notification.Name("openMedicationDetail"), object: medID)
+            }
+            if let store = store { await MainActor.run { store.syncNotifications() } }
         case NotificationManager.actionTaken:
             if let comps = scheduleComps {
                 let logAt = logDate(from: comps)
@@ -102,6 +110,9 @@ import UserNotifications
             let snoozeResult = await MainActor.run { MedicationRules.nextSnooze(for: medID, currentSnoozeCount: count) }
             switch snoozeResult {
             case .snooze(let minutes):
+                if let comps = scheduleComps {
+                    NotificationManager.shared.cancelFollowUps(for: medID, timeComponents: comps, scheduledDate: scheduledDate)
+                }
                 NotificationManager.shared.incrementSnoozeCount(for: medID, scheduleTime: scheduleComps)
                 if let med = store?.medications.first(where: { $0.id == medID }) {
                     NotificationManager.shared.scheduleSnooze(for: med, minutes: minutes, scheduleTime: scheduleComps, scheduledDate: scheduledDate)

@@ -1,0 +1,792 @@
+import SwiftUI
+import Charts
+
+/// Consultation Snapshot — a doctor-first view of the patient-side data
+/// that the hospital's information system doesn't have.
+///
+/// Design goal: a doctor should be able to scan this in ≤10 seconds and
+/// form the same baseline understanding as from 5 minutes of questioning.
+/// Priority: real medication list (all sources) → adherence gaps → home
+/// measurements trend → symptom timeline between visits.
+struct ConsultationSnapshotView: View {
+    @EnvironmentObject var store: DataStore
+    var visit: DoctorVisit? = nil
+
+    @State private var showEmergencyEdit = false
+    @State private var showSymptomEditor: SymptomEntry?
+    @State private var showNewSymptom = false
+    @State private var showMeasurementManager = false
+    @State private var cachedSummary: DoctorReportSummary?
+    @State private var pdfShareURL: URL?
+    @State private var showPDFShare = false
+    @State private var isGeneratingPDF = false
+    @State private var pdfErrorMessage: String?
+    @State private var showPDFError = false
+
+    private let daysWindow: Int = 30
+
+    private var snapshotVisit: DoctorVisit? {
+        visit ?? store.nextDoctorVisit
+    }
+
+    private var doctorSummary: DoctorReportSummary {
+        DoctorReportSummaryBuilder.build(store: store, days: daysWindow, visit: snapshotVisit)
+    }
+
+    var body: some View {
+        let summary = cachedSummary ?? doctorSummary
+
+        ScrollView {
+            VStack(alignment: .leading, spacing: EditorialSpacing.xl) {
+                header
+                visitPrepSection(summary: summary)
+                allergiesWarning(summary: summary)
+                medicationsSection(summary: summary)
+                adherenceSection(summary: summary)
+                measurementsSection(summary: summary)
+                symptomsSection
+                emergencyFooter
+                exportSection(summary: summary)
+            }
+            .padding(.horizontal, EditorialSpacing.lg)
+            .padding(.vertical, EditorialSpacing.lg)
+        }
+        .background(AppColor.background)
+        .navigationTitle(NSLocalizedString("Consultation Snapshot", comment: ""))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        showNewSymptom = true
+                    } label: {
+                        Label(NSLocalizedString("Log Symptom", comment: ""), systemImage: "heart.text.square")
+                    }
+                    Button {
+                        showEmergencyEdit = true
+                    } label: {
+                        Label(NSLocalizedString("Edit Emergency Info", comment: ""), systemImage: "cross.case")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
+        .sheet(isPresented: $showEmergencyEdit) {
+            NavigationStack { EmergencyInfoEditView().environmentObject(store) }
+        }
+        .sheet(isPresented: $showNewSymptom) {
+            SymptomQuickLogSheet().environmentObject(store)
+        }
+        .sheet(isPresented: $showMeasurementManager) {
+            NavigationStack {
+                MeasurementsManagementView()
+                    .environmentObject(store)
+            }
+        }
+        .sheet(item: $showSymptomEditor) { entry in
+            SymptomQuickLogSheet(editing: entry).environmentObject(store)
+        }
+        .sheet(isPresented: $showPDFShare) {
+            if let pdfShareURL {
+                ShareSheet(activityItems: [pdfShareURL])
+            }
+        }
+        .alert(NSLocalizedString("Could not create report", comment: ""), isPresented: $showPDFError) {
+            Button(NSLocalizedString("OK", comment: ""), role: .cancel) {}
+        } message: {
+            if let pdfErrorMessage {
+                Text(pdfErrorMessage)
+            }
+        }
+        .onAppear {
+            refreshSummary()
+        }
+        .onChange(of: store.reportDataRevision) { _ in
+            refreshSummary()
+        }
+        .onChange(of: snapshotVisit?.id) { _ in
+            refreshSummary()
+        }
+    }
+
+    @ViewBuilder
+    private func visitPrepSection(summary: DoctorReportSummary) -> some View {
+        if let visit = summary.visit {
+            VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+                HStack(alignment: .firstTextBaseline) {
+                    sectionLabel(NSLocalizedString("Prepared For", comment: ""))
+                    Spacer()
+                    Text(visit.scheduledDate, format: .dateTime.year().month().day())
+                        .appFontNumeric(.caption)
+                        .foregroundStyle(AppColor.textSecondary)
+                }
+
+                AppDivider()
+
+                VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                    Text(visit.displayTitle)
+                        .appFont(.body)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(AppColor.textPrimary)
+                    if let reason = visit.reason, !reason.isEmpty {
+                        Text(reason)
+                            .appFont(.caption)
+                            .foregroundStyle(AppColor.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text(preVisitReadinessText(for: visit))
+                        .appFont(.caption)
+                        .foregroundStyle(AppColor.textSecondary)
+                }
+
+                VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
+                    ForEach(summary.talkingPoints, id: \.self) { point in
+                        HStack(alignment: .top, spacing: EditorialSpacing.sm) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 12, weight: .regular))
+                                .foregroundStyle(AppColor.primary)
+                                .padding(.top, 2)
+                            Text(point)
+                                .appFont(.caption)
+                                .foregroundStyle(AppColor.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(NSLocalizedString("Visit summary", comment: "Consultation snapshot editorial title"))
+                    .appFont(.displayTitle)
+                    .foregroundStyle(AppColor.textPrimary)
+                Spacer()
+                Text(Date(), format: .dateTime.year().month().day())
+                    .appFontNumeric(.caption)
+                    .foregroundStyle(AppColor.textSecondary)
+            }
+
+            Text(NSLocalizedString("Patient-reported · not a medical record", comment: ""))
+                    .appFont(.caption)
+                    .foregroundStyle(AppColor.textSecondary)
+
+            AppDivider()
+        }
+    }
+
+    @ViewBuilder
+    private func allergiesWarning(summary: DoctorReportSummary) -> some View {
+        if let allergies = summary.allergies {
+            VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+                HStack(alignment: .firstTextBaseline, spacing: EditorialSpacing.sm) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundStyle(AppColor.warning)
+                        .font(.system(size: 14, weight: .regular))
+                    Text(String(format: NSLocalizedString("Allergy · %@", comment: "Visit summary allergy line"), allergies))
+                        .appFont(.body)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(AppColor.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                }
+                AppDivider()
+            }
+        }
+    }
+
+    // MARK: - Medications
+
+    private func groupedSummaryMedications(summary: DoctorReportSummary) -> [(MedicationSource, [DoctorReportSummary.MedicationLine])] {
+        let order: [MedicationSource] = [.prescribed, .external, .otc, .supplement, .unknown]
+        let groups = Dictionary(grouping: summary.medications) { $0.source }
+        return order.compactMap { src in
+            guard let meds = groups[src], !meds.isEmpty else { return nil }
+            return (src, meds)
+        }
+    }
+
+    private func medicationsSection(summary: DoctorReportSummary) -> some View {
+        VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(NSLocalizedString("Current medications", comment: "Visit summary medications header"))
+                    .appFont(.headline)
+                    .foregroundStyle(AppColor.textPrimary)
+                Spacer()
+                Text(String(format: NSLocalizedString("%lld items", comment: "Visit summary medication count"), summary.medications.count))
+                    .appFontNumeric(.caption)
+                    .foregroundStyle(AppColor.textSecondary)
+            }
+
+            AppDivider()
+
+            if summary.medications.isEmpty {
+                Text(NSLocalizedString("No medications recorded.", comment: ""))
+                    .appFont(.caption)
+                    .foregroundStyle(AppColor.textSecondary)
+            } else {
+                ForEach(groupedSummaryMedications(summary: summary), id: \.0) { (source, meds) in
+                    VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
+                        Text(editorialSourceTitle(source))
+                            .appFont(.micro)
+                            .textCase(.uppercase)
+                            .tracking(0.7)
+                            .foregroundStyle(AppColor.textSecondary)
+                        ForEach(Array(meds.enumerated()), id: \.element.id) { index, med in
+                            medicationRow(med)
+                            if index < meds.count - 1 {
+                                AppDivider()
+                            }
+                        }
+                    }
+                    .padding(.top, EditorialSpacing.xs)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func medicationRow(_ med: DoctorReportSummary.MedicationLine) -> some View {
+        VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("\(med.name) \(med.dose)")
+                    .appFont(.body)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(AppColor.textPrimary)
+                Spacer()
+                Text(med.schedule)
+                    .appFont(.caption)
+                    .foregroundStyle(AppColor.textSecondary)
+            }
+
+            if let caption = med.caption {
+                Text(caption)
+                    .appFont(.caption)
+                    .foregroundStyle(AppColor.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, EditorialSpacing.xs)
+    }
+
+    // MARK: - Adherence
+
+    private func adherenceSection(summary: DoctorReportSummary) -> some View {
+        let gaps = summary.adherenceGaps
+        let totalMissed = gaps.reduce(0) { $0 + $1.missedDays.count }
+        let scheduledMeds = store.medications.filter { $0.isAsNeeded != true && !$0.timesOfDay.isEmpty }
+        return VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+            HStack {
+                Text(String(format: NSLocalizedString("Adherence · last %lld days", comment: ""), daysWindow))
+                    .appFont(.headline)
+                    .foregroundStyle(AppColor.textPrimary)
+                Spacer()
+                if !scheduledMeds.isEmpty {
+                    Text(String(format: "%.0f%%", store.adherencePercent(days: daysWindow) * 100))
+                        .appFontNumeric(.headline)
+                        .fontWeight(.bold)
+                        .foregroundStyle(totalMissed == 0 ? AppColor.success : AppColor.textPrimary)
+                }
+            }
+
+            AppDivider()
+
+            if scheduledMeds.isEmpty {
+                Text(NSLocalizedString("No scheduled medications.", comment: ""))
+                    .appFont(.caption)
+                    .foregroundStyle(AppColor.textSecondary)
+            } else if totalMissed == 0 {
+                Text(NSLocalizedString("No missed doses.", comment: ""))
+                    .appFont(.caption)
+                    .foregroundStyle(AppColor.textSecondary)
+            } else {
+                ForEach(gaps) { gap in
+                    VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(gap.medicationName)
+                                .appFont(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(AppColor.textPrimary)
+                            Spacer()
+                            Text(String(format: NSLocalizedString("%lld missed", comment: ""), gap.missedDays.count))
+                                .appFontNumeric(.caption)
+                                .foregroundStyle(AppColor.warning)
+                        }
+                        Text(gap.missedDays.prefix(8).map { dateShort($0) }.joined(separator: ", "))
+                            .appFontNumeric(.footnote)
+                            .foregroundStyle(AppColor.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.vertical, EditorialSpacing.xs)
+                }
+            }
+        }
+    }
+
+    // MARK: - Home Measurements
+
+    private func measurementsSection(summary: DoctorReportSummary) -> some View {
+        VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(String(format: NSLocalizedString("Home measurements · last %lld days", comment: ""), daysWindow))
+                    .appFont(.headline)
+                    .foregroundStyle(AppColor.textPrimary)
+                Spacer()
+                if !store.measurements.isEmpty {
+                    Button {
+                        Haptics.impact(.light)
+                        showMeasurementManager = true
+                    } label: {
+                        Text(NSLocalizedString("Manage", comment: ""))
+                            .appFont(.caption)
+                            .foregroundStyle(AppColor.primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            AppDivider()
+
+            let highlights = summary.measurements
+            if highlights.isEmpty {
+                Text(NSLocalizedString("No measurements recorded in the window.", comment: ""))
+                    .appFont(.caption)
+                    .foregroundStyle(AppColor.textSecondary)
+            } else {
+                ForEach(Array(highlights.enumerated()), id: \.element.id) { index, highlight in
+                    measurementRow(highlight)
+                    if index < highlights.count - 1 {
+                        AppDivider()
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func measurementRow(_ highlight: DoctorReportSummary.MeasurementHighlight) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(highlight.type.displayName)
+                    .appFont(.body)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(AppColor.textPrimary)
+
+                Text(highlight.latestValue)
+                    .appFontNumeric(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundStyle(AppColor.textPrimary)
+
+                if highlight.outOfRangeCount > 0 {
+                    Text(String(format: NSLocalizedString("Latest %@ · %lld entries · %lld out-of-range", comment: "Visit summary measurement warning caption"), dateShort(highlight.latestDate), highlight.entryCount, highlight.outOfRangeCount))
+                        .appFontNumeric(.caption)
+                        .foregroundStyle(AppColor.warning)
+                } else {
+                    Text(String(format: NSLocalizedString("Latest %@ · %lld entries · within range", comment: "Visit summary measurement normal caption"), dateShort(highlight.latestDate), highlight.entryCount))
+                        .appFontNumeric(.caption)
+                        .foregroundStyle(AppColor.textSecondary)
+                }
+            }
+            Spacer()
+            if !highlight.series.isEmpty {
+                sparkline(series: highlight.series, type: highlight.type)
+                    .frame(width: 100, height: 34)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    @ViewBuilder
+    private func sparkline(series: [Measurement], type: MeasurementType) -> some View {
+        Chart(series) { m in
+            LineMark(
+                x: .value("d", m.date),
+                y: .value("v", primaryValue(m))
+            )
+            .foregroundStyle(AppColor.primary.opacity(0.72))
+            .interpolationMethod(.monotone)
+        }
+        .chartXAxis(.hidden)
+        .chartYAxis(.hidden)
+        .chartPlotStyle { plot in
+            plot.background(Color.clear)
+        }
+    }
+
+    private func primaryValue(_ m: Measurement) -> Double {
+        m.value
+    }
+
+    // MARK: - Symptoms
+
+    private var recentSymptoms: [SymptomEntry] {
+        let cal = Calendar.current
+        guard let cutoff = cal.date(byAdding: .day, value: -daysWindow, to: Date()) else { return [] }
+        return store.symptomEntries
+            .filter { $0.date >= cutoff }
+            .sorted(by: { $0.date > $1.date })
+    }
+
+    private var symptomsSection: some View {
+        VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+            HStack {
+                Text(String(format: NSLocalizedString("Symptoms · last %lld days", comment: ""), daysWindow))
+                    .appFont(.headline)
+                    .foregroundStyle(AppColor.textPrimary)
+                Spacer()
+                Button {
+                    showNewSymptom = true
+                } label: {
+                    Label(NSLocalizedString("Add", comment: ""), systemImage: "plus")
+                        .appFont(.caption)
+                        .foregroundStyle(AppColor.primary)
+                }
+            }
+
+            AppDivider()
+
+            if recentSymptoms.isEmpty {
+                Text(NSLocalizedString("No symptoms logged. Tap Add when you feel unwell.", comment: ""))
+                    .appFont(.caption)
+                    .foregroundStyle(AppColor.textSecondary)
+            } else {
+                ForEach(Array(recentSymptoms.enumerated()), id: \.element.id) { index, entry in
+                    Button {
+                        showSymptomEditor = entry
+                    } label: {
+                        symptomRow(entry)
+                    }
+                    .buttonStyle(.plain)
+                    if index < recentSymptoms.count - 1 {
+                        AppDivider()
+                    }
+                }
+            }
+        }
+    }
+
+    private func symptomRow(_ entry: SymptomEntry) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(dateShort(entry.date))
+                    .appFontNumeric(.footnote)
+                    .foregroundStyle(AppColor.textSecondary)
+                Text(entry.severity.displayName)
+                    .appFont(.footnote)
+                    .foregroundStyle(severityColor(entry.severity))
+            }
+            .frame(width: 54, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(entry.tags.joined(separator: "、"))
+                    .appFont(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(AppColor.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let note = entry.note, !note.isEmpty {
+                    Text(note)
+                        .appFont(.footnote)
+                        .foregroundStyle(AppColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let ids = entry.relatedMedicationIDs, !ids.isEmpty {
+                    let names = store.medications.filter { ids.contains($0.id) }.map(\.name)
+                    if !names.isEmpty {
+                        Text(String(format: NSLocalizedString("suspected: %@", comment: ""),
+                                    names.joined(separator: ", ")))
+                            .appFont(.footnote)
+                            .foregroundStyle(AppColor.textSecondary)
+                            .italic()
+                    }
+                }
+            }
+            Spacer()
+        }
+        .padding(.vertical, 3)
+    }
+
+    private func severityColor(_ s: SymptomSeverity) -> Color {
+        switch s {
+        case .mild: return AppColor.textSecondary
+        case .moderate: return AppColor.textPrimary
+        case .severe: return AppColor.warning
+        }
+    }
+
+    // MARK: - Emergency footer
+
+    @ViewBuilder
+    private var emergencyFooter: some View {
+        let info = store.emergencyInfo
+        let contact = info?.emergencyContacts.first
+        VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+            Text(NSLocalizedString("Emergency Info", comment: ""))
+                .appFont(.headline)
+                .foregroundStyle(AppColor.textPrimary)
+
+            AppDivider()
+
+            Group {
+                if let bt = info?.bloodType, !bt.isEmpty {
+                    emergencyLine(NSLocalizedString("Blood type", comment: ""), bt)
+                }
+                if let cond = info?.medicalConditions, !cond.isEmpty {
+                    emergencyLine(NSLocalizedString("Conditions", comment: ""), cond)
+                }
+                if let contact {
+                    emergencyLine(NSLocalizedString("Contact", comment: ""),
+                                  "\(contact.name) · \(contact.phone)")
+                }
+                if info == nil || ((info?.bloodType?.isEmpty ?? true)
+                                    && (info?.medicalConditions?.isEmpty ?? true)
+                                    && (info?.emergencyContacts.isEmpty ?? true)) {
+                    Text(NSLocalizedString("Not set. Use the menu to edit.", comment: ""))
+                        .appFont(.caption)
+                        .foregroundStyle(AppColor.textSecondary)
+                }
+            }
+        }
+    }
+
+    private func emergencyLine(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(label)
+                .appFont(.footnote)
+                .foregroundStyle(AppColor.textSecondary)
+                .frame(width: 72, alignment: .leading)
+            Text(value)
+                .appFont(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(AppColor.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer()
+        }
+    }
+
+    // MARK: - Export
+
+    private func exportSection(summary: DoctorReportSummary) -> some View {
+        VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+            AppDivider()
+
+            Text(NSLocalizedString("Give this to your doctor", comment: "Consultation snapshot export section"))
+                .appFont(.headline)
+                .foregroundStyle(AppColor.textPrimary)
+
+            Text(NSLocalizedString("Export a clean PDF when the doctor needs a focused summary with supporting details.", comment: "Consultation snapshot export helper"))
+                .appFont(.caption)
+                .foregroundStyle(AppColor.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            EditorialButton(
+                isGeneratingPDF
+                ? NSLocalizedString("Generating PDF…", comment: "Health report preview loading action")
+                : NSLocalizedString("Export doctor PDF", comment: "Consultation snapshot PDF export action"),
+                systemImage: isGeneratingPDF ? "hourglass" : "doc.richtext",
+                kind: .primary
+            ) {
+                exportPDFReport()
+            }
+            .disabled(isGeneratingPDF)
+        }
+        .padding(.top, EditorialSpacing.sm)
+    }
+
+    // MARK: - Helpers
+
+    private func sectionLabel(_ text: String, count: Int? = nil) -> some View {
+        HStack(spacing: 6) {
+            Text(text.uppercased())
+                .appFont(.micro)
+                .foregroundStyle(AppColor.textPrimary)
+                .tracking(0.7)
+            if let count, count > 0 {
+                Text("\(count)")
+                    .appFontNumeric(.caption)
+                    .foregroundStyle(AppColor.textSecondary)
+            }
+        }
+    }
+
+    private func editorialSourceTitle(_ source: MedicationSource) -> String {
+        switch source {
+        case .prescribed:
+            return NSLocalizedString("Hospital prescription", comment: "Visit summary medication source")
+        case .external:
+            return NSLocalizedString("External prescription", comment: "Visit summary medication source")
+        case .otc:
+            return NSLocalizedString("OTC", comment: "Visit summary medication source")
+        case .supplement:
+            return NSLocalizedString("Supplement", comment: "Visit summary medication source")
+        case .unknown:
+            return NSLocalizedString("Unspecified", comment: "Visit summary medication source")
+        }
+    }
+
+    private static let shortDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.setLocalizedDateFormatFromTemplate("Md")
+        return formatter
+    }()
+
+    private func dateShort(_ date: Date) -> String {
+        Self.shortDateFormatter.string(from: date)
+    }
+
+    private func preVisitReadinessText(for visit: DoctorVisit) -> String {
+        guard let days = visit.daysUntil() else {
+            return NSLocalizedString("Completed visit. Keep notes here for the next follow-up.", comment: "")
+        }
+        if days == 0 {
+            return NSLocalizedString("Use this during the appointment to answer common doctor questions quickly.", comment: "")
+        }
+        if days > 0 {
+            return String(format: NSLocalizedString("Your appointment is in %lld days. Keep logging anything the doctor should know.", comment: ""), days)
+        }
+        return NSLocalizedString("This appointment is overdue. Update it after the visit or schedule the next one.", comment: "")
+    }
+
+    private func refreshSummary() {
+        cachedSummary = DoctorReportSummaryBuilder.build(store: store, days: daysWindow, visit: snapshotVisit)
+    }
+
+    @MainActor
+    private func exportPDFReport() {
+        guard !isGeneratingPDF else { return }
+        isGeneratingPDF = true
+        Task {
+            do {
+                pdfShareURL = try await PDFGenerator.generateReportOffMain(store: store, days: daysWindow)
+                showPDFShare = true
+                Haptics.success()
+            } catch {
+                pdfErrorMessage = error.localizedDescription
+                showPDFError = true
+            }
+            isGeneratingPDF = false
+        }
+    }
+}
+
+private struct MeasurementsManagementView: View {
+    @EnvironmentObject var store: DataStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var editingMeasurement: Measurement?
+
+    private var sortedMeasurements: [Measurement] {
+        store.measurements.sorted { $0.date > $1.date }
+    }
+
+    var body: some View {
+        Group {
+            if sortedMeasurements.isEmpty {
+                VStack(spacing: EditorialSpacing.md) {
+                    Image(systemName: "waveform.path.ecg")
+                        .font(.system(size: 28, weight: .regular))
+                        .foregroundStyle(AppColor.textTertiary)
+                    Text(NSLocalizedString("No measurements recorded.", comment: ""))
+                        .appFont(.body)
+                        .foregroundStyle(AppColor.textPrimary)
+                    Text(NSLocalizedString("New blood pressure and glucose readings will appear here.", comment: ""))
+                        .appFont(.caption)
+                        .foregroundStyle(AppColor.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(EditorialSpacing.xl)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(AppColor.background)
+            } else {
+                List {
+                    ForEach(sortedMeasurements) { measurement in
+                        Button {
+                            Haptics.impact(.light)
+                            editingMeasurement = measurement
+                        } label: {
+                            measurementRow(measurement)
+                        }
+                        .buttonStyle(EditorialRowButtonStyle())
+                    }
+                    .onDelete(perform: deleteMeasurements)
+                }
+                .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
+                .background(AppColor.background)
+            }
+        }
+        .sheet(item: $editingMeasurement) { measurement in
+            AddMeasurementView(editing: measurement) { updated in
+                store.updateMeasurement(updated)
+            }
+            .environmentObject(store)
+        }
+        .navigationTitle(NSLocalizedString("Manage Measurements", comment: ""))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if !sortedMeasurements.isEmpty {
+                ToolbarItem(placement: .topBarLeading) {
+                    EditButton()
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(NSLocalizedString("Done", comment: "")) { dismiss() }
+            }
+        }
+    }
+
+    private func measurementRow(_ measurement: Measurement) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: EditorialSpacing.md) {
+            VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                Text(measurement.type.displayName)
+                    .appFont(.body)
+                    .foregroundStyle(AppColor.textPrimary)
+                Text(Self.dateFormatter.string(from: measurement.date))
+                    .appFont(.caption)
+                    .foregroundStyle(AppColor.textSecondary)
+            }
+
+            Spacer()
+
+            Text(formattedValue(measurement))
+                .appFontNumeric(.body)
+                .fontWeight(.semibold)
+                .foregroundStyle(AppColor.textPrimary)
+                .multilineTextAlignment(.trailing)
+        }
+        .padding(.vertical, EditorialSpacing.xs)
+    }
+
+    private func deleteMeasurements(at offsets: IndexSet) {
+        let items = offsets.map { sortedMeasurements[$0] }
+        items.forEach(store.removeMeasurement)
+        Haptics.success()
+    }
+
+    private func formattedValue(_ measurement: Measurement) -> String {
+        if measurement.type == .bloodPressure, let diastolic = measurement.diastolic {
+            return "\(Int(measurement.value))/\(Int(diastolic)) \(measurement.type.unit)"
+        }
+        if measurement.type == .bloodGlucose {
+            let value = UnitPreferences.mgdlToPreferred(measurement.value)
+            let formatted = UnitPreferences.glucoseUnit == .mgdL
+                ? String(format: "%.0f", value)
+                : String(format: "%.1f", value)
+            return "\(formatted) \(UnitPreferences.glucoseUnit.rawValue)"
+        }
+        if measurement.type == .heartRate {
+            return "\(Int(measurement.value)) \(measurement.type.unit)"
+        }
+        return "\(String(format: "%.1f", measurement.value)) \(measurement.type.unit)"
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
+}

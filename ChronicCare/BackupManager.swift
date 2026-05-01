@@ -8,6 +8,8 @@ struct AppBackup: Codable {
     let intakeLogs: [IntakeLog]
     var emergencyInfo: EmergencyInfo?
     var caregivers: [CaregiverContact]?
+    var symptomEntries: [SymptomEntry]?
+    var doctorVisits: [DoctorVisit]?
     var medicationImagesByPath: [String: Data]?
 }
 
@@ -46,15 +48,17 @@ enum BackupManager {
             intakeLogs: store.intakeLogs,
             emergencyInfo: store.emergencyInfo,
             caregivers: store.caregivers,
+            symptomEntries: store.symptomEntries,
+            doctorVisits: store.doctorVisits,
             medicationImagesByPath: medicationImagesByPath.isEmpty ? nil : medicationImagesByPath
         )
         let data = try JSONEncoder().encode(backup)
-        let url = prepareExportURL(prefix: "ChronicCare_Backup", ext: "json")
+        let url = prepareExportURL(prefix: "Ccare_Backup", ext: "json")
         try writeProtectedData(data, to: url)
         return url
     }
 
-    static let currentVersion = 2
+    static let currentVersion = 3
 
     static func loadBackup(from url: URL) throws -> AppBackup {
         let data = try Data(contentsOf: url)
@@ -69,6 +73,11 @@ enum BackupManager {
             // v1 -> v2: emergencyInfo and caregivers were added; ensure non-nil defaults
             if result.caregivers == nil { result.caregivers = [] }
             result.version = 2
+        }
+        if result.version < 3 {
+            // v2 -> v3: doctor visit anchors were added for pre-visit prep.
+            if result.doctorVisits == nil { result.doctorVisits = [] }
+            result.version = 3
         }
         return result
     }
@@ -104,7 +113,7 @@ enum BackupManager {
             csv += "\(dateStr),\(name),\(dose),\(status),\(key)\n"
         }
 
-        let url = prepareExportURL(prefix: "ChronicCare_Intake", ext: "csv")
+        let url = prepareExportURL(prefix: "Ccare_Intake", ext: "csv")
         try writeProtectedString(csv, to: url)
         return url
     }
@@ -134,7 +143,7 @@ enum BackupManager {
             csv += "\(dateStr),\(typeName),\(value),\(dia),\(unit)\n"
         }
 
-        let url = prepareExportURL(prefix: "ChronicCare_Measurements", ext: "csv")
+        let url = prepareExportURL(prefix: "Ccare_Measurements", ext: "csv")
         try writeProtectedString(csv, to: url)
         return url
     }

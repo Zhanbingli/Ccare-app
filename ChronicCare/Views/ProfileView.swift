@@ -21,7 +21,6 @@ struct ProfileView: View {
     @State private var showReminderRules = false
     @State private var showHealthSection = false
     @State private var showGoalsSection = false
-    @State private var showSafetySection = false
     @AppStorage("hapticsEnabled") private var hapticsEnabled: Bool = true
     @AppStorage("units.glucose") private var glucoseUnitRaw: String = GlucoseUnit.mgdL.rawValue
     @AppStorage("prefs.graceMinutes") private var graceMinutes: Int = 30
@@ -47,14 +46,14 @@ struct ProfileView: View {
                         Spacer()
                         Text(permissionHint())
                             .appFont(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppColor.textSecondary)
                         if !notificationsEnabled {
                             permissionButton()
                         }
                     }
                     Text(notificationCoverageSummary)
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
 
                     DisclosureGroup(NSLocalizedString("Reminder Rules", comment: ""), isExpanded: $showReminderRules) {
                         LabeledContent(NSLocalizedString("Overdue Grace Period", comment: "")) {
@@ -87,30 +86,6 @@ struct ProfileView: View {
                 }
 
                 Section {
-                    DisclosureGroup(isExpanded: $showSafetySection) {
-                        NavigationLink {
-                            EmergencyInfoEditView().environmentObject(store)
-                        } label: {
-                            Label(NSLocalizedString("Edit Emergency Info", comment: ""), systemImage: "cross.case")
-                        }
-                        NavigationLink {
-                            EmergencyCardView().environmentObject(store)
-                        } label: {
-                            Label(NSLocalizedString("View Medical Summary", comment: ""), systemImage: "person.text.rectangle")
-                        }
-                        NavigationLink {
-                            CaregiversView().environmentObject(store)
-                        } label: {
-                            Label(NSLocalizedString("Manage Caregivers", comment: ""), systemImage: "person.2")
-                        }
-                    } label: {
-                        settingsSummaryRow(
-                            title: NSLocalizedString("Medical & Support", comment: ""),
-                            summary: careSummary,
-                            systemImage: "cross.case"
-                        )
-                    }
-
                     DisclosureGroup(NSLocalizedString("Apple Health", comment: ""), isExpanded: $showHealthSection) {
                         Button {
                             HealthKitManager.shared.requestAuthorization { granted, error in
@@ -124,17 +99,14 @@ struct ProfileView: View {
                                 }
                             }
                         } label: {
-                            Label(NSLocalizedString("Connect Apple Health", comment: ""), systemImage: "heart.fill")
+                            Label(NSLocalizedString("Connect Apple Health", comment: ""), systemImage: "heart")
                         }
                         Button {
                             importFromHealth()
                         } label: {
-                            Label(NSLocalizedString("Import Last 30 Days", comment: ""), systemImage: "arrow.down.doc.fill")
+                            Label(NSLocalizedString("Import Last 30 Days", comment: ""), systemImage: "arrow.down.doc")
                         }
                     }
-                } footer: {
-                    Text(NSLocalizedString("Keep emergency details and caregiver access up to date for missed-dose support.", comment: ""))
-                        .appFont(.caption)
                 }
 
                 Section {
@@ -143,7 +115,7 @@ struct ProfileView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(String(format: NSLocalizedString("Unit: %@", comment: ""), glucoseUnitLabel))
                                     .appFont(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(AppColor.textSecondary)
                                 Stepper(value: glucoseLowDisplayBinding, in: glucoseLowDisplayRange, step: glucoseDisplayStep) {
                                     Text(glucoseLowLabel).appFont(.subheadline)
                                 }
@@ -217,22 +189,22 @@ struct ProfileView: View {
 
                             if !aiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                 HStack {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.green)
+                                    Image(systemName: "checkmark.circle")
+                                        .foregroundStyle(AppColor.primary)
                                     Text(NSLocalizedString("AI insights enabled", comment: ""))
                                         .appFont(.caption)
-                                        .foregroundStyle(.green)
+                                        .foregroundStyle(AppColor.primary)
                                 }
                             }
                         }
                         Text(NSLocalizedString("Used for drug interaction analysis and trend insights. Your API key is stored securely in Keychain.", comment: ""))
                             .appFont(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppColor.textSecondary)
                     } label: {
                         settingsSummaryRow(
                             title: NSLocalizedString("AI Analysis", comment: ""),
                             summary: aiSummary,
-                            systemImage: "sparkles"
+                            systemImage: "text.magnifyingglass"
                         )
                     }
                 } header: {
@@ -242,7 +214,7 @@ struct ProfileView: View {
                 Section {
                     DisclosureGroup(isExpanded: $showDataSection) {
                         Button { showExportSheet = true } label: {
-                            Label(NSLocalizedString("Export Reports", comment: ""), systemImage: "doc.richtext")
+                            Label(NSLocalizedString("Export Data Files", comment: ""), systemImage: "folder")
                         }
                         Button { exportBackup() } label: {
                             Label(NSLocalizedString("Export Backup", comment: ""), systemImage: "externaldrive.fill")
@@ -283,6 +255,8 @@ struct ProfileView: View {
                 // MARK: - About
                 ProfileAboutSection()
             }
+            .scrollContentBackground(.hidden)
+            .background(AppColor.background)
             .navigationTitle(NSLocalizedString("Settings", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
             .alert("Clear all data?", isPresented: $showConfirmClear) {
@@ -363,18 +337,6 @@ struct ProfileView: View {
     }
 
     // MARK: - Actions
-
-    @MainActor
-    private func exportPDF() {
-        do {
-            let url = try PDFGenerator.generateReport(store: store)
-            self.shareURL = url
-            self.showShare = true
-        } catch {
-            errorMessage = String(format: NSLocalizedString("Could not create report: %@", comment: ""), error.localizedDescription)
-            showErrorAlert = true
-        }
-    }
 
     private func refreshNotificationConfiguration() {
         store.syncNotifications()
@@ -537,22 +499,6 @@ struct ProfileView: View {
         return NSLocalizedString("Reminder coverage looks healthy for your scheduled medications.", comment: "")
     }
 
-    private var careSummary: String {
-        let caregivers = store.caregivers.count
-        let hasEmergencyInfo = store.emergencyInfo != nil
-
-        if hasEmergencyInfo && caregivers > 0 {
-            return String(format: NSLocalizedString("Emergency info ready. %lld caregivers saved.", comment: ""), caregivers)
-        }
-        if hasEmergencyInfo {
-            return NSLocalizedString("Emergency info is ready.", comment: "")
-        }
-        if caregivers > 0 {
-            return String(format: NSLocalizedString("%lld caregivers saved. Add emergency info next.", comment: ""), caregivers)
-        }
-        return NSLocalizedString("Add emergency info and caregivers for missed-dose support.", comment: "")
-    }
-
     private var goalsSummary: String {
         NSLocalizedString("Glucose, heart rate, and blood pressure ranges are configured for review.", comment: "")
     }
@@ -568,23 +514,25 @@ struct ProfileView: View {
     }
 
     private var dataSummary: String {
-        NSLocalizedString("Export reports, create backups, or restore this device from a backup.", comment: "")
+        NSLocalizedString("Back up this device or export raw data files for your own records.", comment: "")
     }
 
     @ViewBuilder
     private func settingsSummaryRow(title: String, summary: String, systemImage: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: systemImage)
-                .foregroundStyle(Color.accentColor)
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(AppColor.primary)
                 .frame(width: 24, height: 24)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .appFont(.subheadline)
                     .fontWeight(.semibold)
+                    .foregroundStyle(AppColor.textPrimary)
                 Text(summary)
                     .appFont(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColor.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -673,11 +621,6 @@ private struct ExportOptionsSheet: View {
 
                 Section {
                     Button {
-                        exportPDF()
-                    } label: {
-                        Label(NSLocalizedString("Export PDF Report", comment: ""), systemImage: "doc.richtext")
-                    }
-                    Button {
                         exportIntakeCSV()
                     } label: {
                         Label(NSLocalizedString("Export Intake Log (CSV)", comment: ""), systemImage: "tablecells")
@@ -693,11 +636,11 @@ private struct ExportOptionsSheet: View {
 
                 if let err = errorMessage {
                     Section {
-                        Text(err).foregroundStyle(.red).appFont(.caption)
+                        Text(err).foregroundStyle(AppColor.warning).appFont(.caption)
                     }
                 }
             }
-            .navigationTitle(NSLocalizedString("Export Reports", comment: ""))
+            .navigationTitle(NSLocalizedString("Export Data Files", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -709,20 +652,6 @@ private struct ExportOptionsSheet: View {
                     ShareSheet(activityItems: [url])
                 }
             }
-        }
-    }
-
-    private func exportPDF() {
-        do {
-            let days = useCustomRange
-                ? max(1, Calendar.current.dateComponents([.day], from: customStart, to: customEnd).day ?? 30)
-                : exportDays
-            let url = try PDFGenerator.generateReport(store: store, days: days)
-            shareURL = url
-            showShare = true
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 
@@ -767,7 +696,7 @@ private struct ProfileAboutSection: View {
             } label: {
                 Label(NSLocalizedString("Privacy Policy", comment: ""), systemImage: "hand.raised.fill")
             }
-            Text(NSLocalizedString("ChronicCare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice.", comment: ""))
+            Text(NSLocalizedString("Ccare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice.", comment: ""))
                 .appFont(.caption)
                 .foregroundStyle(.secondary)
             Text(String(format: NSLocalizedString("Version %@", comment: "App version"), appVersion))

@@ -4,22 +4,79 @@ import SwiftUI
 import UIKit
 
 enum PDFGenerator {
+    private struct ReportSnapshot: @unchecked Sendable {
+        let generatedAt: Date
+        let days: Int
+        let doctorSummary: DoctorReportSummary
+        let medications: [Medication]
+        let measurements: [Measurement]
+        let intakeLogs: [IntakeLog]
+
+        func adherencePercent(for medicationID: UUID? = nil, days: Int) -> Double {
+            AdherenceCalculator.adherencePercent(
+                for: medicationID,
+                days: days,
+                medications: medications,
+                intakeLogs: intakeLogs,
+                now: generatedAt
+            )
+        }
+
+        func currentStreak(for medicationID: UUID) -> Int {
+            AdherenceCalculator.currentStreak(
+                for: medicationID,
+                medications: medications,
+                intakeLogs: intakeLogs,
+                now: generatedAt
+            )
+        }
+    }
+
     @MainActor
     static func generateReport(store: DataStore, days: Int = 30) throws -> URL {
+        try generateReport(snapshot: makeSnapshot(store: store, days: days))
+    }
+
+    @MainActor
+    static func generateReportOffMain(store: DataStore, days: Int = 30) async throws -> URL {
+        let snapshot = makeSnapshot(store: store, days: days)
+        return try await Task.detached(priority: .userInitiated) {
+            try generateReport(snapshot: snapshot)
+        }.value
+    }
+
+    @MainActor
+    private static func makeSnapshot(store: DataStore, days: Int) -> ReportSnapshot {
+        let now = Date()
+        return ReportSnapshot(
+            generatedAt: now,
+            days: days,
+            doctorSummary: DoctorReportSummaryBuilder.build(store: store, days: days, now: now),
+            medications: store.medications,
+            measurements: store.measurements,
+            intakeLogs: store.intakeLogs
+        )
+    }
+
+    private static func generateReport(snapshot: ReportSnapshot) throws -> URL {
         let tmp = FileManager.default.temporaryDirectory
-        let url = tmp.appendingPathComponent("ChronicCare_Report_\(Int(Date().timeIntervalSince1970)).pdf")
+        let url = tmp.appendingPathComponent("Ccare_Report_\(Int(snapshot.generatedAt.timeIntervalSince1970)).pdf")
         let bounds = CGRect(x: 0, y: 0, width: 612, height: 792) // US Letter
         let margin: CGFloat = 40
         let renderer = UIGraphicsPDFRenderer(bounds: bounds)
+        let days = snapshot.days
+        let doctorSummary = snapshot.doctorSummary
 
         let titleAttrs: [NSAttributedString.Key: Any] = [.font: UIFont.boldSystemFont(ofSize: 22)]
         let sectionAttrs: [NSAttributedString.Key: Any] = [.font: UIFont.boldSystemFont(ofSize: 16)]
         let subheadAttrs: [NSAttributedString.Key: Any] = [.font: UIFont.boldSystemFont(ofSize: 13)]
         let bodyAttrs: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 11)]
         let smallAttrs: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 10), .foregroundColor: UIColor.secondaryLabel]
-        let greenAttrs: [NSAttributedString.Key: Any] = [.font: UIFont.boldSystemFont(ofSize: 11), .foregroundColor: UIColor.systemGreen]
-        let orangeAttrs: [NSAttributedString.Key: Any] = [.font: UIFont.boldSystemFont(ofSize: 11), .foregroundColor: UIColor.systemOrange]
-        let redAttrs: [NSAttributedString.Key: Any] = [.font: UIFont.boldSystemFont(ofSize: 11), .foregroundColor: UIColor.systemRed]
+        let primary = UIColor(red: 0x2A / 255.0, green: 0x6B / 255.0, blue: 0x7C / 255.0, alpha: 1)
+        let warning = UIColor(red: 0xC0 / 255.0, green: 0x45 / 255.0, blue: 0x45 / 255.0, alpha: 1)
+        let greenAttrs: [NSAttributedString.Key: Any] = [.font: UIFont.boldSystemFont(ofSize: 11), .foregroundColor: primary]
+        let orangeAttrs: [NSAttributedString.Key: Any] = [.font: UIFont.boldSystemFont(ofSize: 11), .foregroundColor: UIColor.secondaryLabel]
+        let redAttrs: [NSAttributedString.Key: Any] = [.font: UIFont.boldSystemFont(ofSize: 11), .foregroundColor: warning]
 
         let data = renderer.pdfData { ctx in
             var y: CGFloat = 0
@@ -41,15 +98,162 @@ enum PDFGenerator {
                 y += 10
             }
 
+            func drawWrapped(
+                _ text: String,
+                x: CGFloat = margin,
+                width: CGFloat = bounds.width - margin * 2,
+                attributes: [NSAttributedString.Key: Any] = bodyAttrs,
+                after: CGFloat = 5
+            ) {
+                let size = CGSize(width: width, height: CGFloat.greatestFiniteMagnitude)
+                let rect = (text as NSString).boundingRect(
+                    with: size,
+                    options: [.usesLineFragmentOrigin, .usesFontLeading],
+                    attributes: attributes,
+                    context: nil
+                )
+                let height = ceil(rect.height) + 2
+                ensureSpace(height + after)
+                (text as NSString).draw(
+                    with: CGRect(x: x, y: y, width: width, height: height),
+                    options: [.usesLineFragmentOrigin, .usesFontLeading],
+                    attributes: attributes,
+                    context: nil
+                )
+                y += height + after
+            }
+
+            func drawMiniHeading(_ title: String, count: String? = nil) {
+                ensureSpace(24)
+                title.draw(at: CGPoint(x: margin, y: y), withAttributes: subheadAttrs)
+                if let count {
+                    let width = (count as NSString).size(withAttributes: smallAttrs).width
+                    count.draw(at: CGPoint(x: bounds.width - margin - width, y: y + 1), withAttributes: smallAttrs)
+                }
+                y += 17
+            }
+
+            func drawBullet(_ text: String, attributes: [NSAttributedString.Key: Any] = bodyAttrs) {
+                drawWrapped("• \(text)", x: margin + 10, width: bounds.width - margin * 2 - 10, attributes: attributes, after: 3)
+            }
+
+            func sourceTitle(_ source: MedicationSource) -> String {
+                switch source {
+                case .prescribed:
+                    return NSLocalizedString("Hospital prescription", comment: "Visit summary medication source")
+                case .external:
+                    return NSLocalizedString("External prescription", comment: "Visit summary medication source")
+                case .otc:
+                    return NSLocalizedString("OTC", comment: "Visit summary medication source")
+                case .supplement:
+                    return NSLocalizedString("Supplement", comment: "Visit summary medication source")
+                case .unknown:
+                    return NSLocalizedString("Unspecified", comment: "Visit summary medication source")
+                }
+            }
+
+            func drawDoctorSummary(_ summary: DoctorReportSummary) {
+                ensureSpace(40)
+                NSLocalizedString("Doctor summary", comment: "PDF section title")
+                    .draw(at: CGPoint(x: margin, y: y), withAttributes: sectionAttrs)
+                y += 20
+
+                drawWrapped(
+                    NSLocalizedString("Patient-reported · not a medical record", comment: "Clinical disclaimer"),
+                    attributes: smallAttrs,
+                    after: 9
+                )
+
+                if let visit = summary.visit {
+                    let visitDate = DateFormatter.localizedString(from: visit.scheduledDate, dateStyle: .medium, timeStyle: .short)
+                    drawWrapped(
+                        String(format: NSLocalizedString("Prepared for: %@ · %@", comment: "PDF doctor summary visit context"), visit.displayTitle, visitDate),
+                        attributes: bodyAttrs,
+                        after: 10
+                    )
+                }
+
+                drawMiniHeading(NSLocalizedString("Red flags", comment: "PDF doctor summary heading"))
+                if summary.redFlags.isEmpty {
+                    drawBullet(NSLocalizedString("No red flags recorded.", comment: "PDF doctor summary empty red flags"), attributes: smallAttrs)
+                } else {
+                    for flag in summary.redFlags.prefix(5) {
+                        drawBullet(flag, attributes: redAttrs)
+                    }
+                }
+                y += 6
+
+                drawMiniHeading(
+                    NSLocalizedString("Current medications", comment: "PDF doctor summary heading"),
+                    count: String(format: NSLocalizedString("%lld items", comment: "PDF count"), summary.medications.count)
+                )
+                if summary.medications.isEmpty {
+                    drawBullet(NSLocalizedString("No medications recorded.", comment: ""), attributes: smallAttrs)
+                } else {
+                    for medication in summary.medications.prefix(8) {
+                        let line = "\(sourceTitle(medication.source)) · \(medication.name) \(medication.dose) — \(medication.schedule)"
+                        drawBullet(line)
+                    }
+                    if summary.medications.count > 8 {
+                        drawBullet(
+                            String(format: NSLocalizedString("+%lld more in medication details", comment: "PDF doctor summary overflow"), summary.medications.count - 8),
+                            attributes: smallAttrs
+                        )
+                    }
+                }
+                y += 6
+
+                drawMiniHeading(NSLocalizedString("Adherence gaps", comment: "PDF doctor summary heading"))
+                if summary.adherenceGaps.isEmpty {
+                    drawBullet(NSLocalizedString("No missed-dose days in the report window.", comment: "PDF doctor summary empty adherence"), attributes: smallAttrs)
+                } else {
+                    for gap in summary.adherenceGaps.prefix(4) {
+                        drawBullet(String(format: NSLocalizedString("%@ · %lld missed days", comment: "PDF doctor summary adherence gap"), gap.medicationName, gap.missedDays.count))
+                    }
+                }
+                y += 6
+
+                drawMiniHeading(NSLocalizedString("Home measurements", comment: "PDF doctor summary heading"))
+                if summary.measurements.isEmpty {
+                    drawBullet(NSLocalizedString("No home measurements in the report window.", comment: "PDF doctor summary empty measurements"), attributes: smallAttrs)
+                } else {
+                    for measurement in summary.measurements {
+                        let status = measurement.outOfRangeCount > 0
+                            ? String(format: NSLocalizedString("%lld out of range", comment: "PDF doctor summary measurement status"), measurement.outOfRangeCount)
+                            : NSLocalizedString("within range", comment: "Measurement status")
+                        drawBullet("\(measurement.type.displayName) · \(measurement.latestValue) · \(measurement.entryCount) \(NSLocalizedString("entries", comment: "PDF count label")) · \(status)")
+                    }
+                }
+                y += 6
+
+                drawMiniHeading(NSLocalizedString("Recent symptoms", comment: "PDF doctor summary heading"))
+                if summary.symptoms.isEmpty {
+                    drawBullet(NSLocalizedString("No symptoms logged in the report window.", comment: "PDF doctor summary empty symptoms"), attributes: smallAttrs)
+                } else {
+                    for symptom in summary.symptoms.prefix(4) {
+                        let date = DateFormatter.localizedString(from: symptom.date, dateStyle: .short, timeStyle: .none)
+                        let note = symptom.note.map { " · \($0)" } ?? ""
+                        drawBullet("\(date) · \(symptom.severity.displayName) · \(symptom.summary)\(note)")
+                    }
+                }
+                y += 6
+
+                drawMiniHeading(NSLocalizedString("Suggested talking points", comment: "PDF doctor summary heading"))
+                for point in summary.talkingPoints.prefix(5) {
+                    drawBullet(point)
+                }
+                y += 8
+            }
+
             // --- Page 1: Header ---
             ctx.beginPage()
             y = margin
 
-            let title = NSLocalizedString("ChronicCare Health Report", comment: "")
+            let title = NSLocalizedString("Ccare Health Report", comment: "")
             title.draw(at: CGPoint(x: margin, y: y), withAttributes: titleAttrs)
             y += 30
 
-            let dateStr = DateFormatter.localizedString(from: Date(), dateStyle: .long, timeStyle: .short)
+            let dateStr = DateFormatter.localizedString(from: snapshot.generatedAt, dateStyle: .long, timeStyle: .short)
             let gen = String(format: NSLocalizedString("Generated: %@", comment: ""), dateStr)
             gen.draw(at: CGPoint(x: margin, y: y), withAttributes: smallAttrs)
             y += 14
@@ -60,13 +264,28 @@ enum PDFGenerator {
 
             drawSeparator()
 
+            drawDoctorSummary(doctorSummary)
+            drawSeparator()
+
+            ctx.beginPage()
+            y = margin
+            NSLocalizedString("Supporting details", comment: "PDF section title")
+                .draw(at: CGPoint(x: margin, y: y), withAttributes: titleAttrs)
+            y += 26
+            drawWrapped(
+                NSLocalizedString("The following pages provide the evidence behind the doctor summary and avoid repeating the summary narrative.", comment: "PDF supporting details caption"),
+                attributes: smallAttrs,
+                after: 12
+            )
+            drawSeparator()
+
             // --- Overall Adherence Summary ---
             ensureSpace(60)
-            NSLocalizedString("Overall Adherence", comment: "").draw(at: CGPoint(x: margin, y: y), withAttributes: sectionAttrs)
+            NSLocalizedString("Adherence detail", comment: "PDF supporting details heading").draw(at: CGPoint(x: margin, y: y), withAttributes: sectionAttrs)
             y += 22
 
-            let adh7 = store.adherencePercent(days: 7)
-            let adh30 = store.adherencePercent(days: 30)
+            let adh7 = snapshot.adherencePercent(days: 7)
+            let adh30 = snapshot.adherencePercent(days: 30)
             let adhStr7 = String(format: NSLocalizedString("7-day: %.0f%%", comment: ""), adh7 * 100)
             let adhStr30 = String(format: NSLocalizedString("30-day: %.0f%%", comment: ""), adh30 * 100)
             adhStr7.draw(at: CGPoint(x: margin + 10, y: y), withAttributes: adh7 >= 0.8 ? greenAttrs : adh7 >= 0.5 ? orangeAttrs : redAttrs)
@@ -74,7 +293,7 @@ enum PDFGenerator {
             y += 20
 
             // --- Adherence Bar Chart ---
-            let scheduledMeds = store.medications.filter { $0.isAsNeeded != true }
+            let scheduledMeds = snapshot.medications.filter { $0.isAsNeeded != true }
             if !scheduledMeds.isEmpty {
                 let barHeight: CGFloat = 14
                 let spacing: CGFloat = 4
@@ -83,7 +302,7 @@ enum PDFGenerator {
                 y += 6
                 let maxBarWidth = bounds.width - margin * 2 - 130
                 for med in scheduledMeds {
-                    let adh = store.adherencePercent(for: med.id, days: days)
+                    let adh = snapshot.adherencePercent(for: med.id, days: days)
                     let barColor: UIColor = adh >= 0.8 ? .systemGreen : adh >= 0.5 ? .systemOrange : .systemRed
                     // Label
                     let label = med.name.count > 15 ? String(med.name.prefix(15)) + "…" : med.name
@@ -108,10 +327,10 @@ enum PDFGenerator {
 
             // --- Medications with Per-Med Adherence & Supply ---
             ensureSpace(30)
-            NSLocalizedString("Medications", comment: "").draw(at: CGPoint(x: margin, y: y), withAttributes: sectionAttrs)
+            NSLocalizedString("Medication details", comment: "PDF supporting details heading").draw(at: CGPoint(x: margin, y: y), withAttributes: sectionAttrs)
             y += 22
 
-            for med in store.medications {
+            for med in snapshot.medications {
                 ensureSpace(60)
 
                 // Medication name and dose
@@ -122,12 +341,12 @@ enum PDFGenerator {
                 if med.isAsNeeded == true {
                     // PRN meds: show label instead of adherence
                     let prnText = NSLocalizedString("As Needed (PRN)", comment: "")
-                    prnText.draw(at: CGPoint(x: margin + 20, y: y), withAttributes: [.font: UIFont.italicSystemFont(ofSize: 11), .foregroundColor: UIColor.systemBlue])
+                    prnText.draw(at: CGPoint(x: margin + 20, y: y), withAttributes: [.font: UIFont.italicSystemFont(ofSize: 11), .foregroundColor: UIColor.secondaryLabel])
                     y += 15
                 } else {
                     // Adherence and streak
-                    let medAdh = store.adherencePercent(for: med.id, days: days)
-                    let streak = store.currentStreak(for: med.id)
+                    let medAdh = snapshot.adherencePercent(for: med.id, days: days)
+                    let streak = snapshot.currentStreak(for: med.id)
                     let adhText = String(format: NSLocalizedString("Adherence: %.0f%%", comment: ""), medAdh * 100)
                     let streakText = String(format: NSLocalizedString("Streak: %lld days", comment: ""), streak)
                     adhText.draw(at: CGPoint(x: margin + 20, y: y), withAttributes: medAdh >= 0.8 ? greenAttrs : medAdh >= 0.5 ? orangeAttrs : redAttrs)
@@ -173,7 +392,7 @@ enum PDFGenerator {
                 y += 6
             }
 
-            if store.medications.isEmpty {
+            if snapshot.medications.isEmpty {
                 NSLocalizedString("No medications recorded.", comment: "").draw(at: CGPoint(x: margin + 10, y: y), withAttributes: bodyAttrs)
                 y += 18
             }
@@ -182,11 +401,11 @@ enum PDFGenerator {
 
             // --- Measurement Statistics ---
             ensureSpace(30)
-            NSLocalizedString("Measurement Statistics", comment: "").draw(at: CGPoint(x: margin, y: y), withAttributes: sectionAttrs)
+            NSLocalizedString("Measurement detail", comment: "PDF supporting details heading").draw(at: CGPoint(x: margin, y: y), withAttributes: sectionAttrs)
             y += 22
 
-            let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Date())!
-            let recentMeasurements = store.measurements.filter { $0.date >= cutoff }
+            let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: snapshot.generatedAt)!
+            let recentMeasurements = snapshot.measurements.filter { $0.date >= cutoff }
 
             for type in MeasurementType.allCases {
                 let typeMeasurements = recentMeasurements.filter { $0.type == type }
@@ -270,7 +489,7 @@ enum PDFGenerator {
                         if i == 0 { path.move(to: CGPoint(x: px, y: py)) }
                         else { path.addLine(to: CGPoint(x: px, y: py)) }
                     }
-                    type.tintUIColor.setStroke()
+                    primary.setStroke()
                     path.lineWidth = 1.5
                     path.stroke()
 
@@ -278,7 +497,7 @@ enum PDFGenerator {
                     if let last = sorted.last {
                         let px = chartX + chartW - 4
                         let py = chartY + chartH - 4 - (chartH - 8) * CGFloat((last.value - vMin + padded) / (effectiveRange + padded * 2))
-                        type.tintUIColor.setFill()
+                        primary.setFill()
                         UIBezierPath(ovalIn: CGRect(x: px - 3, y: py - 3, width: 6, height: 6)).fill()
                     }
 
@@ -297,7 +516,7 @@ enum PDFGenerator {
 
             // --- Recent Measurements List (latest 20) ---
             ensureSpace(30)
-            NSLocalizedString("Recent Measurements", comment: "").draw(at: CGPoint(x: margin, y: y), withAttributes: sectionAttrs)
+            NSLocalizedString("Recent measurement log", comment: "PDF supporting details heading").draw(at: CGPoint(x: margin, y: y), withAttributes: sectionAttrs)
             y += 22
 
             let df = DateFormatter(); df.dateStyle = .short; df.timeStyle = .short
@@ -326,7 +545,7 @@ enum PDFGenerator {
             let footer = NSLocalizedString("This report is for informational purposes only. Consult your healthcare provider for medical advice.", comment: "")
             footer.draw(at: CGPoint(x: margin, y: y), withAttributes: smallAttrs)
         }
-        try data.write(to: url, options: [.atomic, .completeFileProtection])
+        try data.write(to: url, options: .atomic)
         try? (url as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
         return url
     }

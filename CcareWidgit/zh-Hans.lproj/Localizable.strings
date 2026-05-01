@@ -16,7 +16,7 @@
 "Next %@" = "下次 %@";
 "All caught up" = "全部完成";
 "No scheduled dose" = "无排定剂量";
-"Open ChronicCare to set up" = "打开 ChronicCare 设置用药";
+"Open Ccare to set up" = "打开药时护设置用药";
 
 /* Widget Configuration */
 "Shows your next upcoming medication dose." = "显示您下一次需要服用的药物。";

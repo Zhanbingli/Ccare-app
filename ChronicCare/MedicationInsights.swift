@@ -18,21 +18,21 @@ struct MedicationInsight: Identifiable {
 
         var icon: String {
             switch self {
-            case .skippedFrequently: return "exclamationmark.triangle.fill"
+            case .skippedFrequently: return "exclamationmark.triangle"
             case .timeAdjustmentSuggestion: return "clock.arrow.circlepath"
             case .adherenceImprovement: return "chart.line.uptrend.xyaxis"
-            case .reminderNotWorking: return "bell.slash.fill"
+            case .reminderNotWorking: return "bell.slash"
             case .correlationTrend: return "chart.xyaxis.line"
             }
         }
 
         var color: Color {
             switch self {
-            case .skippedFrequently: return .orange
-            case .timeAdjustmentSuggestion: return .blue
-            case .adherenceImprovement: return .purple
-            case .reminderNotWorking: return .gray
-            case .correlationTrend: return .teal
+            case .skippedFrequently: return AppColor.warning
+            case .timeAdjustmentSuggestion: return AppColor.primary
+            case .adherenceImprovement: return AppColor.primary
+            case .reminderNotWorking: return AppColor.textSecondary
+            case .correlationTrend: return AppColor.primary
             }
         }
     }
@@ -194,8 +194,10 @@ class MedicationInsightsEngine {
 
         let cal = Calendar.current
         let now = Date()
-        // Need at least 14 days of data
-        guard let firstLog = logs.filter({ $0.medicationID == medication.id && $0.status == .taken }).sorted(by: { $0.date < $1.date }).first,
+        let takenLogs = logs.filter { $0.medicationID == medication.id && $0.status == .taken }
+        // Need at least 14 days of medication and measurement context.
+        guard takenLogs.count >= 4,
+              let firstLog = takenLogs.sorted(by: { $0.date < $1.date }).first,
               cal.dateComponents([.day], from: firstLog.date, to: now).day ?? 0 >= 14 else { return nil }
 
         for mType in correlatedTypes {
@@ -223,8 +225,15 @@ class MedicationInsightsEngine {
             let direction = change < 0
                 ? NSLocalizedString("decreased", comment: "")
                 : NSLocalizedString("increased", comment: "")
-            let message = String(format: NSLocalizedString("While taking %@, your %@ has %@ by %.0f%% over the past week.", comment: ""),
-                                 medication.name, mType.rawValue, direction, pctChange)
+            let recentTakenCount = takenLogs.filter { $0.effectiveRecordedAt >= fourteenDaysAgo && $0.effectiveRecordedAt <= now }.count
+            let message = String(
+                format: NSLocalizedString("Your %@ average %@ by %.0f%% compared with the previous week while %@ had %lld taken logs. This is trend context, not proof of cause.", comment: "Medication measurement trend insight"),
+                mType.displayName,
+                direction,
+                pctChange,
+                medication.name,
+                recentTakenCount
+            )
 
             return MedicationInsight(
                 medicationID: medication.id,

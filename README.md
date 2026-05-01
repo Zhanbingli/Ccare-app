@@ -1,4 +1,4 @@
-# ChronicCare
+# Ccare
 
 A privacy-first iOS app for chronic medication management. Helps users build reliable daily medication routines through smart reminders, adherence tracking, and health measurement logging.
 
@@ -80,4 +80,4 @@ Requirements:
 
 ## Disclaimer
 
-ChronicCare is a self-management support tool. It is not a medical device, does not diagnose conditions, and does not provide medical advice. Medication changes should always be discussed with a healthcare provider.
+Ccare is a self-management support tool. It is not a medical device, does not diagnose conditions, and does not provide medical advice. Medication changes should always be discussed with a healthcare provider.

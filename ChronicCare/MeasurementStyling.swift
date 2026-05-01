@@ -23,11 +23,10 @@ extension Measurement {
     }
 
     var cardTint: Color {
-        isAbnormal ? .red : type.tint
+        isAbnormal ? AppColor.warning : type.tint
     }
 
     var valueForeground: Color {
-        isAbnormal ? .red : .primary
+        isAbnormal ? AppColor.warning : AppColor.textPrimary
     }
 }
-

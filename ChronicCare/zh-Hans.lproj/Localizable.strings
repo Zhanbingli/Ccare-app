@@ -39,7 +39,7 @@
 "Medication Update — %@" = "用药动态 — %@";
 "No medications scheduled today." = "今日无用药计划。";
 "  ⚠ %lld pills left — refill needed" = "  ⚠ 剩余 %lld 片 — 需要补药";
-"Sent from Ccare" = "来自 ChronicCare";
+"Sent from Ccare" = "来自药时护";
 
 /* Intake Notes */
 "Add a Note?" = "添加备注？";
@@ -64,6 +64,11 @@
 "Snooze 60m" = "延后60分钟";
 "Snoozed Reminder" = "延后提醒";
 "Time to take your medication" = "请按时服药";
+"Medication reminder" = "用药提醒";
+"Scheduled %@" = "计划 %@";
+"scheduled %@" = "计划 %@";
+"Original time %@" = "原定 %@";
+"original time %@" = "原定 %@";
 "Snoozed: %@" = "已延后：%@";
 "%@ — scheduled for %@" = "%@ — 计划于 %@";
 "Dose: %@" = "剂量：%@";
@@ -137,6 +142,8 @@
 "Missed Days" = "缺漏天数";
 "No intake logs for this day." = "当天无服药记录。";
 "No Record" = "无记录";
+"Delete Intake Log" = "删除服药记录";
+"This intake record will be removed from adherence history and future visit summaries." = "这条服药记录会从依从历史和之后的就诊摘要中移除。";
 "Close" = "关闭";
 
 /* Trends */
@@ -159,6 +166,13 @@
 "Value" = "数值";
 "Unit: %@" = "单位：%@";
 "Add Measurement" = "添加测量";
+"Edit Measurement" = "编辑测量";
+"Delete Measurement" = "删除测量";
+"This measurement will be removed from trends and future visit summaries." = "这条测量记录会从趋势和之后的就诊摘要中移除。";
+"Measurement Type" = "测量类型";
+"Reading" = "读数";
+"Recorded Time" = "记录时间";
+"Context" = "背景";
 "Log Measurement" = "记录测量";
 "Log New Measurement" = "记录新测量";
 "Systolic: %lld" = "收缩压：%lld";
@@ -216,7 +230,7 @@
 "Success" = "成功";
 
 /* PDF Report */
-"Ccare Health Report" = "ChronicCare 健康报告";
+"Ccare Health Report" = "药时护健康报告";
 "Generated: %@" = "生成时间：%@";
 "Report period: Last %lld days" = "报告周期：最近 %lld 天";
 "Overall Adherence" = "总体依从率";
@@ -239,7 +253,7 @@
 "This report is for informational purposes only. Consult your healthcare provider for medical advice." = "本报告仅供参考，不构成医疗建议。请咨询您的医生获取专业意见。";
 
 /* About */
-"Ccare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice." = "ChronicCare 将数据保存在本地，仅在你授权后使用 Apple 健康。本应用不提供医疗建议。";
+"Ccare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice." = "药时护将数据保存在本地，仅在你授权后使用 Apple 健康。本应用不提供医疗建议。";
 
 /* AI Analysis */
 "AI Analysis" = "AI 分析";
@@ -263,6 +277,8 @@
 "Too late — next dose " = "已过补服窗口 — 下次 ";
 "%@ (%@) — you can still take it now" = "%@（%@）— 现在还可以补服";
 "%@ and %@ are only %lld minutes apart" = "%@ 和 %@ 只间隔 %lld 分钟";
+"Needs attention" = "需要关注";
+"Schedule overlap" = "服药时间过近";
 
 /* Behavioral Feedback */
 "Great job taking %@ consistently!" = "%@ 服药非常规律，继续保持！";
@@ -303,7 +319,8 @@
 "Your AI configuration has been updated successfully" = "AI 配置已更新成功";
 
 /* Onboarding */
-"Welcome to Ccare" = "欢迎使用 ChronicCare";
+"Welcome to Ccare" = "欢迎使用药时护";
+"Ccare" = "药时护";
 "Your personal medication companion. We'll help you stay on track with your health." = "您的个人用药助手，帮您按时服药、守护健康。";
 "Get Started" = "开始设置";
 "Skip for now" = "稍后再说";
@@ -315,7 +332,7 @@
 "Reminders enabled!" = "提醒已开启！";
 "You can enable reminders later in Settings." = "您可以稍后在设置中开启提醒。";
 "You're All Set!" = "设置完成！";
-"You can add medications anytime from the Medications tab." = "您可以随时在「用药」标签页中添加药物。";
+"Add medications anytime from the profile drawer." = "您可以随时在个人中心添加药物。";
 "We'll remind you to take %@ on time." = "我们会按时提醒您服用%@。";
 "Go to Dashboard" = "进入首页";
 
@@ -352,7 +369,7 @@
 "When you miss medication for 2+ days, we'll remind you to share your status with this person." = "连续漏服2天以上时，我们会提醒您与此人分享用药状态。";
 "Medication Update — %@" = "用药更新 — %@";
 "Upcoming" = "待服用";
-"Sent from Ccare" = "来自 ChronicCare";
+"Sent from Ccare" = "来自药时护";
 "Share with Caregiver?" = "通知照护者？";
 "You haven't taken %@ for %lld days. Would you like to share your status with %@?" = "您已%lld天未服用%@，是否通知%@？";
 
@@ -415,6 +432,9 @@
 "Haven't taken it yet?" = "还没服药？";
 "Reminder: still not taken" = "提醒：仍未服药";
 "Urgent: please take your medication" = "紧急：请立即服药";
+"Dose still pending" = "这次剂量仍待处理";
+"Second reminder" = "第二次提醒";
+"Final reminder" = "最后一次提醒";
 
 /* AI */
 "Get %@ API Key" = "获取 %@ API 密钥";
@@ -738,7 +758,7 @@
 /* ProfileView */
 "Backup & Export" = "备份与导出";
 "Care & Emergency" = "照护与紧急信息";
-"ChronicCare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice." = "ChronicCare 会将数据保存在本地，并仅在你授权后使用 Apple Health。它不提供医疗建议。";
+"Ccare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice." = "药时护会将数据保存在本地，并仅在你授权后使用 Apple Health。它不提供医疗建议。";
 "Danger Zone" = "危险操作";
 "Edit Emergency Info" = "编辑紧急信息";
 "Keep emergency details and caregiver access up to date for missed-dose support." = "请及时更新紧急信息和照护人设置，以便在漏服支持时能顺利使用。";
@@ -885,6 +905,9 @@
 "Export reports, create backups, or restore this device from a backup." = "导出报告、创建备份，或从备份恢复这台设备。";
 "Healthy" = "状态良好";
 "Review Snapshot" = "回顾概览";
+"Open Doctor Snapshot" = "打开就诊摘要";
+"Next appointment planned" = "已安排下次复诊";
+"%@ · %@. Keep logging quietly until the visit gets close." = "%@ · %@。复诊临近前，继续安静记录即可。";
 "See adherence, measurements, and reminder health in one place." = "把依从率、测量和提醒状态集中放在这里查看。";
 "%lld reminder issues still need attention." = "还有 %lld 个提醒问题需要处理。";
 "Your scheduled medications currently look covered." = "当前固定用药的提醒覆盖看起来正常。";
@@ -935,6 +958,7 @@
 "3×/day" = "3×/天";
 "Pick a frequency, then adjust the times." = "选择频率，再调整时间。";
 "Time" = "时间";
+"Remove Time" = "删除时间";
 "Times saved, but notifications won't fire." = "时间已保存，但不会发送通知。";
 "As Needed Only" = "仅按需服用";
 "How is it taken?" = "服用方式";
@@ -955,21 +979,21 @@
 // MARK: - Privacy Policy
 "Privacy Policy" = "隐私政策";
 "About" = "关于";
-"ChronicCare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice — always consult your doctor." = "ChronicCare 将数据保存在设备上，仅在获得许可后使用 Apple 健康。本应用不提供医疗建议——请咨询医生。";
+"Ccare keeps your data on device and uses Apple Health only with your permission. It does not provide medical advice — always consult your doctor." = "药时护将数据保存在设备上，仅在获得许可后使用 Apple 健康。本应用不提供医疗建议——请咨询医生。";
 "Overview" = "概述";
-"ChronicCare is designed with your privacy as a priority. All health data is stored locally on your device. We do not collect, transmit, or share your personal information with any third party." = "ChronicCare 以保护隐私为首要设计原则。所有健康数据仅存储在您的设备上，我们不会收集、传输或与任何第三方共享您的个人信息。";
+"Ccare is designed with your privacy as a priority. Medication routines, health measurements, intake logs, contacts, and settings are stored locally on your device. We do not operate analytics, advertising, or tracking services." = "药时护以保护隐私为首要设计原则。服药计划、健康测量、服药记录、联系人和设置均存储在您的设备上。我们不运营分析、广告或追踪服务。";
 "Data Stored on Device" = "存储在设备上的数据";
 "The following data is stored only on your device:\n• Medications and dosing schedules\n• Health measurements (blood pressure, blood glucose, weight, heart rate)\n• Intake logs and adherence history\n• Emergency contacts and medical information\n• Caregiver contact information\n• App preferences and settings" = "以下数据仅存储在您的设备上：\n• 药物和服药计划\n• 健康测量数据（血压、血糖、体重、心率）\n• 服药记录和依从性历史\n• 紧急联系人和医疗信息\n• 照护人联系信息\n• 应用偏好设置";
 "Apple Health Integration" = "Apple 健康整合";
-"If you grant permission, ChronicCare can read and write health measurements to Apple Health. This data exchange happens entirely on your device through Apple's HealthKit framework. We never access your Apple Health data remotely." = "如果您授权，ChronicCare 可以向 Apple 健康读取和写入健康测量数据。数据交换完全在您的设备上通过 Apple HealthKit 框架进行，我们绝不会远程访问您的 Apple 健康数据。";
+"If you grant permission, Ccare can read and write health measurements to Apple Health. This data exchange happens entirely on your device through Apple's HealthKit framework. We never access your Apple Health data remotely." = "如果您授权，药时护可以向 Apple 健康读取和写入健康测量数据。数据交换完全在您的设备上通过 Apple HealthKit 框架进行，我们绝不会远程访问您的 Apple 健康数据。";
 "Camera Access" = "相机访问";
 "The camera is used solely to scan medication labels for assisted data entry. Photos taken for scanning are processed on-device and are not stored or transmitted unless you choose to save a medication photo." = "相机仅用于扫描药物标签以辅助数据录入。扫描拍摄的照片在设备上处理，除非您选择保存药物照片，否则不会被存储或传输。";
 "Notifications" = "通知";
-"With your permission, ChronicCare sends local notifications to remind you of medication doses. These notifications are scheduled on-device and do not involve any external server." = "经您许可，ChronicCare 会发送本地通知提醒您服药。这些通知在设备上调度，不涉及任何外部服务器。";
+"With your permission, Ccare sends local notifications to remind you of medication doses. These notifications are scheduled on-device and do not involve any external server." = "经您许可，药时护会发送本地通知提醒您服药。这些通知在设备上调度，不涉及任何外部服务器。";
 "AI Features" = "AI 功能";
-"If you choose to enable AI-powered features (such as drug interaction checks), your query is sent to the configured AI service. No personal health data is included in these requests unless you explicitly type it. The AI API key is stored securely in your device's Keychain." = "如果您启用 AI 功能（如药物相互作用检查），您的查询将被发送到配置的 AI 服务。除非您主动输入，否则请求中不包含个人健康数据。AI API 密钥安全存储在设备的钥匙串中。";
+"If you choose to use AI-powered features (such as drug interaction checks), the text you enter for that AI request is sent to the configured AI service for processing. No medication or health data is sent automatically unless you explicitly include it in your query. The AI API key is stored securely in your device's Keychain." = "如果您使用 AI 功能（如药物相互作用检查），您为该 AI 请求输入的文本会被发送到配置的 AI 服务进行处理。除非您主动写入查询，否则不会自动发送药物或健康数据。AI API 密钥安全存储在设备的钥匙串中。";
 "No Analytics or Tracking" = "无分析或追踪";
-"ChronicCare does not use any analytics, crash reporting, or advertising frameworks. We do not track your usage or behavior in any way." = "ChronicCare 不使用任何分析、崩溃报告或广告框架。我们不会以任何方式追踪您的使用情况或行为。";
+"Ccare does not use any analytics, crash reporting, or advertising frameworks. We do not track your usage or behavior in any way." = "药时护不使用任何分析、崩溃报告或广告框架。我们不会以任何方式追踪您的使用情况或行为。";
 "Data Deletion" = "数据删除";
 "You can delete all your data at any time from Settings > Clear All Data. Uninstalling the app also removes all stored data from your device." = "您可以随时在「设置 > 清除所有数据」中删除所有数据。卸载应用也会从设备中移除所有存储的数据。";
 "Changes to This Policy" = "政策变更";
@@ -1105,12 +1129,12 @@
 "Your adherence to %@ is %d%% in the past week. Consistent use is important for best results." = "你过去一周对 %@ 的依从率为 %d%%，坚持服药对效果很重要。";
 
 /* Missing translations — Other */
-"ChronicCare Health Report" = "ChronicCare 健康报告";
+"Ccare Health Report" = "药时护健康报告";
 "Log" = "记录";
 "Refresh" = "刷新";
 "Saved" = "已保存";
 "Share Medical Summary" = "分享医疗摘要";
-"Welcome to ChronicCare" = "欢迎使用 ChronicCare";
+"Welcome to Ccare" = "欢迎使用药时护";
 "Suggested next step:" = "建议下一步：";
 "Context Notes" = "备注";
 "Symptoms, meals, activity..." = "症状、饮食、活动…";
@@ -1137,7 +1161,7 @@
 "Next %@" = "下次 %@";
 "All caught up" = "全部完成";
 "No scheduled dose" = "无排定剂量";
-"Open ChronicCare to set up" = "打开 ChronicCare 设置用药";
+"Open Ccare to set up" = "打开药时护设置用药";
 
 /* Schedule Presets */
 "Once Daily" = "每日一次";
@@ -1153,3 +1177,338 @@
 
 /* Accessibility */
 "Enable Reminders" = "启用提醒";
+
+/* V2 UI — RootViewV2 / ProfileDrawerV2 / WeeklyAdherenceCard */
+"Profile" = "我的";
+"My Medications" = "我的药物";
+"%d medications" = "共 %d 种药物";
+"%d contacts" = "%d 位联系人";
+"No caregivers added" = "尚未添加照护者";
+"Reminders, units, data, AI" = "提醒、单位、数据、AI";
+
+/* Weekly adherence reflection card */
+"This week %d%%" = "本周 %d%%";
+"Great consistency — keep going." = "坚持得很好，请继续保持。";
+"Solid week overall." = "本周整体不错。";
+"A few doses slipped — we'll help you catch up." = "漏了几次，我们一起调整。";
+"Some doses missed. Tap to review and adjust." = "本周漏服较多，点击查看并调整。";
+"Opens full adherence insights." = "打开完整的依从报告。";
+
+/* Missed dose recovery */
+"Recovery window open" = "仍在补救窗口";
+"If you are sure this dose was missed, you can log it now. Do not take extra doses beyond the schedule unless your clinician told you to." = "如果确认这一剂漏服，可以现在记录。除非医生明确要求，不要在排定剂量之外额外加服。";
+"Can log late dose" = "可补记这一剂";
+"Too close to next dose" = "距离下一剂太近";
+"Next scheduled dose is at %@. Avoid doubling up; skip this missed dose unless your clinician told you otherwise." = "下一剂排在 %@。避免一次服用双倍剂量；除非医生另有说明，建议跳过这次漏服。";
+"Near next dose; avoid doubling up" = "接近下一剂，避免加倍服用";
+"Check before logging" = "记录前请确认";
+"No next scheduled dose was found. Log this only if you actually took it." = "未找到下一次排定剂量。只有在确实已经服用时才记录。";
+"Confirm before logging" = "确认后再记录";
+
+/* Outcome linkage */
+"Recent average is stable at %@ compared with the previous week." = "近期平均值为 %@，与前一周相比基本稳定。";
+"lower" = "降低";
+"higher" = "升高";
+"Recent average is %@, %@ by %@ from the previous week." = "近期平均值为 %@，较前一周%@ %@。";
+"%.0f mmHg systolic" = "%.0f mmHg 收缩压";
+"Trend context only; this does not prove the medication caused the change." = "仅作为趋势参考；这不能证明变化由该药物导致。";
+"Trend context only: %lld readings and %lld taken logs in the past 14 days; this does not prove the medication caused the change." = "仅作为趋势参考：过去 14 天有 %lld 次读数和 %lld 条服药记录；这不能证明变化由该药物导致。";
+"Your %@ average %@ by %.0f%% compared with the previous week while %@ had %lld taken logs. This is trend context, not proof of cause." = "与前一周相比，%@ 平均值%@ %.0f%%；同期 %@ 有 %lld 条服药记录。这仅是趋势参考，并不能证明因果关系。";
+
+/* ── v2 Consultation Snapshot & Symptom Logging ── */
+
+/* Medication source */
+"Prescription" = "本院处方";
+"External Rx" = "外院处方";
+"OTC" = "非处方药";
+"Supplement" = "保健品";
+"Unspecified" = "未分类";
+
+/* Symptom severity */
+"Mild" = "轻度";
+"Moderate" = "中度";
+"Severe" = "重度";
+
+/* Symptom preset tags */
+"Dizziness" = "头晕";
+"Abdominal pain" = "腹痛";
+"Insomnia" = "失眠";
+"Rash" = "皮疹";
+"Chest tightness" = "胸闷";
+"Wheezing" = "喘息";
+
+/* Symptom sheet */
+"Other (type here)" = "其他（输入症状）";
+"Symptoms" = "症状";
+"Tap to pick one or more. Your doctor will see this during your next visit." = "可多选。医生下次就诊时能看到这些信息。";
+"Severity" = "严重程度";
+"When" = "发生时间";
+"Occurred" = "发生时间";
+"e.g., after lunch, lasted 30 minutes" = "例如：午饭后出现，持续 30 分钟";
+"Notes (optional)" = "备注（可选）";
+"Suspected medication" = "疑似关联用药";
+"If you think a medication might have caused this, link it here. Optional." = "如果你怀疑是某种药导致的，可以关联。选填。";
+"Log Symptom" = "记录症状";
+"Edit Symptom" = "编辑症状";
+"No medications to choose from." = "暂无可选用药。";
+
+/* Dashboard symptom entry card */
+"How are you feeling?" = "今天感觉如何？";
+"Log any discomfort so your doctor can review next visit." = "记录任何不适，下次就诊时让医生看。";
+"%lld logged today. Tap to add another." = "今天已记录 %lld 条，点击继续添加。";
+
+/* Consultation Snapshot */
+"Consultation Snapshot" = "就诊摘要";
+"What the hospital doesn't see" = "医院病历看不到的部分";
+"For Your Doctor" = "给医生看";
+"Visit Prep" = "复诊准备";
+"Doctor visit" = "复诊";
+"Plan your next appointment" = "规划下一次复诊";
+"Add a visit date when you know your next appointment." = "知道下次就诊日期后，在这里添加复诊。";
+"Prepare for your next visit" = "准备下一次复诊";
+"Add an appointment so your medication, symptoms, and measurements become a focused doctor summary." = "添加复诊时间，让用药、症状和测量自动整理成给医生看的摘要。";
+"No visit scheduled" = "暂无复诊安排";
+"Add your next appointment so the app can prepare a focused doctor snapshot." = "添加下一次复诊，应用会提前准备聚焦的就诊摘要。";
+"Add Visit" = "添加复诊";
+"Edit Visit" = "编辑复诊";
+"Appointment" = "复诊信息";
+"Date" = "日期";
+"Hospital" = "医院";
+"Department" = "科室";
+"Doctor" = "医生";
+"Reason" = "复诊原因";
+"Follow-up" = "复诊随访";
+"After Visit" = "就诊后";
+"Visit completed" = "已完成就诊";
+"Doctor notes" = "医生交代";
+"Medication changes" = "用药调整";
+"Set next visit date" = "设置下次复诊";
+"Next visit" = "下次复诊";
+"Doctor-facing summary for the appointment" = "给医生看的本次复诊摘要";
+"Time, doctor, department, and reason" = "时间、医生、科室和复诊原因";
+"Upcoming" = "即将到来";
+"Overdue" = "已逾期";
+"Completed" = "已完成";
+"Appointment today" = "今天就诊";
+"%lld days until appointment" = "距离复诊 %lld 天";
+"%lld days overdue" = "逾期 %lld 天";
+"%lld days overdue · %@" = "逾期 %lld 天 · %@";
+"In %lld days · %@" = "%lld 天后 · %@";
+"Today · %@" = "今天 · %@";
+"Completed %@" = "完成于 %@";
+"Tap to add doctor, department, and reason." = "点击补充医生、科室和复诊原因。";
+"Prepared For" = "本次复诊";
+"Completed visit. Keep notes here for the next follow-up." = "就诊已完成。可保留记录，供下次复诊参考。";
+"Use this during the appointment to answer common doctor questions quickly." = "就诊时用它快速回答医生常问的问题。";
+"Your appointment is in %lld days. Keep logging anything the doctor should know." = "距离复诊还有 %lld 天。继续记录医生需要知道的情况。";
+"This appointment is overdue. Update it after the visit or schedule the next one." = "这次复诊已逾期。就诊后请更新记录或安排下次复诊。";
+"%lld current medications, grouped by source." = "当前 %lld 种用药，已按来源分组。";
+"%lld missed-dose days to discuss." = "有 %lld 个漏服日可与医生讨论。";
+"%lld out-of-range home readings in the last 30 days." = "近 30 天有 %lld 次家庭测量超出范围。";
+"%lld symptom notes since the last review window." = "本周期记录了 %lld 条症状。";
+"No major issues logged yet; keep recording doses, symptoms, and measurements before the visit." = "暂无明显问题记录；复诊前继续记录服药、症状和测量。";
+"Prepare for your doctor visit" = "准备复诊";
+"Visit preparation" = "复诊准备";
+"Open the doctor snapshot and review medication, symptoms, and measurements." = "打开就诊摘要，复核用药、症状和家庭测量。";
+"Medication routine maintained" = "用药记录保持稳定";
+"%@ has been logged consistently for %lld days." = "%@ 已连续记录 %lld 天。";
+"%@ is coming up. Review your medication, symptoms, and measurements before the appointment." = "%@ 即将到来。复诊前请查看用药、症状和测量摘要。";
+"Prepared for: %@ (%@)" = "准备给：%@（%@）";
+"Reason: %@" = "复诊原因：%@";
+"%@ · prepare the doctor snapshot now." = "%@ · 现在可以准备就诊摘要。";
+"%@ · keep logging doses, symptoms, and measurements." = "%@ · 继续记录服药、症状和测量。";
+"Patient-reported · not from hospital records" = "患者自报 · 非病历数据";
+"No medications recorded." = "暂无用药记录。";
+"PRN" = "按需";
+"since %@ (%lldd)" = "自 %@（已用 %lld 天）";
+"Adherence · last %lld days" = "服药依从 · 近 %lld 天";
+"Adherence" = "服药依从";
+"No scheduled medications." = "暂无定时用药。";
+"No missed doses." = "无漏服。";
+"%lld missed" = "漏服 %lld 次";
+"Home Measurements · last %lld days" = "家庭自测 · 近 %lld 天";
+"Home Measurements" = "家庭自测";
+"No measurements recorded in the window." = "此时段内没有测量记录。";
+"%lld out-of-range" = "超出范围 %lld 次";
+"%lld readings · in range" = "共 %lld 次 · 均在范围内";
+"Symptoms · last %lld days" = "症状 · 近 %lld 天";
+"No symptoms logged. Tap Add when you feel unwell." = "暂无症状记录。感觉不适时点击添加。";
+"suspected: %@" = "疑似：%@";
+"Blood type" = "血型";
+"Conditions" = "基础病";
+"Contact" = "紧急联系人";
+"Not set. Use the menu to edit." = "未设置，可在菜单中编辑。";
+"Share Snapshot" = "分享摘要";
+"Edit Emergency Info" = "编辑急救信息";
+"since" = "起始于";
+"None." = "无。";
+"Add" = "添加";
+
+/* Emergency Card (slimmed) */
+"Emergency Card" = "急救卡";
+"For emergencies: show first responders or ER staff." = "紧急情况使用：可展示给急救人员或急诊医护。";
+"Who prescribed this?" = "这个药从哪来？";
+"Source" = "来源";
+"Hospital or doctor (optional)" = "医院 / 诊所 / 医生名（选填）";
+"Helps your doctor see at a glance which meds come from other clinics, OTC, or supplements." = "便于医生一眼看清哪些是外院、OTC 或保健品。";
+
+/* ── Visit management & misc ── */
+"Delete Visit" = "删除就诊";
+"Delete this visit?" = "确认删除这次就诊？";
+"%d caregivers" = "%d 位照护者";
+"%d measurements" = "%d 条测量";
+"Blood pressure, glucose, weight, heart rate" = "血压、血糖、体重、心率";
+"Could not create report" = "无法生成报告";
+"PDF for your doctor — last 30 days" = "给医生的 PDF — 最近 30 天";
+"Share Health Report" = "分享健康报告";
+"up next" = "下一项";
+"Today schedule" = "今日日程";
+"%lld total" = "共 %lld 项";
+"Show full schedule" = "查看完整日程";
+"Show key items only" = "只看关键项";
+"Small logs today become useful context for your next doctor visit." = "今天的小记录，会变成下次给医生看的有用线索。";
+"Doses" = "用药";
+"Readings" = "测量";
+"Feelings" = "感觉";
+"of %lld items" = "共 %lld 项";
+"Next item %@" = "下一项 %@";
+"Blood pressure" = "血压";
+"Blood glucose" = "血糖";
+"Not measured" = "未测量";
+"Appointment countdown" = "复诊倒计时";
+"%lld days" = "%lld 天";
+"Body check-in" = "身体打卡";
+"Logged today" = "今天已记";
+"Good" = "好";
+"Okay" = "一般";
+"Unwell" = "不适";
+"Felt good" = "今天感觉好";
+"Felt okay" = "今天感觉一般";
+"Felt unwell" = "今天感觉不适";
+"Saved: %@" = "已记录：%@";
+"%lld doses need attention" = "%lld 次用药需要处理";
+"One thing to handle now" = "现在只处理一件事";
+"Start today's health log" = "开始今天的健康记录";
+"Today is documented" = "今天已记录完整";
+"%lld doses left today" = "今天还剩 %lld 次用药";
+"Appointment in %lld days" = "距离复诊 %lld 天";
+"30d readings" = "30天测量";
+"30d feelings" = "30天感觉";
+"Today is your appointment" = "今天去复诊";
+"Show Doctor Snapshot" = "展示就诊摘要";
+"Bring ID, insurance card, and your medication list." = "记得带身份证、医保卡和用药清单。";
+"Record doctor notes after the visit" = "就诊后记录医生交代";
+"Capture what the doctor said" = "趁现在记下医生说了什么";
+"The first 48 hours after a visit are the best time to record instructions, medication changes, and the next appointment." = "复诊后的 48 小时内最适合记录医嘱、用药调整和下次复诊。";
+"Doctor instructions" = "医生交代";
+"Not recorded yet" = "尚未记录";
+"Next appointment" = "下次复诊";
+"Not scheduled yet" = "尚未安排";
+"Record Visit Notes" = "记录本次复诊";
+"Visit prep materials" = "复诊资料准备";
+"Review current medications" = "当前用药核对";
+"%lld medications to review" = "需要核对 %lld 种用药";
+"Home measurement records" = "家庭测量记录";
+"Record blood pressure, glucose, weight, or heart rate" = "记录血压、血糖、体重或心率";
+"%lld home readings in the last 30 days" = "近 30 天 %lld 次家庭测量";
+"Body changes and symptoms" = "身体变化记录";
+"Add discomfort only when something feels different" = "只有感觉不一样时再补充不适";
+"%lld body notes in the last 30 days" = "近 30 天 %lld 条身体记录";
+"%lld/3 ready" = "%lld/3 已准备";
+"Today complete. Appointment in %lld days; your records are getting ready." = "今天已完成。距离复诊 %lld 天，记录正在积累。";
+"Today complete. Appointment in %lld days; review the doctor snapshot next." = "今天已完成。距离复诊 %lld 天，接下来查看就诊摘要。";
+"Today complete. This appointment is overdue; update it after the visit." = "今天已完成。这次复诊已逾期，就诊后请更新记录。";
+"Today complete. Keep the doctor snapshot ready for the appointment." = "今天已完成。就诊时保持摘要可随时展示。";
+"Open visit summary" = "打开就诊摘要";
+"Data readiness" = "数据准备";
+"%lld / 6" = "%lld / 6";
+"%lld / %lld" = "%lld / %lld";
+"Medication records" = "用药记录";
+"Add current medications" = "添加当前用药";
+"30 days complete" = "30 天完整";
+"%lld current medications" = "%lld 种当前用药";
+"0 entries" = "0 条";
+"%lld entries" = "%lld 条";
+"%lld entries in last 30 days" = "近 30 天 %lld 条";
+"Needed for blood pressure medications" = "当前有降压药，需要血压记录";
+"Needed for diabetes medications" = "当前有降糖药，需要血糖记录";
+"Home measurements" = "家庭测量";
+"Add only if your doctor asked you to track a value." = "只有医生要求追踪某项指标时再添加。";
+"Symptoms or concerns" = "症状或担心";
+"No concerns recorded; fine if nothing changed." = "未记录不适；如果身体没有变化，这是正常的。";
+"Last dose adjustment" = "上次调药";
+"Unconfirmed" = "未确认";
+"Saved from last visit" = "已从上次复诊保存";
+"No prior adjustment recorded." = "未记录上次调药。";
+"Next follow-up booking" = "下次复诊预约";
+"Appointment details" = "复诊信息";
+"Scheduled" = "已设置";
+"Visit summary" = "就诊摘要";
+"Patient-reported · not a medical record" = "患者自报 · 非病历数据";
+"Allergy · %@" = "过敏 · %@";
+"Current medications" = "当前用药";
+"%lld items" = "%lld 项";
+"Hospital prescription" = "本院处方";
+"External prescription" = "外院处方";
+"No time set" = "未设置时间";
+"Since %@" = "自 %@";
+"Home measurements · last %lld days" = "家庭测量 · 近 %lld 天";
+"Manage" = "管理";
+"Manage Measurements" = "管理测量记录";
+"No measurements recorded." = "暂无测量记录。";
+"New blood pressure and glucose readings will appear here." = "新的血压和血糖记录会显示在这里。";
+"Latest %@ · %lld entries · %lld out-of-range" = "最新 %@ · %lld 条 · %lld 次超出范围";
+"Latest %@ · %lld entries · within range" = "最新 %@ · %lld 条 · 范围内";
+"Delete Symptom Entry" = "删除症状记录";
+"Delete this symptom entry?" = "删除这条症状记录？";
+"This symptom note will be removed from future visit summaries." = "这条症状记录将从之后的就诊摘要中移除。";
+"Warning" = "警示";
+"Doctor summary" = "医生摘要";
+"Prepared for: %@ · %@" = "准备给：%@ · %@";
+"Red flags" = "风险提示";
+"No red flags recorded." = "暂无需特别提示的风险。";
+"+%lld more in medication details" = "另外 %lld 项见用药详情";
+"Adherence gaps" = "依从性问题";
+"No missed-dose days in the report window." = "报告周期内没有整日漏服记录。";
+"%@ · %lld missed days" = "%@ · %lld 个漏服日";
+"No home measurements in the report window." = "报告周期内没有家庭测量记录。";
+"%lld out of range" = "%lld 次超出范围";
+"within range" = "范围内";
+"entries" = "条记录";
+"Recent symptoms" = "近期症状";
+"No symptoms logged in the report window." = "报告周期内没有症状记录。";
+"Suggested talking points" = "建议沟通点";
+"Supporting details" = "支持性明细";
+"The following pages provide the evidence behind the doctor summary and avoid repeating the summary narrative." = "以下页面提供医生摘要背后的明细证据，避免重复摘要叙述。";
+"Adherence detail" = "依从性明细";
+"Medication details" = "用药明细";
+"Measurement detail" = "测量明细";
+"Recent measurement log" = "近期测量记录";
+"Allergy: %@" = "过敏：%@";
+"Low supply: %@" = "余量不足：%@";
+"%lld missed-dose days in the report window." = "报告周期内有 %lld 个漏服日。";
+"%lld out-of-range home readings." = "家庭测量有 %lld 次超出范围。";
+"%lld severe symptom notes." = "有 %lld 条重度症状记录。";
+"Prepared for %@." = "为 %@ 准备。";
+"Review %lld current medications and whether the schedule is still correct." = "核对当前 %lld 种用药及服药时间是否仍然正确。";
+"Discuss missed doses for %@." = "讨论 %@ 的漏服情况。";
+"Review %@ readings with %lld out-of-range values." = "查看 %@，其中 %lld 次超出范围。";
+"Discuss recent symptom: %@." = "讨论近期症状：%@。";
+"No major issues were logged; use the detail pages as supporting context." = "未记录明显问题，可把后续明细作为沟通背景。";
+"Report Preview" = "报告预览";
+"Share PDF" = "分享 PDF";
+"Generating PDF…" = "正在生成 PDF…";
+"Doctor summary first. Details second." = "先给医生摘要，再给明细证据。";
+"This PDF covers the last %lld days and starts with the same doctor-focused summary used in Visit Snapshot." = "这份 PDF 覆盖最近 %lld 天，并以就诊摘要中同一套面向医生的摘要开头。";
+"Included in the PDF" = "PDF 将包含";
+"Red flags, current medications, adherence gaps, home measurements, symptoms, and talking points." = "风险提示、当前用药、依从性问题、家庭测量、症状和建议沟通点。";
+"Adherence chart, medication details, measurement trends, and recent measurement log." = "依从性图表、用药明细、测量趋势和近期测量记录。";
+"Data coverage" = "数据覆盖";
+"Give this to your doctor" = "给医生看";
+"Export a clean PDF when the doctor needs a focused summary with supporting details." = "需要正式、清晰的资料时，导出包含摘要和明细证据的 PDF。";
+"Export doctor PDF" = "导出医生 PDF";
+"Next visit in %lld days. Today’s logs will become your doctor summary." = "距离下次复诊 %lld 天。今天的记录会成为给医生看的摘要。";
+"Next visit in %lld days · %lld days of data ready for your doctor." = "距离下次复诊 %lld 天 · 已为医生准备 %lld 天数据。";
+"Export Data Files" = "导出数据文件";
+"Back up this device or export raw data files for your own records." = "备份此设备，或导出原始数据文件供自己留存。";
+"handle above" = "在上方处理";

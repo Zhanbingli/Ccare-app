@@ -65,35 +65,36 @@ struct ReminderDiagnosticsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                TintedCard(tint: hasCoverageIssues ? .orange : .green) {
+                Card {
                     VStack(alignment: .leading, spacing: 14) {
                         Text(NSLocalizedString("Reminder Coverage", comment: ""))
                             .appFont(.title)
                             .fontWeight(.bold)
+                            .foregroundStyle(AppColor.textPrimary)
                         Text(systemStatusText)
                             .appFont(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppColor.textSecondary)
 
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                             diagnosticMetric(
                                 title: NSLocalizedString("Permission", comment: ""),
                                 value: permissionLabel,
-                                tint: notificationStatus == .authorized || notificationStatus == .provisional ? .green : .orange
+                                tint: notificationStatus == .authorized || notificationStatus == .provisional ? AppColor.primary : AppColor.warning
                             )
                             diagnosticMetric(
                                 title: NSLocalizedString("Reminders Off", comment: ""),
                                 value: "\(scheduledWithoutRemindersCount)",
-                                tint: scheduledWithoutRemindersCount > 0 ? .orange : .secondary
+                                tint: scheduledWithoutRemindersCount > 0 ? AppColor.warning : AppColor.textSecondary
                             )
                             diagnosticMetric(
                                 title: NSLocalizedString("Missing Times", comment: ""),
                                 value: "\(untimedScheduledCount)",
-                                tint: untimedScheduledCount > 0 ? .orange : .secondary
+                                tint: untimedScheduledCount > 0 ? AppColor.warning : AppColor.textSecondary
                             )
                             diagnosticMetric(
                                 title: NSLocalizedString("PRN", comment: ""),
                                 value: "\(prnMeds.count)",
-                                tint: .blue
+                                tint: AppColor.textSecondary
                             )
                         }
 
@@ -110,9 +111,9 @@ struct ReminderDiagnosticsView: View {
 
                 if !hasCoverageIssues {
                     Card {
-                        Label(NSLocalizedString("All scheduled medications currently have reminder coverage.", comment: ""), systemImage: "checkmark.circle.fill")
+                        Label(NSLocalizedString("All scheduled medications currently have reminder coverage.", comment: ""), systemImage: "checkmark.circle")
                             .appFont(.subheadline)
-                            .foregroundStyle(.green)
+                            .foregroundStyle(AppColor.primary)
                     }
                 }
 
@@ -172,6 +173,7 @@ struct ReminderDiagnosticsView: View {
             }
             .padding(16)
         }
+        .background(AppColor.background)
         .navigationTitle(NSLocalizedString("Reminder Coverage", comment: ""))
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $editTarget) { med in
@@ -223,13 +225,13 @@ struct ReminderDiagnosticsView: View {
         InsetPanel(tint: tint) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(value)
-                    .appFont(.headline)
+                    .appFontNumeric(.headline)
                     .foregroundStyle(tint)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Text(title)
                     .appFont(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppColor.textSecondary)
             }
             .frame(maxWidth: .infinity, minHeight: 74, alignment: .topLeading)
         }
@@ -248,9 +250,10 @@ struct ReminderDiagnosticsView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(title)
                             .appFont(.headline)
+                            .foregroundStyle(AppColor.textPrimary)
                         Text(subtitle)
                             .appFont(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppColor.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
@@ -278,9 +281,10 @@ struct ReminderDiagnosticsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(medication.name)
                         .appFont(.subheadline)
+                        .foregroundStyle(AppColor.textPrimary)
                     Text("\(medication.dose) · \(reason)")
                         .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColor.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()

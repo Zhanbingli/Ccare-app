@@ -1,7 +1,53 @@
 import SwiftUI
 
+enum EditorialPalette {
+    static let primary = Color(red: 0.165, green: 0.420, blue: 0.486) // #2A6B7C
+    static let warning = Color(red: 0.753, green: 0.271, blue: 0.271) // #C04545
+    static let background = Color(red: 0.980, green: 0.980, blue: 0.980) // #FAFAFA
+    static let surface = Color.white
+    static let textPrimary = Color(red: 0.110, green: 0.110, blue: 0.118) // #1C1C1E
+    static let textSecondary = Color(red: 0.420, green: 0.447, blue: 0.502) // #6B7280
+    static let textTertiary = Color(red: 0.631, green: 0.631, blue: 0.667) // #A1A1AA
+    static let divider = Color(red: 0.898, green: 0.906, blue: 0.922) // #E5E7EB
+    static let success = Color(red: 0.180, green: 0.490, blue: 0.310)
+}
+
+enum AppColor {
+    static let primary = EditorialPalette.primary
+    static let warning = EditorialPalette.warning
+    static let background = EditorialPalette.background
+    static let surface = EditorialPalette.surface
+    static let textPrimary = EditorialPalette.textPrimary
+    static let textSecondary = EditorialPalette.textSecondary
+    static let textTertiary = EditorialPalette.textTertiary
+    static let divider = EditorialPalette.divider
+    static let success = EditorialPalette.success
+}
+
+enum EditorialSpacing {
+    static let xxs: CGFloat = 2
+    static let xs: CGFloat = 4
+    static let sm: CGFloat = 8
+    static let md: CGFloat = 12
+    static let lg: CGFloat = 16
+    static let xl: CGFloat = 24
+    static let xxl: CGFloat = 32
+    static let xxxl: CGFloat = 48
+}
+
+enum AppTypography {
+    static let heroNumber = AppFontStyle.heroNumber
+    static let displayTitle = AppFontStyle.displayTitle
+    static let sectionTitle = AppFontStyle.headline
+    static let body = AppFontStyle.body
+    static let caption = AppFontStyle.caption
+    static let micro = AppFontStyle.micro
+}
+
 enum AppSpacing {
+    static let micro: CGFloat = 2
     static let xxSmall: CGFloat = 4
+    static let tiny: CGFloat = 6
     static let xSmall: CGFloat = 8
     static let small: CGFloat = 12
     static let medium: CGFloat = 16
@@ -10,56 +56,42 @@ enum AppSpacing {
 }
 
 enum AppRadius {
+    static let pill: CGFloat = 8
+    static let small: CGFloat = 10
+    static let medium: CGFloat = 12
     static let panel: CGFloat = 16
     static let card: CGFloat = 24
     static let hero: CGFloat = 28
 }
 
 enum AppSemanticColor {
-    static let info = Color.accentColor
-    static let success = Color.green
-    static let warning = Color.orange
-    static let danger = Color.red
+    static let info = EditorialPalette.primary
+    static let success = EditorialPalette.success
+    static let warning = EditorialPalette.warning
+    static let danger = EditorialPalette.warning
 }
 
 struct Card<Content: View>: View {
-    @Environment(\.colorScheme) private var colorScheme
     let content: Content
     init(@ViewBuilder content: () -> Content) { self.content = content() }
     var body: some View {
         content
-            .padding(AppSpacing.large)
+            .padding(EditorialSpacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                    .fill(cardFill)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(EditorialPalette.surface)
+                    .shadow(color: .black.opacity(0.04), radius: 10, x: 0, y: 4)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                    .stroke(cardStroke, lineWidth: 1)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(EditorialPalette.divider.opacity(0.65), lineWidth: 0.8)
             )
-            .shadow(color: cardShadow, radius: 14, x: 0, y: 8)
-    }
-
-    private var cardFill: Color {
-        colorScheme == .dark
-            ? Color.white.opacity(0.07)
-            : Color.white.opacity(0.82)
-    }
-
-    private var cardStroke: Color {
-        colorScheme == .dark
-            ? Color.white.opacity(0.07)
-            : Color.black.opacity(0.05)
-    }
-
-    private var cardShadow: Color {
-        colorScheme == .dark
-            ? Color.black.opacity(0.24)
-            : Color(red: 0.15, green: 0.22, blue: 0.28).opacity(0.10)
     }
 }
 
+/// Reserved for emphasis states (overdue dose, low supply, critical alert).
+/// Don't use as a default container — plain `Card` is the baseline now.
 struct TintedCard<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
     let tint: Color
@@ -70,17 +102,217 @@ struct TintedCard<Content: View>: View {
     }
     var body: some View {
         content
-            .padding(AppSpacing.large)
+            .padding(EditorialSpacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: AppRadius.hero, style: .continuous)
-                    .fill(tint.opacity(colorScheme == .dark ? 0.10 : 0.06))
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(EditorialPalette.surface)
+                    .shadow(color: .black.opacity(0.04), radius: 10, x: 0, y: 4)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.hero, style: .continuous)
-                    .stroke(tint.opacity(colorScheme == .dark ? 0.18 : 0.12), lineWidth: 0.8)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(tint.opacity(colorScheme == .dark ? 0.42 : 0.24), lineWidth: 0.9)
             )
-            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.16 : 0.06), radius: 8, x: 0, y: 4)
+    }
+}
+
+struct AppDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(AppColor.divider)
+            .frame(height: 1)
+    }
+}
+
+struct EditorialSection<Content: View>: View {
+    let title: String
+    let trailing: String?
+    let content: Content
+
+    init(_ title: String, trailing: String? = nil, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.trailing = trailing
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .appFont(AppTypography.sectionTitle)
+                    .foregroundStyle(AppColor.textPrimary)
+                Spacer(minLength: EditorialSpacing.md)
+                if let trailing {
+                    Text(trailing)
+                        .appFontNumeric(AppTypography.caption)
+                        .foregroundStyle(AppColor.textSecondary)
+                }
+            }
+
+            AppDivider()
+
+            content
+        }
+    }
+}
+
+struct EditorialRow<Trailing: View>: View {
+    enum Tone {
+        case neutral
+        case primary
+        case warning
+        case success
+
+        var color: Color {
+            switch self {
+            case .neutral: return AppColor.textTertiary
+            case .primary: return AppColor.primary
+            case .warning: return AppColor.warning
+            case .success: return AppColor.success
+            }
+        }
+    }
+
+    let icon: String?
+    let title: String
+    let detail: String?
+    let tone: Tone
+    let trailing: Trailing
+
+    init(
+        icon: String? = nil,
+        title: String,
+        detail: String? = nil,
+        tone: Tone = .neutral,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.icon = icon
+        self.title = title
+        self.detail = detail
+        self.tone = tone
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: EditorialSpacing.sm) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(tone.color)
+                    .frame(width: 18, alignment: .center)
+            }
+
+            VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                Text(title)
+                    .appFont(AppTypography.body)
+                    .foregroundStyle(AppColor.textPrimary)
+                if let detail, !detail.isEmpty {
+                    Text(detail)
+                        .appFont(AppTypography.caption)
+                        .foregroundStyle(AppColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Spacer(minLength: EditorialSpacing.md)
+
+            trailing
+        }
+        .padding(.vertical, EditorialSpacing.xs)
+        .contentShape(Rectangle())
+    }
+}
+
+extension EditorialRow where Trailing == EmptyView {
+    init(icon: String? = nil, title: String, detail: String? = nil, tone: Tone = .neutral) {
+        self.init(icon: icon, title: title, detail: detail, tone: tone) {
+            EmptyView()
+        }
+    }
+}
+
+struct EditorialRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
+                    .fill(configuration.isPressed ? AppColor.divider.opacity(0.42) : Color.clear)
+            )
+    }
+}
+
+enum EditorialButtonKind {
+    case primary
+    case secondary
+    case plain
+}
+
+struct EditorialButton: View {
+    let title: String
+    let systemImage: String?
+    let kind: EditorialButtonKind
+    let action: () -> Void
+
+    init(
+        _ title: String,
+        systemImage: String? = nil,
+        kind: EditorialButtonKind = .secondary,
+        action: @escaping () -> Void
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.kind = kind
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: EditorialSpacing.sm) {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 14, weight: .regular))
+                }
+                Text(title)
+                    .appFont(.subheadline)
+                    .fontWeight(.medium)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 42)
+            .foregroundStyle(foreground)
+            .background(background)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(stroke, lineWidth: kind == .plain ? 0 : 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var foreground: Color {
+        switch kind {
+        case .primary: return AppColor.primary
+        case .secondary: return AppColor.textPrimary
+        case .plain: return AppColor.primary
+        }
+    }
+
+    @ViewBuilder
+    private var background: some View {
+        if kind == .plain {
+            Color.clear
+        } else {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(AppColor.surface)
+        }
+    }
+
+    private var stroke: Color {
+        switch kind {
+        case .primary: return AppColor.primary.opacity(0.55)
+        case .secondary: return AppColor.divider
+        case .plain: return .clear
+        }
     }
 }
 
@@ -206,10 +438,10 @@ struct EmptyStateView: View {
 extension MeasurementType {
     var tint: Color {
         switch self {
-        case .bloodPressure: return .indigo // use red only when abnormal
-        case .bloodGlucose:  return .orange
-        case .weight:        return .teal
-        case .heartRate:     return .pink
+        case .bloodPressure: return AppColor.primary
+        case .bloodGlucose:  return AppColor.primary
+        case .weight:        return AppColor.textSecondary
+        case .heartRate:     return AppColor.primary
         }
     }
 }
@@ -217,10 +449,10 @@ extension MeasurementType {
 extension MeasurementType {
     var tintUIColor: UIColor {
         switch self {
-        case .bloodPressure: return .systemIndigo
-        case .bloodGlucose:  return .systemOrange
-        case .weight:        return .systemTeal
-        case .heartRate:     return .systemPink
+        case .bloodPressure: return UIColor(red: 0.165, green: 0.420, blue: 0.486, alpha: 1)
+        case .bloodGlucose:  return UIColor(red: 0.165, green: 0.420, blue: 0.486, alpha: 1)
+        case .weight:        return UIColor(red: 0.420, green: 0.447, blue: 0.502, alpha: 1)
+        case .heartRate:     return UIColor(red: 0.165, green: 0.420, blue: 0.486, alpha: 1)
         }
     }
 }

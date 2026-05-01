@@ -1,3 +1,5 @@
-"NSHealthShareUsageDescription" = "ChronicCare 使用“健康”来读取你的健康数据（血压、血糖、心率、体重），用于趋势分析与洞察。";
-"NSHealthUpdateUsageDescription" = "ChronicCare 会将你添加的测量写入“健康”，以便安全存储并在其他 App 中使用。";
-"CFBundleDisplayName" = "ChronicCare";
+"NSHealthShareUsageDescription" = "药时护使用“健康”来读取你的健康数据（血压、血糖、心率、体重），用于趋势分析与洞察。";
+"NSHealthUpdateUsageDescription" = "药时护会将你添加的测量写入“健康”，以便安全存储并在其他 App 中使用。";
+"NSCameraUsageDescription" = "药时护使用相机扫描药物标签并填写药物详情。";
+"NSContactsUsageDescription" = "药时护使用通讯录，方便你添加紧急联系人和照护人，无需手动输入。";
+"CFBundleDisplayName" = "药时护";

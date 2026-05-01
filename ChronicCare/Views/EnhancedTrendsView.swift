@@ -7,6 +7,8 @@ struct EnhancedTrendsView: View {
     @State private var selectedType: MeasurementType = .bloodPressure
     @State private var rangeDays: Int = 30
     @State private var selectedDataPoint: Measurement?
+    @State private var editingMeasurement: Measurement?
+    @State private var deleteTarget: Measurement?
     @State private var showAIInsights = false
     @State private var aiInsights: String?
     @State private var isLoadingInsights = false
@@ -26,6 +28,13 @@ struct EnhancedTrendsView: View {
         return store.measurements
             .filter { $0.type == selectedType && $0.date >= start && $0.date <= now }
             .sorted(by: { $0.date < $1.date })
+    }
+
+    private var deleteConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: { deleteTarget != nil },
+            set: { if !$0 { deleteTarget = nil } }
+        )
     }
 
     private struct BPPoint: Identifiable {
@@ -62,7 +71,7 @@ struct EnhancedTrendsView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 14) {
+                VStack(spacing: EditorialSpacing.lg) {
                     kpiHeader
                         .padding(.horizontal)
 
@@ -75,7 +84,7 @@ struct EnhancedTrendsView: View {
                         if let selected = selectedDataPoint {
                             dataPointDetailCard(measurement: selected)
                                 .padding(.horizontal)
-                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                                .transition(.opacity)
                         }
 
                         aiInsightsSection
@@ -84,33 +93,43 @@ struct EnhancedTrendsView: View {
                 }
                 .padding(.vertical, 12)
             }
+            .background(AppColor.background)
             .safeAreaInset(edge: .top) {
                 pickerSection
                     .padding(.vertical, 8)
-                    .background(.ultraThinMaterial)
-                    .overlay(Divider(), alignment: .bottom)
+                    .background(AppColor.background)
+                    .overlay(AppDivider(), alignment: .bottom)
             }
             .navigationTitle(NSLocalizedString("Trends", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(item: $editingMeasurement) { measurement in
+                AddMeasurementView(editing: measurement) { updated in
+                    store.updateMeasurement(updated)
+                    selectedDataPoint = updated
+                    Haptics.success()
+                }
+            }
+            .alert(NSLocalizedString("Delete Measurement", comment: ""), isPresented: deleteConfirmationBinding) {
+                Button(NSLocalizedString("Delete", comment: ""), role: .destructive) {
+                    deleteSelectedMeasurement()
+                }
+                Button(NSLocalizedString("Cancel", comment: ""), role: .cancel) {
+                    deleteTarget = nil
+                }
+            } message: {
+                Text(NSLocalizedString("This measurement will be removed from trends and future visit summaries.", comment: ""))
+            }
         }
     }
 
     // MARK: - Empty State
     private var emptyStateView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "chart.xyaxis.line")
-                .font(.system(size: 60))
-                .foregroundStyle(.secondary)
-            Text(NSLocalizedString("No data in range", comment: ""))
-                .appFont(.headline)
-                .foregroundStyle(.secondary)
-            Text(NSLocalizedString("Add measurements to see trends", comment: ""))
-                .appFont(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 300)
+        EmptyStateView(
+            systemImage: "chart.xyaxis.line",
+            title: NSLocalizedString("No data in range", comment: ""),
+            subtitle: NSLocalizedString("Add measurements to see trends", comment: "")
+        )
+        .frame(minHeight: 260)
     }
 
     // MARK: - KPI Header
@@ -126,19 +145,23 @@ struct EnhancedTrendsView: View {
     private func kpiCell(label: String, value: String, unit: String) -> some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(.system(.title3, design: .rounded))
-                .fontWeight(.bold)
-                .monospacedDigit()
+                .appFontNumeric(.title)
+                .foregroundStyle(AppColor.textPrimary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.75)
             Text(label)
                 .appFont(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppColor.textSecondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
+        .padding(.vertical, AppSpacing.small)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
+            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                .fill(AppColor.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                .stroke(AppColor.divider, lineWidth: 1)
         )
     }
 
@@ -150,52 +173,73 @@ struct EnhancedTrendsView: View {
 
     // MARK: - Data Point Detail
     private func dataPointDetailCard(measurement: Measurement) -> some View {
-        HStack(spacing: 12) {
-            // Value
-            Group {
-                if measurement.type == .bloodPressure, let dia = measurement.diastolic {
-                    Text("\(Int(measurement.value))/\(Int(dia)) \(measurement.type.unit)")
-                } else if measurement.type == .bloodGlucose {
-                    let v = UnitPreferences.mgdlToPreferred(measurement.value)
-                    let formatted = UnitPreferences.glucoseUnit == .mgdL ? String(format: "%.0f", v) : String(format: "%.1f", v)
-                    Text("\(formatted) \(UnitPreferences.glucoseUnit.rawValue)")
-                } else {
-                    Text("\(String(format: "%.1f", measurement.value)) \(measurement.type.unit)")
-                }
-            }
-            .appFont(.subheadline)
-            .fontWeight(.bold)
+        VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                    Text(measurementValueText(measurement))
+                        .appFont(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundStyle(AppColor.textPrimary)
 
-            // Date
-            Text(measurement.date, style: .date)
-                .appFont(.caption)
-                .foregroundStyle(.secondary)
-            Text(measurement.date, style: .time)
-                .appFont(.caption)
-                .foregroundStyle(.secondary)
-
-            if let note = measurement.note, !note.isEmpty {
-                Text(note)
+                    HStack(spacing: EditorialSpacing.sm) {
+                        Text(measurement.date, style: .date)
+                        Text(measurement.date, style: .time)
+                    }
                     .appFont(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .foregroundStyle(AppColor.textSecondary)
+
+                    if let note = measurement.note, !note.isEmpty {
+                        Text(note)
+                            .appFont(.caption)
+                            .foregroundStyle(AppColor.textSecondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { selectedDataPoint = nil }
+                } label: {
+                    Image(systemName: "xmark.circle")
+                        .font(.system(size: 20, weight: .regular))
+                        .foregroundStyle(AppColor.textTertiary)
+                }
+                .accessibilityLabel(NSLocalizedString("Close", comment: ""))
             }
 
-            Spacer(minLength: 0)
+            HStack(spacing: EditorialSpacing.sm) {
+                Button {
+                    editingMeasurement = measurement
+                } label: {
+                    Label(NSLocalizedString("Edit", comment: ""), systemImage: "square.and.pencil")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(AppColor.primary)
+                .controlSize(.small)
 
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) { selectedDataPoint = nil }
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.secondary)
+                Button(role: .destructive) {
+                    deleteTarget = measurement
+                } label: {
+                    Label(NSLocalizedString("Delete", comment: ""), systemImage: "trash")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(AppColor.warning)
+                .controlSize(.small)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, AppSpacing.medium)
+        .padding(.vertical, AppSpacing.medium)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
+            RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                .fill(AppColor.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                .stroke(AppColor.divider, lineWidth: 1)
         )
     }
 
@@ -210,11 +254,12 @@ struct EnhancedTrendsView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     HStack(spacing: 6) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.purple)
+                        Image(systemName: "text.magnifyingglass")
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundStyle(AppColor.primary)
                         Text(NSLocalizedString("AI Analysis", comment: ""))
                             .appFont(.subheadline)
+                            .foregroundStyle(AppColor.textPrimary)
                     }
                     Spacer()
                     if !isLoadingInsights {
@@ -225,6 +270,7 @@ struct EnhancedTrendsView: View {
                                 .appFont(.caption)
                         }
                         .buttonStyle(.bordered)
+                        .tint(AppColor.primary)
                         .controlSize(.small)
                     }
                 }
@@ -235,20 +281,24 @@ struct EnhancedTrendsView: View {
                             .controlSize(.small)
                         Text("Analyzing...")
                             .appFont(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppColor.textSecondary)
                     }
                     .padding(.vertical, 12)
                 } else if let insights = aiInsights {
                     Text(insights)
                         .appFont(.caption)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(AppColor.textPrimary)
                         .lineSpacing(5)
                 }
             }
-            .padding(14)
+            .padding(AppSpacing.medium)
             .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color(.secondarySystemBackground))
+            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                    .fill(AppColor.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                    .stroke(AppColor.divider, lineWidth: 1)
             )
         }
     }
@@ -313,18 +363,21 @@ struct EnhancedTrendsView: View {
         return Chart {
             RuleMark(y: .value("Systolic High", thresholds.systolicHigh))
                 .lineStyle(.init(dash: [4, 4]))
-                .foregroundStyle(.red.opacity(0.6))
+                .foregroundStyle(AppColor.warning.opacity(0.6))
                 .annotation(position: .top, alignment: .trailing) {
                     Text(NSLocalizedString("High", comment: "chart annotation"))
                         .appFont(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(AppColor.warning)
                         .padding(4)
-                        .background(Capsule().fill(.red.opacity(0.1)))
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(AppColor.surface)
+                        )
                 }
 
             RuleMark(y: .value("Diastolic High", thresholds.diastolicHigh))
                 .lineStyle(.init(dash: [4, 4]))
-                .foregroundStyle(.red.opacity(0.6))
+                .foregroundStyle(AppColor.warning.opacity(0.6))
 
             ForEach(points.filter { $0.diastolic != nil }) { p in
                 AreaMark(
@@ -334,7 +387,7 @@ struct EnhancedTrendsView: View {
                 )
                 .foregroundStyle(
                     LinearGradient(
-                        colors: [selectedType.tint.opacity(0.3), selectedType.tint.opacity(0.1)],
+                        colors: [AppColor.primary.opacity(0.12), AppColor.primary.opacity(0.03)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
@@ -368,7 +421,7 @@ struct EnhancedTrendsView: View {
                     y: .value("Systolic", p.systolic)
                 )
                 .symbolSize(isSelected ? 120 : 50)
-                .foregroundStyle(.indigo)
+                .foregroundStyle(AppColor.primary)
             }
 
             if let selected = selectedDataPoint {
@@ -442,22 +495,25 @@ struct EnhancedTrendsView: View {
                     yStart: .value("Low", rDisplay.lowerBound),
                     yEnd: .value("High", rDisplay.upperBound)
                 )
-                .foregroundStyle(.green.opacity(0.1))
+                .foregroundStyle(AppColor.primary.opacity(0.06))
 
                 RuleMark(y: .value("High", rDisplay.upperBound))
                     .lineStyle(.init(dash: [4,4]))
-                    .foregroundStyle(.green.opacity(0.6))
+                    .foregroundStyle(AppColor.primary.opacity(0.55))
                     .annotation(position: .top, alignment: .trailing) {
                         Text(NSLocalizedString("Target", comment: "chart annotation"))
                             .appFont(.caption)
-                            .foregroundStyle(.green)
+                            .foregroundStyle(AppColor.primary)
                             .padding(4)
-                            .background(Capsule().fill(.green.opacity(0.1)))
+                            .background(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(AppColor.surface)
+                            )
                     }
 
                 RuleMark(y: .value("Low", rDisplay.lowerBound))
                     .lineStyle(.init(dash: [4,4]))
-                    .foregroundStyle(.green.opacity(0.6))
+                    .foregroundStyle(AppColor.primary.opacity(0.55))
             }
 
             ForEach(filtered) { m in
@@ -469,7 +525,7 @@ struct EnhancedTrendsView: View {
                 )
                 .foregroundStyle(
                     LinearGradient(
-                        colors: [selectedType.tint.opacity(0.25), selectedType.tint.opacity(0.02)],
+                        colors: [AppColor.primary.opacity(0.10), AppColor.primary.opacity(0.02)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
@@ -484,7 +540,7 @@ struct EnhancedTrendsView: View {
                     y: .value("Value", yVal)
                 )
                 .interpolationMethod(.catmullRom)
-                .foregroundStyle(selectedType.tint)
+                .foregroundStyle(AppColor.primary)
                 .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
             }
 
@@ -501,7 +557,7 @@ struct EnhancedTrendsView: View {
                     y: .value("Value", yVal)
                 )
                 .symbolSize(selectedDataPoint?.id == m.id ? 120 : (isOutOfRange ? 80 : 60))
-                .foregroundStyle(isOutOfRange ? .red : selectedType.tint)
+                .foregroundStyle(isOutOfRange ? AppColor.warning : AppColor.primary)
             }
 
             if let selected = selectedDataPoint {
@@ -543,6 +599,28 @@ struct EnhancedTrendsView: View {
     }
 
     // MARK: - Helpers
+    private func measurementValueText(_ measurement: Measurement) -> String {
+        if measurement.type == .bloodPressure, let dia = measurement.diastolic {
+            return "\(Int(measurement.value))/\(Int(dia)) \(measurement.type.unit)"
+        }
+        if measurement.type == .bloodGlucose {
+            let value = UnitPreferences.mgdlToPreferred(measurement.value)
+            let formatted = UnitPreferences.glucoseUnit == .mgdL ? String(format: "%.0f", value) : String(format: "%.1f", value)
+            return "\(formatted) \(UnitPreferences.glucoseUnit.rawValue)"
+        }
+        return "\(String(format: "%.1f", measurement.value)) \(measurement.type.unit)"
+    }
+
+    private func deleteSelectedMeasurement() {
+        guard let deleteTarget else { return }
+        store.removeMeasurement(deleteTarget)
+        if selectedDataPoint?.id == deleteTarget.id {
+            selectedDataPoint = nil
+        }
+        self.deleteTarget = nil
+        Haptics.notification(.warning)
+    }
+
     private func latestText() -> String {
         guard let last = filtered.last else { return "—" }
         switch selectedType {

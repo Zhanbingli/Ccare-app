@@ -4,7 +4,7 @@
 <dict>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.lizhanbing.Ccare</string>
+		<string>group.ccare</string>
 	</array>
 </dict>
 </plist>

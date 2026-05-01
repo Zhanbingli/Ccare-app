@@ -79,6 +79,152 @@ struct ChronicCareTests {
         #expect(count == 1)
     }
 
+    @Test func doseSchedulingSkipsLoggedOutcomeForSameScheduleAndDay() {
+        let medID = UUID()
+        let morning = DateComponents(hour: 8, minute: 0)
+        let evening = DateComponents(hour: 20, minute: 0)
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(secondsFromGMT: 0)!
+        let day = cal.date(from: DateComponents(year: 2026, month: 4, day: 8))!
+        let morningDate = cal.date(bySettingHour: 8, minute: 0, second: 0, of: day)!
+        let eveningDate = cal.date(bySettingHour: 20, minute: 0, second: 0, of: day)!
+        let log = IntakeLog(
+            medicationID: medID,
+            date: morningDate,
+            status: .taken,
+            scheduleKey: "08:00",
+            scheduledDate: morningDate,
+            recordedAt: morningDate.addingTimeInterval(60)
+        )
+
+        #expect(NotificationManager.shouldScheduleDoseReminder(
+            medicationID: medID,
+            scheduleTime: morning,
+            doseDate: morningDate,
+            intakeLogs: [log],
+            allowNilScheduleKey: false,
+            calendar: cal
+        ) == false)
+
+        #expect(NotificationManager.shouldScheduleDoseReminder(
+            medicationID: medID,
+            scheduleTime: evening,
+            doseDate: eveningDate,
+            intakeLogs: [log],
+            allowNilScheduleKey: false,
+            calendar: cal
+        ))
+    }
+
+    @Test func doseSchedulingSkipsSnoozedOutcomeForSameScheduleAndDay() {
+        let medID = UUID()
+        let morning = DateComponents(hour: 8, minute: 0)
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(secondsFromGMT: 0)!
+        let day = cal.date(from: DateComponents(year: 2026, month: 4, day: 8))!
+        let morningDate = cal.date(bySettingHour: 8, minute: 0, second: 0, of: day)!
+        let log = IntakeLog(
+            medicationID: medID,
+            date: morningDate,
+            status: .snoozed,
+            scheduleKey: "08:00",
+            scheduledDate: morningDate,
+            recordedAt: morningDate.addingTimeInterval(120)
+        )
+
+        #expect(NotificationManager.shouldScheduleDoseReminder(
+            medicationID: medID,
+            scheduleTime: morning,
+            doseDate: morningDate,
+            intakeLogs: [log],
+            allowNilScheduleKey: false,
+            calendar: cal
+        ) == false)
+    }
+
+    @MainActor
+    @Test func makeupDoseAllowsLateDoseBeforeMidpointToNextDose() {
+        let cal = Calendar.current
+        let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 8, hour: 10, minute: 0))!
+        let med = Medication(
+            name: "Metformin",
+            dose: "500mg",
+            timesOfDay: [DateComponents(hour: 8, minute: 0), DateComponents(hour: 20, minute: 0)],
+            remindersEnabled: true
+        )
+
+        let result = MedicationRules.checkMakeupDose(
+            medication: med,
+            missedTime: DateComponents(hour: 8, minute: 0),
+            now: now
+        )
+
+        if case .canTakeLate = result {
+            #expect(true)
+        } else {
+            #expect(Bool(false), "Expected late dose to remain in the recovery window")
+        }
+    }
+
+    @MainActor
+    @Test func makeupDoseBlocksLateDoseWhenTooCloseToNextDose() {
+        let cal = Calendar.current
+        let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 8, hour: 16, minute: 0))!
+        let med = Medication(
+            name: "Metformin",
+            dose: "500mg",
+            timesOfDay: [DateComponents(hour: 8, minute: 0), DateComponents(hour: 20, minute: 0)],
+            remindersEnabled: true
+        )
+
+        let result = MedicationRules.checkMakeupDose(
+            medication: med,
+            missedTime: DateComponents(hour: 8, minute: 0),
+            now: now
+        )
+
+        if case .tooCloseToNext(let next) = result {
+            #expect(cal.component(.hour, from: next) == 20)
+        } else {
+            #expect(Bool(false), "Expected missed dose to be too close to the next scheduled dose")
+        }
+    }
+
+    @MainActor
+    @Test func dailySafetyCheckDoesNotWarnForCloseMedicationSchedules() {
+        let first = Medication(
+            name: "Amlodipine",
+            dose: "5mg",
+            timesOfDay: [DateComponents(hour: 8, minute: 0)],
+            remindersEnabled: true
+        )
+        let second = Medication(
+            name: "Metformin",
+            dose: "500mg",
+            timesOfDay: [DateComponents(hour: 8, minute: 15)],
+            remindersEnabled: true
+        )
+        var rule = MedicationRuleConfig.defaults
+        rule.timingConflictMinutes = 60
+        MedicationRuleStore.shared.setOverride(rule, for: first.id)
+        MedicationRuleStore.shared.setOverride(rule, for: second.id)
+        defer {
+            MedicationRuleStore.shared.removeOverride(for: first.id)
+            MedicationRuleStore.shared.removeOverride(for: second.id)
+        }
+
+        let rawConflicts = MedicationRules.checkTimingConflicts(medications: [first, second])
+        let dailySummary = MedicationRules.dailySafetyCheck(
+            medications: [first, second],
+            intakeLogs: [],
+            consecutiveMissedDaysProvider: { _ in 0 }
+        )
+
+        #expect(rawConflicts.isEmpty == false)
+        #expect(dailySummary.timingConflicts.isEmpty)
+        #expect(dailySummary.hasIssues == false)
+    }
+
     @Test func measurementClampsFutureDateToNow() {
         let now = Date()
         let future = now.addingTimeInterval(60 * 60 * 24)
@@ -87,6 +233,44 @@ struct ChronicCareTests {
         let clamped = measurement.clampedToNow(now: now)
 
         #expect(clamped.date == now)
+    }
+
+    @Test func doctorVisitClassifiesUpcomingAndOverdueByCalendarDay() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 24, hour: 10))!
+        let future = cal.date(from: DateComponents(year: 2026, month: 4, day: 27, hour: 9))!
+        let past = cal.date(from: DateComponents(year: 2026, month: 4, day: 23, hour: 9))!
+
+        let upcoming = DoctorVisit(scheduledDate: future)
+        let overdue = DoctorVisit(scheduledDate: past)
+
+        #expect(upcoming.isUpcoming(now: now, calendar: cal))
+        #expect(upcoming.daysUntil(now: now, calendar: cal) == 3)
+        #expect(overdue.isOverdue(now: now, calendar: cal))
+        #expect(overdue.daysUntil(now: now, calendar: cal) == -1)
+    }
+
+    @Test func visitPrepReminderUsesThreeDayLeadOrNextMorning() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 24, hour: 10))!
+        let laterVisitDate = cal.date(from: DateComponents(year: 2026, month: 4, day: 30, hour: 9))!
+        let nearVisitDate = cal.date(from: DateComponents(year: 2026, month: 4, day: 27, hour: 9))!
+
+        let laterFire = NotificationManager.shared.visitPrepFireDate(
+            for: DoctorVisit(scheduledDate: laterVisitDate),
+            now: now,
+            calendar: cal
+        )
+        let nearFire = NotificationManager.shared.visitPrepFireDate(
+            for: DoctorVisit(scheduledDate: nearVisitDate),
+            now: now,
+            calendar: cal
+        )
+
+        #expect(laterFire == cal.date(from: DateComponents(year: 2026, month: 4, day: 27, hour: 9)))
+        #expect(nearFire == cal.date(from: DateComponents(year: 2026, month: 4, day: 25, hour: 9)))
     }
 
     @Test func adaptiveReminderAddsLeadTimeForConsistentDelay() {
@@ -139,7 +323,7 @@ struct ChronicCareTests {
 
         let strategy = AdaptiveReminderEngine.strategy(for: med, intakeLogs: logs, now: now)
 
-        #expect(strategy.followUpIntervals == [20])
+        #expect(strategy.followUpIntervals == [15, 45])
         #expect(strategy.riskLevel == .low)
     }
 
@@ -377,6 +561,57 @@ struct ChronicCareTests {
         #expect(store.medications.first?.pillsRemaining == 0)
         store.decrementPills(for: med.id)
         #expect(store.medications.first?.pillsRemaining == 0)
+    }
+
+    @MainActor
+    @Test func recordTakenDoseDoesNotDoubleDecrementSameScheduledDose() {
+        let store = DataStore()
+        store.clearAll()
+        let comps = DateComponents(hour: 8, minute: 0)
+        let scheduled = Calendar.current.date(from: DateComponents(year: 2026, month: 4, day: 10, hour: 8, minute: 0))!
+        let med = Medication(name: "Test", dose: "5mg", timesOfDay: [comps], remindersEnabled: true, pillsRemaining: 10, pillsPerDose: 2)
+        store.addMedication(med)
+
+        store.recordTakenDose(medicationID: med.id, scheduleTime: comps, at: scheduled, scheduledDate: scheduled)
+        store.recordTakenDose(medicationID: med.id, scheduleTime: comps, at: scheduled, scheduledDate: scheduled)
+
+        #expect(store.intakeLogs.count == 1)
+        #expect(store.intakeLogs.first?.status == .taken)
+        #expect(store.medications.first?.pillsRemaining == 8)
+    }
+
+    @MainActor
+    @Test func deletingTakenIntakeRestoresPillSupply() {
+        let store = DataStore()
+        store.clearAll()
+        let comps = DateComponents(hour: 8, minute: 0)
+        let scheduled = Calendar.current.date(from: DateComponents(year: 2026, month: 4, day: 10, hour: 8, minute: 0))!
+        let med = Medication(name: "Test", dose: "5mg", timesOfDay: [comps], remindersEnabled: true, pillsRemaining: 10, pillsPerDose: 2)
+        store.addMedication(med)
+
+        store.recordTakenDose(medicationID: med.id, scheduleTime: comps, at: scheduled, scheduledDate: scheduled)
+        let log = store.intakeLogs.first!
+        store.removeIntakeLog(log)
+
+        #expect(store.intakeLogs.isEmpty)
+        #expect(store.medications.first?.pillsRemaining == 10)
+    }
+
+    @MainActor
+    @Test func replacingTakenWithSkippedRestoresPillSupply() {
+        let store = DataStore()
+        store.clearAll()
+        let comps = DateComponents(hour: 8, minute: 0)
+        let scheduled = Calendar.current.date(from: DateComponents(year: 2026, month: 4, day: 10, hour: 8, minute: 0))!
+        let med = Medication(name: "Test", dose: "5mg", timesOfDay: [comps], remindersEnabled: true, pillsRemaining: 10, pillsPerDose: 2)
+        store.addMedication(med)
+
+        store.recordTakenDose(medicationID: med.id, scheduleTime: comps, at: scheduled, scheduledDate: scheduled)
+        store.upsertIntake(medicationID: med.id, status: .skipped, scheduleTime: comps, at: scheduled, scheduledDate: scheduled)
+
+        #expect(store.intakeLogs.count == 1)
+        #expect(store.intakeLogs.first?.status == .skipped)
+        #expect(store.medications.first?.pillsRemaining == 10)
     }
 
     @MainActor

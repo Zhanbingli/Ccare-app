@@ -99,6 +99,26 @@ enum FoodInstruction: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+enum MedicationSource: String, Codable, CaseIterable, Identifiable {
+    case prescribed     // 本院/明确医院处方
+    case external       // 外院处方（跨院）
+    case otc            // 非处方药 / 自行购买
+    case supplement     // 保健品 / 中成药 / 补剂
+    case unknown        // 未指定（旧数据默认值）
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .prescribed: return NSLocalizedString("Prescription", comment: "Medication source")
+        case .external:   return NSLocalizedString("External Rx", comment: "Medication source")
+        case .otc:        return NSLocalizedString("OTC", comment: "Medication source")
+        case .supplement: return NSLocalizedString("Supplement", comment: "Medication source")
+        case .unknown:    return NSLocalizedString("Unspecified", comment: "Medication source")
+        }
+    }
+}
+
 struct Medication: Identifiable, Codable {
     var id: UUID = UUID()
     var name: String
@@ -116,10 +136,13 @@ struct Medication: Identifiable, Codable {
     var isAsNeeded: Bool?
     var courseEndDate: Date?
     var specialInstructions: String?
+    var source: MedicationSource?
+    /// 自由文本：医院名 / 诊所 / 医生姓名。与 source 配合使用。
+    var hospital: String?
 
-    enum CodingKeys: String, CodingKey { case id, name, dose, notes, startDate, timesOfDay, timeOfDay, remindersEnabled, category, customCategoryName, imagePath, pillsRemaining, pillsPerDose, foodInstruction, isAsNeeded, courseEndDate, specialInstructions }
+    enum CodingKeys: String, CodingKey { case id, name, dose, notes, startDate, timesOfDay, timeOfDay, remindersEnabled, category, customCategoryName, imagePath, pillsRemaining, pillsPerDose, foodInstruction, isAsNeeded, courseEndDate, specialInstructions, source, hospital }
 
-    init(id: UUID = UUID(), name: String, dose: String, notes: String? = nil, startDate: Date = Date(), timesOfDay: [DateComponents], remindersEnabled: Bool, category: MedicationCategory? = nil, customCategoryName: String? = nil, imagePath: String? = nil, pillsRemaining: Int? = nil, pillsPerDose: Int? = nil, foodInstruction: FoodInstruction? = nil, isAsNeeded: Bool? = nil, courseEndDate: Date? = nil, specialInstructions: String? = nil) {
+    init(id: UUID = UUID(), name: String, dose: String, notes: String? = nil, startDate: Date = Date(), timesOfDay: [DateComponents], remindersEnabled: Bool, category: MedicationCategory? = nil, customCategoryName: String? = nil, imagePath: String? = nil, pillsRemaining: Int? = nil, pillsPerDose: Int? = nil, foodInstruction: FoodInstruction? = nil, isAsNeeded: Bool? = nil, courseEndDate: Date? = nil, specialInstructions: String? = nil, source: MedicationSource? = nil, hospital: String? = nil) {
         self.id = id
         self.name = name
         self.dose = dose
@@ -136,6 +159,8 @@ struct Medication: Identifiable, Codable {
         self.isAsNeeded = isAsNeeded
         self.courseEndDate = courseEndDate
         self.specialInstructions = specialInstructions
+        self.source = source
+        self.hospital = hospital
     }
 
     init(from decoder: Decoder) throws {
@@ -155,6 +180,8 @@ struct Medication: Identifiable, Codable {
         self.isAsNeeded = try c.decodeIfPresent(Bool.self, forKey: .isAsNeeded)
         self.courseEndDate = try c.decodeIfPresent(Date.self, forKey: .courseEndDate)
         self.specialInstructions = try c.decodeIfPresent(String.self, forKey: .specialInstructions)
+        self.source = try c.decodeIfPresent(MedicationSource.self, forKey: .source)
+        self.hospital = try c.decodeIfPresent(String.self, forKey: .hospital)
         if let times = try c.decodeIfPresent([DateComponents].self, forKey: .timesOfDay) {
             self.timesOfDay = times
         } else if let legacy = try c.decodeIfPresent(DateComponents.self, forKey: .timeOfDay) {
@@ -182,6 +209,8 @@ struct Medication: Identifiable, Codable {
         try c.encodeIfPresent(isAsNeeded, forKey: .isAsNeeded)
         try c.encodeIfPresent(courseEndDate, forKey: .courseEndDate)
         try c.encodeIfPresent(specialInstructions, forKey: .specialInstructions)
+        try c.encodeIfPresent(source, forKey: .source)
+        try c.encodeIfPresent(hospital, forKey: .hospital)
     }
 }
 
@@ -304,4 +333,104 @@ struct CaregiverContact: Codable, Identifiable {
     var name: String
     var phone: String?
     var notifyOnMiss: Bool = true
+}
+
+// MARK: - Symptom Log
+
+enum SymptomSeverity: String, Codable, CaseIterable, Identifiable {
+    case mild       // 轻
+    case moderate   // 中
+    case severe     // 重
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .mild:     return NSLocalizedString("Mild", comment: "Symptom severity")
+        case .moderate: return NSLocalizedString("Moderate", comment: "Symptom severity")
+        case .severe:   return NSLocalizedString("Severe", comment: "Symptom severity")
+        }
+    }
+}
+
+/// A patient-logged symptom entry. This is the data HIS doesn't have —
+/// subjective complaints between visits. Keep it small on purpose:
+/// doctors skim, not read.
+struct SymptomEntry: Identifiable, Codable {
+    var id: UUID = UUID()
+    var date: Date
+    /// Free-form tags. Preset suggestions live in the UI, but users can add any string.
+    var tags: [String]
+    var severity: SymptomSeverity
+    var note: String?
+    /// Optional: which medication(s) the patient suspects triggered this.
+    var relatedMedicationIDs: [UUID]?
+}
+
+// MARK: - Doctor Visit (the center of the "pre-visit prep" loop)
+
+/// A single doctor visit — either scheduled (upcoming) or completed (past).
+/// The product treats these as the anchor points of the patient's chronic
+/// care timeline: the App silently collects data between visits, and
+/// surfaces relevant summaries around each one.
+struct DoctorVisit: Identifiable, Codable {
+    var id: UUID = UUID()
+    var scheduledDate: Date
+    /// nil while the visit is upcoming; filled when the patient confirms
+    /// the visit happened (or retroactively).
+    var completedDate: Date?
+
+    // Context — all optional because prep value doesn't depend on them.
+    var hospital: String?
+    var department: String?
+    var doctorName: String?
+    var reason: String?
+
+    // Post-visit reflection — filled after the visit.
+    var notes: String?
+    var medicationChangesSummary: String?
+    var nextVisitDate: Date?
+}
+
+extension DoctorVisit {
+    var isCompleted: Bool { completedDate != nil }
+
+    /// Upcoming = not yet completed and scheduled in the future OR today.
+    func isUpcoming(now: Date = Date(), calendar: Calendar = .current) -> Bool {
+        guard completedDate == nil else { return false }
+        let today = calendar.startOfDay(for: now)
+        let visitDay = calendar.startOfDay(for: scheduledDate)
+        return visitDay >= today
+    }
+
+    /// Overdue = scheduled before today and not yet confirmed.
+    func isOverdue(now: Date = Date(), calendar: Calendar = .current) -> Bool {
+        guard completedDate == nil else { return false }
+        let today = calendar.startOfDay(for: now)
+        let visitDay = calendar.startOfDay(for: scheduledDate)
+        return visitDay < today
+    }
+
+    /// Calendar days from today to the scheduled date. Negative if overdue.
+    /// Nil once the visit is completed.
+    func daysUntil(now: Date = Date(), calendar: Calendar = .current) -> Int? {
+        guard completedDate == nil else { return nil }
+        let today = calendar.startOfDay(for: now)
+        let visitDay = calendar.startOfDay(for: scheduledDate)
+        return calendar.dateComponents([.day], from: today, to: visitDay).day
+    }
+
+    /// Short display title — doctor + department fall back to hospital.
+    var displayTitle: String {
+        if let doctor = doctorName?.trimmingCharacters(in: .whitespaces), !doctor.isEmpty {
+            return doctor
+        }
+        if let dept = department?.trimmingCharacters(in: .whitespaces), !dept.isEmpty {
+            return dept
+        }
+        if let hospital = hospital?.trimmingCharacters(in: .whitespaces), !hospital.isEmpty {
+            return hospital
+        }
+        return NSLocalizedString("Doctor visit", comment: "Fallback visit title")
+    }
 }

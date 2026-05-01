@@ -294,7 +294,7 @@ struct CcareWidgetEntryView: View {
                 }
                 Text(entry.todayTotal > 0
                      ? progressSummary
-                     : NSLocalizedString("Open ChronicCare to set up", comment: "Widget empty hint"))
+                     : NSLocalizedString("Open Ccare to set up", comment: "Widget empty hint"))
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
