@@ -564,6 +564,57 @@ struct ChronicCareTests {
     }
 
     @MainActor
+    @Test func recordTakenDoseDoesNotDoubleDecrementSameScheduledDose() {
+        let store = DataStore()
+        store.clearAll()
+        let comps = DateComponents(hour: 8, minute: 0)
+        let scheduled = Calendar.current.date(from: DateComponents(year: 2026, month: 4, day: 10, hour: 8, minute: 0))!
+        let med = Medication(name: "Test", dose: "5mg", timesOfDay: [comps], remindersEnabled: true, pillsRemaining: 10, pillsPerDose: 2)
+        store.addMedication(med)
+
+        store.recordTakenDose(medicationID: med.id, scheduleTime: comps, at: scheduled, scheduledDate: scheduled)
+        store.recordTakenDose(medicationID: med.id, scheduleTime: comps, at: scheduled, scheduledDate: scheduled)
+
+        #expect(store.intakeLogs.count == 1)
+        #expect(store.intakeLogs.first?.status == .taken)
+        #expect(store.medications.first?.pillsRemaining == 8)
+    }
+
+    @MainActor
+    @Test func deletingTakenIntakeRestoresPillSupply() {
+        let store = DataStore()
+        store.clearAll()
+        let comps = DateComponents(hour: 8, minute: 0)
+        let scheduled = Calendar.current.date(from: DateComponents(year: 2026, month: 4, day: 10, hour: 8, minute: 0))!
+        let med = Medication(name: "Test", dose: "5mg", timesOfDay: [comps], remindersEnabled: true, pillsRemaining: 10, pillsPerDose: 2)
+        store.addMedication(med)
+
+        store.recordTakenDose(medicationID: med.id, scheduleTime: comps, at: scheduled, scheduledDate: scheduled)
+        let log = store.intakeLogs.first!
+        store.removeIntakeLog(log)
+
+        #expect(store.intakeLogs.isEmpty)
+        #expect(store.medications.first?.pillsRemaining == 10)
+    }
+
+    @MainActor
+    @Test func replacingTakenWithSkippedRestoresPillSupply() {
+        let store = DataStore()
+        store.clearAll()
+        let comps = DateComponents(hour: 8, minute: 0)
+        let scheduled = Calendar.current.date(from: DateComponents(year: 2026, month: 4, day: 10, hour: 8, minute: 0))!
+        let med = Medication(name: "Test", dose: "5mg", timesOfDay: [comps], remindersEnabled: true, pillsRemaining: 10, pillsPerDose: 2)
+        store.addMedication(med)
+
+        store.recordTakenDose(medicationID: med.id, scheduleTime: comps, at: scheduled, scheduledDate: scheduled)
+        store.upsertIntake(medicationID: med.id, status: .skipped, scheduleTime: comps, at: scheduled, scheduledDate: scheduled)
+
+        #expect(store.intakeLogs.count == 1)
+        #expect(store.intakeLogs.first?.status == .skipped)
+        #expect(store.medications.first?.pillsRemaining == 10)
+    }
+
+    @MainActor
     @Test func upsertIntakeReplacesExistingLogForSameScheduleKey() {
         let store = DataStore()
         store.clearAll()

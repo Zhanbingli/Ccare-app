@@ -183,8 +183,12 @@ final class DataStore: ObservableObject {
         let cal = Calendar.current
         let dayStart = cal.startOfDay(for: effectiveDate)
         guard let dayEnd = cal.date(byAdding: .day, value: 1, to: dayStart) else { return }
-        intakeLogs.removeAll { log in
-            log.medicationID == medicationID && log.date >= dayStart && log.date < dayEnd && log.scheduleKey == key
+        let replacedLogs = intakeLogs.filter {
+            isMatchingIntakeLog($0, medicationID: medicationID, dayStart: dayStart, dayEnd: dayEnd, scheduleKey: key)
+        }
+        let hadTakenLog = replacedLogs.contains { $0.status == .taken }
+        intakeLogs.removeAll {
+            isMatchingIntakeLog($0, medicationID: medicationID, dayStart: dayStart, dayEnd: dayEnd, scheduleKey: key)
         }
         let trimmedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         intakeLogs.append(
@@ -198,6 +202,7 @@ final class DataStore: ObservableObject {
                 recordedAt: recordedAt
             )
         )
+        reconcilePillSupplyAfterIntakeChange(medicationID: medicationID, oldHadTakenLog: hadTakenLog, newStatus: status)
         markReportDataChanged()
 
         // Behavioral feedback — fire after state is committed
@@ -216,6 +221,38 @@ final class DataStore: ObservableObject {
                     NotificationManager.shared.sendCaregiverReminder(caregiverID: cg.id, caregiverName: cg.name, medicationName: medName, missedDays: missed)
                 }
             }
+        }
+    }
+
+    func removeIntakeLog(_ log: IntakeLog) {
+        let removedLogs = intakeLogs.filter { $0.id == log.id }
+        guard !removedLogs.isEmpty else { return }
+        intakeLogs.removeAll { $0.id == log.id }
+        if removedLogs.contains(where: { $0.status == .taken }) {
+            restorePills(for: log.medicationID)
+        }
+        markReportDataChanged()
+    }
+
+    private func isMatchingIntakeLog(
+        _ log: IntakeLog,
+        medicationID: UUID,
+        dayStart: Date,
+        dayEnd: Date,
+        scheduleKey: String?
+    ) -> Bool {
+        log.medicationID == medicationID && log.date >= dayStart && log.date < dayEnd && log.scheduleKey == scheduleKey
+    }
+
+    private func reconcilePillSupplyAfterIntakeChange(
+        medicationID: UUID,
+        oldHadTakenLog: Bool,
+        newStatus: IntakeStatus
+    ) {
+        if oldHadTakenLog && newStatus != .taken {
+            restorePills(for: medicationID)
+        } else if !oldHadTakenLog && newStatus == .taken {
+            decrementPills(for: medicationID)
         }
     }
 
@@ -245,7 +282,6 @@ final class DataStore: ObservableObject {
             scheduleKeyOverride: scheduleKeyOverride,
             note: note
         )
-        decrementPills(for: medicationID)
     }
 
     /// Decrement pill supply when a dose is taken
@@ -254,6 +290,14 @@ final class DataStore: ObservableObject {
               let remaining = medications[idx].pillsRemaining else { return }
         let perDose = medications[idx].pillsPerDose ?? 1
         medications[idx].pillsRemaining = max(0, remaining - perDose)
+        NotificationManager.shared.scheduleRefillReminder(for: medications[idx])
+    }
+
+    func restorePills(for medicationID: UUID) {
+        guard let idx = medications.firstIndex(where: { $0.id == medicationID }),
+              let remaining = medications[idx].pillsRemaining else { return }
+        let perDose = medications[idx].pillsPerDose ?? 1
+        medications[idx].pillsRemaining = max(0, remaining + perDose)
         NotificationManager.shared.scheduleRefillReminder(for: medications[idx])
     }
 

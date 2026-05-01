@@ -6,6 +6,7 @@ struct AdherenceCalendarView: View {
 
     @State private var displayedMonth: Date = Date()
     @State private var selectedDay: Date?
+    @State private var deleteTarget: IntakeLog?
 
     private let calendar = Calendar.current
     private let weekdaySymbols: [String] = {
@@ -129,9 +130,26 @@ struct AdherenceCalendarView: View {
         .background(AppColor.background)
         .navigationTitle(NSLocalizedString("Adherence Calendar", comment: ""))
         .navigationBarTitleDisplayMode(.inline)
+        .alert(NSLocalizedString("Delete Intake Log", comment: ""), isPresented: deleteConfirmationBinding) {
+            Button(NSLocalizedString("Delete", comment: ""), role: .destructive) {
+                deleteSelectedIntakeLog()
+            }
+            Button(NSLocalizedString("Cancel", comment: ""), role: .cancel) {
+                deleteTarget = nil
+            }
+        } message: {
+            Text(NSLocalizedString("This intake record will be removed from adherence history and future visit summaries.", comment: ""))
+        }
     }
 
     // MARK: - Helpers
+
+    private var deleteConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: { deleteTarget != nil },
+            set: { if !$0 { deleteTarget = nil } }
+        )
+    }
 
     private var isCurrentMonth: Bool {
         calendar.isDate(displayedMonth, equalTo: Date(), toGranularity: .month)
@@ -286,23 +304,7 @@ struct AdherenceCalendarView: View {
                         let medLogs = logs.filter { $0.medicationID == med.id }
                         if !medLogs.isEmpty {
                             ForEach(medLogs) { log in
-                                HStack(spacing: 10) {
-                                    statusIcon(log.status)
-                                        .frame(width: 20)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(med.name)
-                                            .appFont(.subheadline)
-                                        Text(med.dose)
-                                            .appFont(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                    Text(timeString(log.date))
-                                        .appFont(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 6)
+                                intakeLogRow(log: log, medication: med)
                             }
                         }
                     }
@@ -341,6 +343,53 @@ struct AdherenceCalendarView: View {
         .padding(.horizontal)
     }
 
+    private func intakeLogRow(log: IntakeLog, medication: Medication) -> some View {
+        HStack(spacing: 10) {
+            statusIcon(log.status)
+                .frame(width: 20)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(medication.name)
+                    .appFont(.subheadline)
+                Text(medication.dose)
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(timeString(log.date))
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+                Text(statusText(log.status))
+                    .font(.caption2)
+                    .foregroundStyle(AppColor.textTertiary)
+            }
+
+            Button(role: .destructive) {
+                deleteTarget = log
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(AppColor.warning)
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(NSLocalizedString("Delete Intake Log", comment: ""))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+    }
+
+    private func deleteSelectedIntakeLog() {
+        guard let deleteTarget else { return }
+        store.removeIntakeLog(deleteTarget)
+        store.syncNotifications()
+        self.deleteTarget = nil
+        Haptics.notification(.warning)
+    }
+
     private func dayTitle(_ date: Date) -> String {
         let f = DateFormatter()
         f.dateStyle = .medium
@@ -351,6 +400,14 @@ struct AdherenceCalendarView: View {
         let f = DateFormatter()
         f.timeStyle = .short
         return f.string(from: date)
+    }
+
+    private func statusText(_ status: IntakeStatus) -> String {
+        switch status {
+        case .taken: return NSLocalizedString("Taken", comment: "")
+        case .skipped: return NSLocalizedString("Skipped", comment: "")
+        case .snoozed: return NSLocalizedString("Snoozed", comment: "")
+        }
     }
 
     @ViewBuilder

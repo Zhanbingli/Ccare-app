@@ -142,6 +142,8 @@
 "Missed Days" = "缺漏天数";
 "No intake logs for this day." = "当天无服药记录。";
 "No Record" = "无记录";
+"Delete Intake Log" = "删除服药记录";
+"This intake record will be removed from adherence history and future visit summaries." = "这条服药记录会从依从历史和之后的就诊摘要中移除。";
 "Close" = "关闭";
 
 /* Trends */
@@ -165,6 +167,8 @@
 "Unit: %@" = "单位：%@";
 "Add Measurement" = "添加测量";
 "Edit Measurement" = "编辑测量";
+"Delete Measurement" = "删除测量";
+"This measurement will be removed from trends and future visit summaries." = "这条测量记录会从趋势和之后的就诊摘要中移除。";
 "Measurement Type" = "测量类型";
 "Reading" = "读数";
 "Recorded Time" = "记录时间";

@@ -7,6 +7,8 @@ struct EnhancedTrendsView: View {
     @State private var selectedType: MeasurementType = .bloodPressure
     @State private var rangeDays: Int = 30
     @State private var selectedDataPoint: Measurement?
+    @State private var editingMeasurement: Measurement?
+    @State private var deleteTarget: Measurement?
     @State private var showAIInsights = false
     @State private var aiInsights: String?
     @State private var isLoadingInsights = false
@@ -26,6 +28,13 @@ struct EnhancedTrendsView: View {
         return store.measurements
             .filter { $0.type == selectedType && $0.date >= start && $0.date <= now }
             .sorted(by: { $0.date < $1.date })
+    }
+
+    private var deleteConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: { deleteTarget != nil },
+            set: { if !$0 { deleteTarget = nil } }
+        )
     }
 
     private struct BPPoint: Identifiable {
@@ -93,6 +102,23 @@ struct EnhancedTrendsView: View {
             }
             .navigationTitle(NSLocalizedString("Trends", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(item: $editingMeasurement) { measurement in
+                AddMeasurementView(editing: measurement) { updated in
+                    store.updateMeasurement(updated)
+                    selectedDataPoint = updated
+                    Haptics.success()
+                }
+            }
+            .alert(NSLocalizedString("Delete Measurement", comment: ""), isPresented: deleteConfirmationBinding) {
+                Button(NSLocalizedString("Delete", comment: ""), role: .destructive) {
+                    deleteSelectedMeasurement()
+                }
+                Button(NSLocalizedString("Cancel", comment: ""), role: .cancel) {
+                    deleteTarget = nil
+                }
+            } message: {
+                Text(NSLocalizedString("This measurement will be removed from trends and future visit summaries.", comment: ""))
+            }
         }
     }
 
@@ -147,51 +173,66 @@ struct EnhancedTrendsView: View {
 
     // MARK: - Data Point Detail
     private func dataPointDetailCard(measurement: Measurement) -> some View {
-        HStack(spacing: 12) {
-            // Value
-            Group {
-                if measurement.type == .bloodPressure, let dia = measurement.diastolic {
-                    Text("\(Int(measurement.value))/\(Int(dia)) \(measurement.type.unit)")
-                } else if measurement.type == .bloodGlucose {
-                    let v = UnitPreferences.mgdlToPreferred(measurement.value)
-                    let formatted = UnitPreferences.glucoseUnit == .mgdL ? String(format: "%.0f", v) : String(format: "%.1f", v)
-                    Text("\(formatted) \(UnitPreferences.glucoseUnit.rawValue)")
-                } else {
-                    Text("\(String(format: "%.1f", measurement.value)) \(measurement.type.unit)")
-                }
-            }
-            .appFont(.subheadline)
-            .fontWeight(.bold)
-            .foregroundStyle(AppColor.textPrimary)
+        VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                    Text(measurementValueText(measurement))
+                        .appFont(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundStyle(AppColor.textPrimary)
 
-            // Date
-            Text(measurement.date, style: .date)
-                .appFont(.caption)
-                .foregroundStyle(AppColor.textSecondary)
-            Text(measurement.date, style: .time)
-                .appFont(.caption)
-                .foregroundStyle(AppColor.textSecondary)
-
-            if let note = measurement.note, !note.isEmpty {
-                Text(note)
+                    HStack(spacing: EditorialSpacing.sm) {
+                        Text(measurement.date, style: .date)
+                        Text(measurement.date, style: .time)
+                    }
                     .appFont(.caption)
                     .foregroundStyle(AppColor.textSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+
+                    if let note = measurement.note, !note.isEmpty {
+                        Text(note)
+                            .appFont(.caption)
+                            .foregroundStyle(AppColor.textSecondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { selectedDataPoint = nil }
+                } label: {
+                    Image(systemName: "xmark.circle")
+                        .font(.system(size: 20, weight: .regular))
+                        .foregroundStyle(AppColor.textTertiary)
+                }
+                .accessibilityLabel(NSLocalizedString("Close", comment: ""))
             }
 
-            Spacer(minLength: 0)
+            HStack(spacing: EditorialSpacing.sm) {
+                Button {
+                    editingMeasurement = measurement
+                } label: {
+                    Label(NSLocalizedString("Edit", comment: ""), systemImage: "square.and.pencil")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(AppColor.primary)
+                .controlSize(.small)
 
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) { selectedDataPoint = nil }
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 20))
-                    .foregroundStyle(AppColor.textTertiary)
+                Button(role: .destructive) {
+                    deleteTarget = measurement
+                } label: {
+                    Label(NSLocalizedString("Delete", comment: ""), systemImage: "trash")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(AppColor.warning)
+                .controlSize(.small)
             }
         }
         .padding(.horizontal, AppSpacing.medium)
-        .padding(.vertical, 10)
+        .padding(.vertical, AppSpacing.medium)
         .background(
             RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
                 .fill(AppColor.surface)
@@ -558,6 +599,28 @@ struct EnhancedTrendsView: View {
     }
 
     // MARK: - Helpers
+    private func measurementValueText(_ measurement: Measurement) -> String {
+        if measurement.type == .bloodPressure, let dia = measurement.diastolic {
+            return "\(Int(measurement.value))/\(Int(dia)) \(measurement.type.unit)"
+        }
+        if measurement.type == .bloodGlucose {
+            let value = UnitPreferences.mgdlToPreferred(measurement.value)
+            let formatted = UnitPreferences.glucoseUnit == .mgdL ? String(format: "%.0f", value) : String(format: "%.1f", value)
+            return "\(formatted) \(UnitPreferences.glucoseUnit.rawValue)"
+        }
+        return "\(String(format: "%.1f", measurement.value)) \(measurement.type.unit)"
+    }
+
+    private func deleteSelectedMeasurement() {
+        guard let deleteTarget else { return }
+        store.removeMeasurement(deleteTarget)
+        if selectedDataPoint?.id == deleteTarget.id {
+            selectedDataPoint = nil
+        }
+        self.deleteTarget = nil
+        Haptics.notification(.warning)
+    }
+
     private func latestText() -> String {
         guard let last = filtered.last else { return "—" }
         switch selectedType {
