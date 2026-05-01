@@ -205,28 +205,32 @@ struct AddMeasurementView: View {
                 .buttonStyle(EditorialRowButtonStyle())
 
                 if showTimeEditor {
-                    HStack(spacing: EditorialSpacing.sm) {
-                        quickDateButton(title: NSLocalizedString("Now", comment: "")) {
-                            date = Date()
-                            timeManuallySet = true
+                    VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+                        HStack(spacing: EditorialSpacing.sm) {
+                            quickDateButton(title: NSLocalizedString("Now", comment: "")) {
+                                date = Date()
+                                timeManuallySet = true
+                            }
+                            quickDateButton(title: NSLocalizedString("1h Ago", comment: "")) {
+                                date = Date().addingTimeInterval(-3600)
+                                timeManuallySet = true
+                            }
+                            quickDateButton(title: NSLocalizedString("Today 8 PM", comment: "")) {
+                                let cal = Calendar.current
+                                let candidate = cal.date(bySettingHour: 20, minute: 0, second: 0, of: Date()) ?? Date()
+                                date = min(candidate, Date())
+                                timeManuallySet = true
+                            }
                         }
-                        quickDateButton(title: NSLocalizedString("1h Ago", comment: "")) {
-                            date = Date().addingTimeInterval(-3600)
-                            timeManuallySet = true
-                        }
-                        quickDateButton(title: NSLocalizedString("Today 8 PM", comment: "")) {
-                            let cal = Calendar.current
-                            let candidate = cal.date(bySettingHour: 20, minute: 0, second: 0, of: Date()) ?? Date()
-                            date = min(candidate, Date())
-                            timeManuallySet = true
-                        }
-                    }
 
-                    DatePicker(NSLocalizedString("Date", comment: ""), selection: $date, in: ...Date())
-                        .datePickerStyle(.compact)
-                        .onChange(of: date) { _ in timeManuallySet = true }
+                        DatePicker(NSLocalizedString("Date", comment: ""), selection: $date, in: ...Date())
+                            .datePickerStyle(.compact)
+                            .onChange(of: date) { _ in timeManuallySet = true }
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
+            .animation(.easeInOut(duration: 0.18), value: showTimeEditor)
         }
     }
 
@@ -277,8 +281,10 @@ struct AddMeasurementView: View {
                             RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                                 .stroke(AppColor.divider, lineWidth: 1)
                         )
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
+            .animation(.easeInOut(duration: 0.18), value: showContextNotes)
         }
     }
 

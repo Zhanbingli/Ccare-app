@@ -289,20 +289,22 @@ struct DashboardView: View {
 
                             if !schedules.isEmpty {
                                 todayUnifiedList(
+                                    title: todayScheduleTitle(state: state, mode: mode),
                                     schedules: schedules,
                                     statusCache: statusCache,
                                     currentActionID: nil,
                                     nextUpcomingID: nextUpcoming?.id,
-                                    collapsedLimit: 3
+                                    collapsedLimit: scheduleCollapsedLimit(for: mode)
                                 )
                             }
                         } else if !schedules.isEmpty {
                             todayUnifiedList(
+                                title: todayScheduleTitle(state: state, mode: mode),
                                 schedules: schedules,
                                 statusCache: statusCache,
                                 currentActionID: currentAction?.id,
                                 nextUpcomingID: nextUpcoming?.id,
-                                collapsedLimit: 3
+                                collapsedLimit: scheduleCollapsedLimit(for: mode)
                             )
                         }
 
@@ -465,7 +467,7 @@ private extension DashboardView {
         case secondary
     }
 
-    private enum ReadinessStatus {
+    private enum ReadinessStatus: Equatable {
         case ready
         case needsAction
         case optional
@@ -492,6 +494,12 @@ private extension DashboardView {
         let detail: String
         let status: ReadinessStatus
         let countsTowardScore: Bool
+        let action: () -> Void
+    }
+
+    private struct VisitPrepTask {
+        let title: String
+        let detail: String
         let action: () -> Void
     }
 
@@ -895,7 +903,7 @@ private extension DashboardView {
             editorialDivider()
 
             VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
-                Text(NSLocalizedString("Appointment countdown", comment: "Visit prep editorial title"))
+                Text(NSLocalizedString("Preparing for your visit", comment: "Visit prep editorial title"))
                     .appFont(.micro)
                     .textCase(.uppercase)
                     .tracking(0.7)
@@ -1034,19 +1042,26 @@ private extension DashboardView {
 
     private func visitDataReadinessCard(visit: DoctorVisit, mode: HomeMode) -> some View {
         let items = visitReadinessItems(for: visit)
+        let tasks = preVisitTasks(from: items)
         let requiredItems = items.filter(\.countsTowardScore)
         let readinessCount = requiredItems.filter { $0.status == .ready }.count
         let readinessTotal = requiredItems.count
 
         return VStack(alignment: .leading, spacing: EditorialSpacing.md) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(NSLocalizedString("Data readiness", comment: "Visit prep readiness card title"))
-                    .appFont(.headline)
-                    .foregroundStyle(AppColor.textPrimary)
-                Spacer()
-                Text(String(format: NSLocalizedString("%lld / %lld", comment: "Data readiness score"), readinessCount, readinessTotal))
-                    .appFontNumeric(.caption)
+            VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(NSLocalizedString("Doctor-ready data", comment: "Visit prep readiness card title"))
+                        .appFont(.headline)
+                        .foregroundStyle(AppColor.textPrimary)
+                    Spacer()
+                    Text(String(format: NSLocalizedString("%lld / %lld ready", comment: "Data readiness score"), readinessCount, readinessTotal))
+                        .appFontNumeric(.caption)
+                        .foregroundStyle(AppColor.textSecondary)
+                }
+                Text(NSLocalizedString("What your doctor can use at the appointment.", comment: "Visit prep readiness subtitle"))
+                    .appFont(.caption)
                     .foregroundStyle(AppColor.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             AppDivider()
@@ -1061,6 +1076,43 @@ private extension DashboardView {
                     )
                     if index < items.count - 1 {
                         AppDivider()
+                    }
+                }
+            }
+
+            if !tasks.isEmpty {
+                AppDivider()
+                VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
+                    Text(NSLocalizedString("Before the visit", comment: "Visit prep action section title"))
+                        .appFont(.micro)
+                        .textCase(.uppercase)
+                        .tracking(0.7)
+                        .foregroundStyle(AppColor.textSecondary)
+
+                    ForEach(Array(tasks.enumerated()), id: \.offset) { index, task in
+                        Button(action: task.action) {
+                            HStack(alignment: .top, spacing: EditorialSpacing.sm) {
+                                Text("\(index + 1)")
+                                    .appFontNumeric(.caption)
+                                    .foregroundStyle(AppColor.primary)
+                                    .frame(width: 18, alignment: .leading)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(task.title)
+                                        .appFont(.subheadline)
+                                        .foregroundStyle(AppColor.textPrimary)
+                                    Text(task.detail)
+                                        .appFont(.caption)
+                                        .foregroundStyle(AppColor.textSecondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer(minLength: EditorialSpacing.sm)
+                                Image(systemName: "arrow.right")
+                                    .font(.system(size: 11, weight: .regular))
+                                    .foregroundStyle(AppColor.textTertiary)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -1080,8 +1132,8 @@ private extension DashboardView {
             VisitReadinessItem(
                 title: NSLocalizedString("Medication records", comment: "Visit prep readiness item"),
                 detail: medCount == 0
-                    ? NSLocalizedString("Add current medications", comment: "")
-                    : String(format: NSLocalizedString("%lld current medications", comment: "Visit prep medication readiness detail"), medCount),
+                    ? NSLocalizedString("No current medication list yet.", comment: "Visit prep medication missing detail")
+                    : String(format: NSLocalizedString("%lld current medications ready to review.", comment: "Visit prep medication readiness detail"), medCount),
                 status: medCount > 0 ? .ready : .needsAction,
                 countsTowardScore: true,
                 action: { showAddMedication = true }
@@ -1110,7 +1162,7 @@ private extension DashboardView {
             items.append(
                 VisitReadinessItem(
                     title: NSLocalizedString("Home measurements", comment: "Visit prep readiness item"),
-                    detail: NSLocalizedString("Add only if your doctor asked you to track a value.", comment: "Visit prep optional measurement detail"),
+                    detail: NSLocalizedString("Optional unless your doctor asked for home values.", comment: "Visit prep optional measurement detail"),
                     status: .optional,
                     countsTowardScore: false,
                     action: { onLogMeasurement?(.bloodPressure) }
@@ -1122,9 +1174,9 @@ private extension DashboardView {
             VisitReadinessItem(
                 title: NSLocalizedString("Symptoms or concerns", comment: "Visit prep readiness item"),
                 detail: symptomCount == 0
-                    ? NSLocalizedString("No concerns recorded; fine if nothing changed.", comment: "Visit prep optional symptom detail")
-                    : String(format: NSLocalizedString("%lld entries in last 30 days", comment: "Visit prep entries count"), symptomCount),
-                status: symptomCount > 0 ? .ready : .optional,
+                    ? NSLocalizedString("No concerns logged; add changes you want to mention.", comment: "Visit prep optional symptom detail")
+                    : String(format: NSLocalizedString("%lld symptom notes ready for the visit.", comment: "Visit prep entries count"), symptomCount),
+                status: symptomCount > 0 ? .ready : .needsAction,
                 countsTowardScore: false,
                 action: { showSymptomLog = true }
             )
@@ -1137,8 +1189,8 @@ private extension DashboardView {
                 title: NSLocalizedString("Last dose adjustment", comment: "Visit prep readiness item"),
                 detail: previousChangeSaved
                     ? NSLocalizedString("Saved from last visit", comment: "Visit prep prior medication change detail")
-                    : NSLocalizedString("No prior adjustment recorded.", comment: "Visit prep prior medication change detail"),
-                status: previousChangeSaved ? .ready : .optional,
+                    : NSLocalizedString("Confirm whether the last visit changed any medication.", comment: "Visit prep prior medication change detail"),
+                status: previousChangeSaved ? .ready : (previousVisit == nil ? .optional : .needsAction),
                 countsTowardScore: false,
                 action: { editingDoctorVisit = previousVisit ?? visit }
             )
@@ -1162,11 +1214,24 @@ private extension DashboardView {
             title: title,
             detail: count == 0
                 ? emptyDetail
-                : String(format: NSLocalizedString("%lld entries in last 30 days", comment: "Visit prep entries count"), count),
+                : String(format: NSLocalizedString("%lld entries can show a trend.", comment: "Visit prep entries count"), count),
             status: count > 0 ? .ready : .needsAction,
             countsTowardScore: true,
             action: { onLogMeasurement?(type) }
         )
+    }
+
+    private func preVisitTasks(from items: [VisitReadinessItem]) -> [VisitPrepTask] {
+        items
+            .filter { $0.status == .needsAction }
+            .prefix(3)
+            .map {
+                VisitPrepTask(
+                    title: $0.title,
+                    detail: $0.detail,
+                    action: $0.action
+                )
+            }
     }
 
     private func latestCompletedVisit(before date: Date) -> DoctorVisit? {
@@ -1419,6 +1484,7 @@ private extension DashboardView {
     /// Unified time-sorted list for Today. Rows are status-only; the single
     /// place to act on a due dose is the current item surfaced above.
     private func todayUnifiedList(
+        title: String,
         schedules: [MedSchedule],
         statusCache: [String: TodayMedStatus],
         currentActionID: String?,
@@ -1427,20 +1493,14 @@ private extension DashboardView {
     ) -> some View {
         let visibleSchedules = showFullTodaySchedule || schedules.count <= collapsedLimit
             ? schedules
-            : previewSchedules(
-                schedules: schedules,
-                statusCache: statusCache,
-                currentActionID: currentActionID,
-                nextUpcomingID: nextUpcomingID,
-                limit: collapsedLimit
-            )
+            : stableCollapsedSchedules(schedules: schedules, limit: collapsedLimit)
         let isCollapsed = visibleSchedules.count < schedules.count
 
         return VStack(alignment: .leading, spacing: EditorialSpacing.md) {
             AppDivider()
 
             HStack(alignment: .firstTextBaseline) {
-                Text(NSLocalizedString("Schedule", comment: "Unified schedule section title"))
+                Text(title)
                     .appFont(.headline)
                     .foregroundStyle(EditorialPalette.textPrimary)
                 Spacer()
@@ -1483,7 +1543,7 @@ private extension DashboardView {
                     HStack(spacing: EditorialSpacing.sm) {
                         Text(isCollapsed
                              ? NSLocalizedString("Show full schedule", comment: "")
-                             : NSLocalizedString("Show key items only", comment: ""))
+                             : NSLocalizedString("Show Less", comment: ""))
                             .appFont(.footnote)
                             .fontWeight(.medium)
                         Image(systemName: isCollapsed ? "chevron.down" : "chevron.up")
@@ -1496,49 +1556,33 @@ private extension DashboardView {
                 .buttonStyle(.plain)
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: showFullTodaySchedule)
     }
 
-    private func previewSchedules(
-        schedules: [MedSchedule],
-        statusCache: [String: TodayMedStatus],
-        currentActionID: String?,
-        nextUpcomingID: String?,
-        limit: Int
-    ) -> [MedSchedule] {
-        var selectedIDs = Set<String>()
+    private func stableCollapsedSchedules(schedules: [MedSchedule], limit: Int) -> [MedSchedule] {
+        Array(schedules.prefix(max(limit, 0)))
+    }
 
-        func select(_ item: MedSchedule?) {
-            guard let item, selectedIDs.count < limit else { return }
-            selectedIDs.insert(item.id)
+    private func scheduleCollapsedLimit(for mode: HomeMode) -> Int {
+        switch mode {
+        case .lightPrep, .activePrep, .visitDay:
+            return 1
+        case .quietAccumulation, .postVisitCapture:
+            return 3
         }
+    }
 
-        select(schedules.first { $0.id == currentActionID })
-        for item in schedules where selectedIDs.count < limit {
-            if case .overdue = statusCache[item.id] ?? .none {
-                select(item)
-            }
+    private func todayScheduleTitle(state: TodayState, mode: HomeMode) -> String {
+        switch mode {
+        case .lightPrep, .activePrep, .visitDay:
+            return String(
+                format: NSLocalizedString("Today's medication · %lld/%lld", comment: "Visit prep downgraded medication schedule title"),
+                state.takenCount + state.skippedCount,
+                state.totalCount
+            )
+        case .quietAccumulation, .postVisitCapture:
+            return NSLocalizedString("Schedule", comment: "Unified schedule section title")
         }
-        for item in schedules where selectedIDs.count < limit {
-            switch statusCache[item.id] ?? .none {
-            case .dueSoon, .snoozed:
-                select(item)
-            default:
-                break
-            }
-        }
-        select(schedules.first { $0.id == nextUpcomingID })
-        for item in schedules where selectedIDs.count < limit {
-            if !(statusCache[item.id] ?? .none).isFinal {
-                select(item)
-            }
-        }
-        for item in schedules where selectedIDs.count < limit {
-            select(item)
-        }
-
-        // Keep the visible subset in the same chronological order as the full
-        // schedule so expanding does not reshuffle rows under the user's finger.
-        return schedules.filter { selectedIDs.contains($0.id) }
     }
 
     private func compactUnifiedRow(
@@ -1678,7 +1722,7 @@ private extension DashboardView {
                             Divider()
                         }
                     }
-                    .transition(.opacity)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
                 if medications.count > 3 {
@@ -1701,6 +1745,7 @@ private extension DashboardView {
                     .buttonStyle(.plain)
                 }
             }
+            .animation(.easeInOut(duration: 0.18), value: showAllPRN)
         }
     }
 
