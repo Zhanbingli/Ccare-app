@@ -39,6 +39,7 @@ struct ConsultationSnapshotView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: EditorialSpacing.xl) {
                 header
+                snapshotSummaryStrip(summary: summary)
                 visitPrepSection(summary: summary)
                 allergiesWarning(summary: summary)
                 medicationsSection(summary: summary)
@@ -55,7 +56,15 @@ struct ConsultationSnapshotView: View {
         .navigationTitle(NSLocalizedString("Consultation Snapshot", comment: ""))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button {
+                    exportPDFReport()
+                } label: {
+                    Image(systemName: isGeneratingPDF ? "hourglass" : "doc.richtext")
+                }
+                .disabled(isGeneratingPDF)
+                .accessibilityLabel(NSLocalizedString("Export doctor PDF", comment: "Consultation snapshot PDF export action"))
+
                 Menu {
                     Button {
                         showNewSymptom = true
@@ -107,6 +116,48 @@ struct ConsultationSnapshotView: View {
         }
         .onChange(of: snapshotVisit?.id) { _ in
             refreshSummary()
+        }
+    }
+
+    private func snapshotSummaryStrip(summary: DoctorReportSummary) -> some View {
+        let totalMissed = summary.adherenceGaps.reduce(0) { $0 + $1.missedDays.count }
+        let abnormalReadings = summary.measurements.reduce(0) { $0 + $1.outOfRangeCount }
+        let symptomCount = recentSymptoms.count
+        let concernCount = totalMissed + abnormalReadings + symptomCount
+
+        return VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+            HStack(alignment: .firstTextBaseline) {
+                sectionLabel(NSLocalizedString("At A Glance", comment: "Consultation snapshot quick summary section"))
+                Spacer()
+                Text(String(format: NSLocalizedString("Last %lld days", comment: "Consultation snapshot summary window"), daysWindow))
+                    .appFontNumeric(.caption)
+                    .foregroundStyle(AppColor.textSecondary)
+            }
+
+            VStack(spacing: EditorialSpacing.sm) {
+                snapshotSummaryLine(
+                    title: NSLocalizedString("Allergy", comment: "Consultation snapshot summary metric"),
+                    value: summary.allergies ?? NSLocalizedString("None recorded", comment: "Consultation snapshot allergy metric detail"),
+                    systemImage: summary.allergies == nil ? "checkmark.circle" : "exclamationmark.triangle",
+                    tint: summary.allergies == nil ? AppColor.success : AppColor.warning
+                )
+                AppDivider()
+                snapshotSummaryLine(
+                    title: NSLocalizedString("Medications", comment: "Consultation snapshot summary metric"),
+                    value: String(format: NSLocalizedString("%lld current medications", comment: "Consultation snapshot medication summary"), summary.medications.count),
+                    systemImage: "pills",
+                    tint: summary.medications.isEmpty ? AppColor.textSecondary : AppColor.primary
+                )
+                AppDivider()
+                snapshotSummaryLine(
+                    title: NSLocalizedString("Doctor should note", comment: "Consultation snapshot concern summary"),
+                    value: concernCount == 0
+                        ? NSLocalizedString("No major issues logged", comment: "Consultation snapshot no concerns")
+                        : String(format: NSLocalizedString("%lld items need review", comment: "Consultation snapshot concern count"), concernCount),
+                    systemImage: concernCount == 0 ? "checkmark.seal" : "exclamationmark.triangle",
+                    tint: concernCount == 0 ? AppColor.success : AppColor.warning
+                )
+            }
         }
     }
 
@@ -253,16 +304,17 @@ struct ConsultationSnapshotView: View {
     @ViewBuilder
     private func medicationRow(_ med: DoctorReportSummary.MedicationLine) -> some View {
         VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("\(med.name) \(med.dose)")
-                    .appFont(.body)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(AppColor.textPrimary)
-                Spacer()
-                Text(med.schedule)
-                    .appFont(.caption)
-                    .foregroundStyle(AppColor.textSecondary)
-            }
+            Text("\(med.name) \(med.dose)")
+                .appFont(.body)
+                .fontWeight(.semibold)
+                .foregroundStyle(AppColor.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Label(med.schedule, systemImage: med.schedule == NSLocalizedString("PRN", comment: "As needed") ? "hand.raised" : "clock")
+                .appFont(.caption)
+                .foregroundStyle(AppColor.textSecondary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
 
             if let caption = med.caption {
                 Text(caption)
@@ -370,6 +422,10 @@ struct ConsultationSnapshotView: View {
 
     @ViewBuilder
     private func measurementRow(_ highlight: DoctorReportSummary.MeasurementHighlight) -> some View {
+        let latestIsOutOfRange = latestMeasurementIsOutOfRange(highlight)
+        let valueColor = latestIsOutOfRange ? AppColor.warning : AppColor.textPrimary
+        let rangeText = measurementRangeText(for: highlight.type)
+
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(highlight.type.displayName)
@@ -380,7 +436,13 @@ struct ConsultationSnapshotView: View {
                 Text(highlight.latestValue)
                     .appFontNumeric(.subheadline)
                     .fontWeight(.bold)
-                    .foregroundStyle(AppColor.textPrimary)
+                    .foregroundStyle(valueColor)
+
+                if let rangeText {
+                    Text(rangeText)
+                        .appFontNumeric(.footnote)
+                        .foregroundStyle(AppColor.textSecondary)
+                }
 
                 if highlight.outOfRangeCount > 0 {
                     Text(String(format: NSLocalizedString("Latest %@ · %lld entries · %lld out-of-range", comment: "Visit summary measurement warning caption"), dateShort(highlight.latestDate), highlight.entryCount, highlight.outOfRangeCount))
@@ -410,6 +472,14 @@ struct ConsultationSnapshotView: View {
             )
             .foregroundStyle(AppColor.primary.opacity(0.72))
             .interpolationMethod(.monotone)
+
+            if m.id == series.last?.id {
+                PointMark(
+                    x: .value("d", m.date),
+                    y: .value("v", primaryValue(m))
+                )
+                .foregroundStyle(m.isAbnormal ? AppColor.warning : AppColor.primary)
+            }
         }
         .chartXAxis(.hidden)
         .chartYAxis(.hidden)
@@ -420,6 +490,33 @@ struct ConsultationSnapshotView: View {
 
     private func primaryValue(_ m: Measurement) -> Double {
         m.value
+    }
+
+    private func latestMeasurementIsOutOfRange(_ highlight: DoctorReportSummary.MeasurementHighlight) -> Bool {
+        guard let latest = highlight.series.last else { return false }
+        return latest.isAbnormal
+    }
+
+    private func measurementRangeText(for type: MeasurementType) -> String? {
+        switch type {
+        case .bloodPressure:
+            let thresholds = store.bpThresholds()
+            let target = "\(Int(thresholds.systolicHigh))/\(Int(thresholds.diastolicHigh)) \(type.unit)"
+            return String(format: NSLocalizedString("Target <= %@", comment: "Consultation snapshot blood pressure target"), target)
+        case .bloodGlucose:
+            guard let range = store.customGoalRange(for: type) else { return nil }
+            let low = UnitPreferences.mgdlToPreferred(range.lowerBound)
+            let high = UnitPreferences.mgdlToPreferred(range.upperBound)
+            let formatter = UnitPreferences.glucoseUnit == .mgdL ? "%.0f" : "%.1f"
+            let target = "\(String(format: formatter, low))-\(String(format: formatter, high)) \(UnitPreferences.glucoseUnit.rawValue)"
+            return String(format: NSLocalizedString("Target %@", comment: "Consultation snapshot measurement target"), target)
+        case .heartRate:
+            guard let range = store.customGoalRange(for: type) else { return nil }
+            let target = "\(Int(range.lowerBound))-\(Int(range.upperBound)) \(type.unit)"
+            return String(format: NSLocalizedString("Target %@", comment: "Consultation snapshot measurement target"), target)
+        case .weight:
+            return nil
+        }
     }
 
     // MARK: - Symptoms
@@ -611,6 +708,27 @@ struct ConsultationSnapshotView: View {
                     .foregroundStyle(AppColor.textSecondary)
             }
         }
+    }
+
+    private func snapshotSummaryLine(title: String, value: String, systemImage: String, tint: Color) -> some View {
+        HStack(alignment: .top, spacing: EditorialSpacing.sm) {
+            Image(systemName: systemImage)
+                .font(.system(size: 18, weight: .regular))
+                .foregroundStyle(tint)
+                .frame(width: 24, alignment: .center)
+
+            VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                Text(title)
+                    .appFont(.body)
+                    .foregroundStyle(AppColor.textSecondary)
+                Text(value)
+                    .appFont(.headline)
+                    .foregroundStyle(AppColor.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: EditorialSpacing.sm)
+        }
+        .padding(.vertical, EditorialSpacing.xs)
     }
 
     private func editorialSourceTitle(_ source: MedicationSource) -> String {

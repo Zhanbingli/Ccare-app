@@ -28,6 +28,7 @@ struct DashboardView: View {
     @State private var editingDoctorVisit: DoctorVisit?
     @State private var showVisitSnapshot = false
     @State private var quickFeelingConfirmation: String?
+    @State private var visitDayChecklistRevision = 0
     private let refreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     private struct MedSchedule: Identifiable {
@@ -948,101 +949,236 @@ private extension DashboardView {
     }
 
     private func visitDayBoardingPass(visit: DoctorVisit) -> some View {
-        TintedCard(tint: EditorialPalette.primary) {
-            VStack(alignment: .leading, spacing: EditorialSpacing.lg) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(NSLocalizedString("Today is your appointment", comment: "Visit day hero title"))
-                        .appFont(.displayTitle)
-                        .fontWeight(.bold)
-                        .foregroundStyle(EditorialPalette.textPrimary)
-                    Text(visitSupportingLine(visit))
-                        .appFont(.subheadline)
-                        .foregroundStyle(EditorialPalette.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+        return VStack(alignment: .leading, spacing: EditorialSpacing.lg) {
+            VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
+                Text(NSLocalizedString("Today is your appointment", comment: "Visit day hero title"))
+                    .appFont(.displayTitle)
+                    .fontWeight(.bold)
+                    .foregroundStyle(EditorialPalette.textPrimary)
+                Text(visit.scheduledDate.formatted(date: .omitted, time: .shortened))
+                    .appFontNumeric(.heroNumber)
+                    .foregroundStyle(AppColor.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+            }
 
-                Button {
-                    showVisitSnapshot = true
-                } label: {
-                    Label(NSLocalizedString("Show Doctor Snapshot", comment: "Visit day primary action"), systemImage: "doc.text.magnifyingglass")
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity, minHeight: 52)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(EditorialPalette.primary)
+            AppDivider()
 
-                InsetPanel(tint: nil) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label(NSLocalizedString("Bring ID, insurance card, and your medication list.", comment: "Visit day reminder"), systemImage: "checklist")
-                            .appFont(.caption)
-                            .foregroundStyle(EditorialPalette.textSecondary)
-                        Button {
-                            editingDoctorVisit = visit
-                        } label: {
-                            Label(NSLocalizedString("Record doctor notes after the visit", comment: "Visit day secondary action"), systemImage: "square.and.pencil")
-                                .appFont(.caption)
-                        }
-                        .buttonStyle(.plain)
+            visitDayPlaceSummary(visit)
+
+            Button {
+                showVisitSnapshot = true
+            } label: {
+                Label(NSLocalizedString("Show Doctor Snapshot", comment: "Visit day primary action"), systemImage: "doc.text.magnifyingglass")
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(EditorialPalette.primary)
+
+            VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
+                Text(NSLocalizedString("Before you leave", comment: "Visit day checklist title"))
+                    .appFont(.micro)
+                    .textCase(.uppercase)
+                    .tracking(0.7)
+                    .foregroundStyle(AppColor.textSecondary)
+
+                ForEach(Array(visitDayChecklistItems(for: visit).enumerated()), id: \.element.id) { index, item in
+                    visitDayChecklistRow(visit: visit, item: item)
+                    if index < visitDayChecklistItems(for: visit).count - 1 {
+                        AppDivider()
                     }
                 }
             }
+
+            AppDivider()
+
+            VStack(spacing: EditorialSpacing.sm) {
+                Button {
+                    markVisitDoneAndOpenCapture(visit)
+                } label: {
+                    Label(NSLocalizedString("Mark visit done and record notes", comment: "Visit day completion action"), systemImage: "checkmark.circle")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity, minHeight: 46)
+                }
+                .buttonStyle(.bordered)
+                .tint(EditorialPalette.primary)
+            }
+        }
+        .padding(.vertical, EditorialSpacing.sm)
+    }
+
+    @ViewBuilder
+    private func visitDayPlaceSummary(_ visit: DoctorVisit) -> some View {
+        let place = [visit.hospital, visit.department, visit.doctorName]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+
+        if place.isEmpty {
+            Button {
+                editingDoctorVisit = visit
+            } label: {
+                Label(NSLocalizedString("Add clinic details", comment: "Visit day missing appointment details"), systemImage: "square.and.pencil")
+                    .appFont(.body)
+                    .foregroundStyle(AppColor.primary)
+            }
+            .buttonStyle(.plain)
+        } else {
+            Label(place, systemImage: "building.2")
+                .appFont(.body)
+                .fontWeight(.semibold)
+                .foregroundStyle(AppColor.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private struct VisitDayChecklistItem {
+        let id: String
+        let title: String
+        let detail: String
+        let systemImage: String
+    }
+
+    private func visitDayChecklistItems(for visit: DoctorVisit) -> [VisitDayChecklistItem] {
+        [
+            VisitDayChecklistItem(
+                id: "cards",
+                title: NSLocalizedString("ID and insurance card", comment: "Visit day checklist item"),
+                detail: "",
+                systemImage: "person.text.rectangle"
+            ),
+            VisitDayChecklistItem(
+                id: "meds",
+                title: NSLocalizedString("Medication list", comment: "Visit day checklist item"),
+                detail: "",
+                systemImage: "pills"
+            ),
+            VisitDayChecklistItem(
+                id: "readings",
+                title: NSLocalizedString("Home readings", comment: "Visit day checklist item"),
+                detail: "",
+                systemImage: "waveform.path.ecg"
+            )
+        ]
+    }
+
+    private func visitDayChecklistRow(visit: DoctorVisit, item: VisitDayChecklistItem) -> some View {
+        let _ = visitDayChecklistRevision
+        let isDone = visitDayChecklistDone(visitID: visit.id, itemID: item.id)
+
+        return Button {
+            setVisitDayChecklistDone(!isDone, visitID: visit.id, itemID: item.id)
+        } label: {
+            HStack(alignment: .top, spacing: EditorialSpacing.sm) {
+                Image(systemName: isDone ? "checkmark.circle.fill" : item.systemImage)
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(isDone ? AppColor.success : AppColor.primary)
+                    .frame(width: 22, alignment: .center)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.title)
+                        .appFont(.body)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(AppColor.textPrimary)
+                    if !item.detail.isEmpty {
+                        Text(item.detail)
+                            .appFont(.caption)
+                            .foregroundStyle(AppColor.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: EditorialSpacing.sm)
+            }
+            .padding(.vertical, EditorialSpacing.xs)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func visitDayChecklistDone(visitID: UUID, itemID: String) -> Bool {
+        UserDefaults.standard.bool(forKey: visitDayChecklistKey(visitID: visitID, itemID: itemID))
+    }
+
+    private func setVisitDayChecklistDone(_ done: Bool, visitID: UUID, itemID: String) {
+        UserDefaults.standard.set(done, forKey: visitDayChecklistKey(visitID: visitID, itemID: itemID))
+        visitDayChecklistRevision += 1
+    }
+
+    private func visitDayChecklistKey(visitID: UUID, itemID: String) -> String {
+        "visitDayChecklist.\(visitID.uuidString).\(itemID)"
+    }
+
+    private func markVisitDoneAndOpenCapture(_ visit: DoctorVisit) {
+        store.completeDoctorVisit(visit)
+        if let completed = store.doctorVisits.first(where: { $0.id == visit.id }) {
+            editingDoctorVisit = completed
+        } else {
+            editingDoctorVisit = visit
         }
     }
 
     private func postVisitCaptureCard(visit: DoctorVisit) -> some View {
-        TintedCard(tint: EditorialPalette.primary) {
-            VStack(alignment: .leading, spacing: EditorialSpacing.lg) {
-                VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
-                    Text(NSLocalizedString("Capture what the doctor said", comment: "Post visit capture title"))
-                        .appFont(.displayTitle)
-                        .fontWeight(.bold)
-                        .foregroundStyle(EditorialPalette.textPrimary)
-                    Text(NSLocalizedString("The first 48 hours after a visit are the best time to record instructions, medication changes, and the next appointment.", comment: "Post visit capture subtitle"))
-                        .appFont(.caption)
-                        .foregroundStyle(EditorialPalette.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
-                    readinessRow(
-                        title: NSLocalizedString("Doctor instructions", comment: "Post visit checklist"),
-                        detail: visit.notes?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-                            ? NSLocalizedString("Saved", comment: "")
-                            : NSLocalizedString("Not recorded yet", comment: ""),
-                        isReady: visit.notes?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
-                        action: { editingDoctorVisit = visit }
-                    )
-                    readinessRow(
-                        title: NSLocalizedString("Medication changes", comment: "Post visit checklist"),
-                        detail: visit.medicationChangesSummary?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-                            ? NSLocalizedString("Saved", comment: "")
-                            : NSLocalizedString("Not recorded yet", comment: ""),
-                        isReady: visit.medicationChangesSummary?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
-                        action: { editingDoctorVisit = visit }
-                    )
-                    readinessRow(
-                        title: NSLocalizedString("Next appointment", comment: "Post visit checklist"),
-                        detail: visit.nextVisitDate?.formatted(date: .abbreviated, time: .omitted) ?? NSLocalizedString("Not scheduled yet", comment: ""),
-                        isReady: visit.nextVisitDate != nil,
-                        action: { editingDoctorVisit = visit }
-                    )
-                }
-
-                Button {
-                    editingDoctorVisit = visit
-                } label: {
-                    Label(NSLocalizedString("Record Visit Notes", comment: "Post visit capture action"), systemImage: "square.and.pencil")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(EditorialPalette.primary)
+        VStack(alignment: .leading, spacing: EditorialSpacing.lg) {
+            VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
+                Text(NSLocalizedString("Record today's visit", comment: "Post visit capture title"))
+                    .appFont(.displayTitle)
+                    .fontWeight(.bold)
+                    .foregroundStyle(EditorialPalette.textPrimary)
+                Text(NSLocalizedString("Save the doctor's instructions while they are fresh.", comment: "Post visit capture subtitle"))
+                    .appFont(.body)
+                    .foregroundStyle(EditorialPalette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+
+            AppDivider()
+
+            VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+                postVisitStatusLine(
+                    title: NSLocalizedString("Doctor notes", comment: "Post visit status"),
+                    value: visit.notes?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                        ? NSLocalizedString("Saved", comment: "")
+                        : NSLocalizedString("Not saved yet", comment: "")
+                )
+                AppDivider()
+                postVisitStatusLine(
+                    title: NSLocalizedString("Next visit", comment: "Post visit status"),
+                    value: visit.nextVisitDate?.formatted(date: .abbreviated, time: .omitted) ?? NSLocalizedString("Not set", comment: "")
+                )
+            }
+
+            Button {
+                editingDoctorVisit = visit
+            } label: {
+                Label(NSLocalizedString("Record Visit Notes", comment: "Post visit capture action"), systemImage: "square.and.pencil")
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(EditorialPalette.primary)
         }
+        .padding(.vertical, EditorialSpacing.sm)
+    }
+
+    private func postVisitStatusLine(title: String, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .appFont(.body)
+                .foregroundStyle(AppColor.textPrimary)
+            Spacer(minLength: EditorialSpacing.md)
+            Text(value)
+                .appFont(.body)
+                .fontWeight(.semibold)
+                .foregroundStyle(AppColor.textSecondary)
+                .multilineTextAlignment(.trailing)
+        }
+        .padding(.vertical, EditorialSpacing.xs)
     }
 
     private func visitDataReadinessCard(visit: DoctorVisit, mode: HomeMode) -> some View {
         let items = visitReadinessItems(for: visit)
         let tasks = preVisitTasks(from: items)
+        let visibleItems = Array(items.prefix(3))
         let requiredItems = items.filter(\.countsTowardScore)
         let readinessCount = requiredItems.filter { $0.status == .ready }.count
         let readinessTotal = requiredItems.count
@@ -1059,7 +1195,7 @@ private extension DashboardView {
                         .foregroundStyle(AppColor.textSecondary)
                 }
                 Text(NSLocalizedString("What your doctor can use at the appointment.", comment: "Visit prep readiness subtitle"))
-                    .appFont(.caption)
+                    .appFont(.body)
                     .foregroundStyle(AppColor.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -1067,14 +1203,14 @@ private extension DashboardView {
             AppDivider()
 
             VStack(spacing: EditorialSpacing.sm) {
-                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                ForEach(Array(visibleItems.enumerated()), id: \.offset) { index, item in
                     readinessRow(
                         title: item.title,
                         detail: item.detail,
                         status: item.status,
                         action: item.action
                     )
-                    if index < items.count - 1 {
+                    if index < visibleItems.count - 1 {
                         AppDivider()
                     }
                 }

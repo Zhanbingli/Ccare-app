@@ -47,15 +47,34 @@ struct DoctorVisitFormView: View {
                 TextField(NSLocalizedString("Department", comment: ""), text: $department)
                 TextField(NSLocalizedString("Doctor", comment: ""), text: $doctorName)
                 TextField(NSLocalizedString("Reason", comment: ""), text: $reason, axis: .vertical)
+                    .lineLimit(2...4)
             }
 
-            Section(NSLocalizedString("After Visit", comment: "")) {
+            Section {
                 Toggle(NSLocalizedString("Visit completed", comment: ""), isOn: $isCompleted)
-                TextField(NSLocalizedString("Doctor notes", comment: ""), text: $notes, axis: .vertical)
-                TextField(NSLocalizedString("Medication changes", comment: ""), text: $medicationChangesSummary, axis: .vertical)
-                Toggle(NSLocalizedString("Set next visit date", comment: ""), isOn: $hasNextVisitDate)
-                if hasNextVisitDate {
-                    DatePicker(NSLocalizedString("Next visit", comment: ""), selection: $nextVisitDate, displayedComponents: [.date])
+
+                if showsAfterVisitFields {
+                    TextField(NSLocalizedString("Doctor notes", comment: ""), text: $notes, axis: .vertical)
+                        .lineLimit(3...7)
+                    TextField(NSLocalizedString("Medication changes", comment: ""), text: $medicationChangesSummary, axis: .vertical)
+                        .lineLimit(3...7)
+                    Toggle(NSLocalizedString("Set next visit date", comment: ""), isOn: $hasNextVisitDate)
+                    if hasNextVisitDate {
+                        DatePicker(NSLocalizedString("Next visit", comment: ""), selection: $nextVisitDate, displayedComponents: [.date])
+                    }
+                } else {
+                    Text(NSLocalizedString("After the appointment, turn this on to record the doctor's notes and next follow-up.", comment: "Doctor visit after-visit collapsed helper"))
+                        .appFont(.body)
+                        .foregroundStyle(AppColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } header: {
+                Text(NSLocalizedString("After Visit", comment: ""))
+            } footer: {
+                if createsFollowUpVisit {
+                    Text(NSLocalizedString("Saving will also add the next follow-up visit to your schedule.", comment: "Doctor visit follow-up creation helper"))
+                } else if isCompleted && hasNextVisitDate {
+                    Text(NSLocalizedString("A visit already exists on that date, so this record will only save the follow-up date.", comment: "Doctor visit duplicate follow-up helper"))
                 }
             }
 
@@ -121,6 +140,18 @@ struct DoctorVisitFormView: View {
     private func trimmedOrNil(_ value: String) -> String? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private var showsAfterVisitFields: Bool {
+        isCompleted || hasText(notes) || hasText(medicationChangesSummary) || hasNextVisitDate
+    }
+
+    private var createsFollowUpVisit: Bool {
+        isCompleted && hasNextVisitDate && !store.hasDoctorVisit(on: nextVisitDate)
+    }
+
+    private func hasText(_ value: String) -> Bool {
+        !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func createNextVisitIfNeeded(from completedVisit: DoctorVisit) {

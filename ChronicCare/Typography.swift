@@ -18,25 +18,25 @@ enum AppFontStyle {
         case .heroNumber:
             return .system(size: 48, weight: .bold, design: .rounded)
         case .displayTitle:
-            return .system(size: 30, weight: .bold, design: .default)
+            return .system(size: 32, weight: .bold, design: .default)
         case .largeTitle:
             return .system(.largeTitle, design: design).weight(.bold)
         case .title:
             return .system(.title2, design: design).weight(.semibold)
         case .headline:
-            return .system(size: 18, weight: .semibold, design: design)
+            return .system(size: 20, weight: .semibold, design: design)
         case .subheadline:
-            return .system(size: 16, weight: .medium, design: design)
+            return .system(size: 17, weight: .medium, design: design)
         case .body:
-            return .system(size: 17, weight: .regular, design: design)
+            return .system(size: 18, weight: .regular, design: design)
         case .label:
-            return .system(size: 16, weight: .semibold, design: design)
+            return .system(size: 17, weight: .semibold, design: design)
         case .footnote:
-            return .system(size: 14, weight: .regular, design: design)
+            return .system(size: 15, weight: .regular, design: design)
         case .caption:
-            return .system(size: 14, weight: .regular, design: design)
+            return .system(size: 15, weight: .regular, design: design)
         case .micro:
-            return .system(size: 12, weight: .medium, design: design)
+            return .system(size: 13, weight: .medium, design: design)
         }
     }
 
