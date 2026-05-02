@@ -103,8 +103,10 @@ struct MedicationsView: View {
             .navigationTitle(NSLocalizedString("Medications", comment: ""))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showAdd = true } label: { Image(systemName: "plus") }
-                        .accessibilityLabel(NSLocalizedString("Add Medication", comment: ""))
+                    if !store.medications.isEmpty {
+                        Button { showAdd = true } label: { Image(systemName: "plus") }
+                            .accessibilityLabel(NSLocalizedString("Add Medication", comment: ""))
+                    }
                 }
             }
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: NSLocalizedString("Search medications", comment: ""))
@@ -259,16 +261,6 @@ private extension MedicationsView {
                 .appFont(.caption)
                 .foregroundStyle(AppColor.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-
-            Button {
-                showAdd = true
-            } label: {
-                Label(NSLocalizedString("Add Medication", comment: ""), systemImage: "plus.circle")
-                    .fontWeight(.semibold)
-            }
-            .buttonStyle(.bordered)
-            .tint(AppColor.primary)
-            .padding(.top, 2)
         }
         .padding(.vertical, 4)
     }

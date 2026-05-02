@@ -1463,6 +1463,10 @@
 "Start today's health log" = "开始今天的健康记录";
 "Today is documented" = "今天已记录完整";
 "%lld doses left today" = "今天还剩 %lld 次用药";
+"Medication due now" = "现在该处理用药";
+"Keep today's medication log complete before the appointment." = "复诊前也要保持今天的用药记录完整。";
+"Keep today's medication log current while you record the visit plan." = "记录复诊计划时，也同步保持今天的用药记录。";
+"Log today's dose so reminders and visit summaries stay accurate." = "记录今天这次用药，让提醒和复诊摘要保持准确。";
 "Appointment in %lld days" = "距离复诊 %lld 天";
 "30d readings" = "30天测量";
 "30d feelings" = "30天感觉";

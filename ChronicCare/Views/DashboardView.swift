@@ -240,6 +240,11 @@ struct DashboardView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     homeHeader()
 
+                    let showsDoseBeforeVisitCard = isVisitDayMode(mode) && currentAction != nil
+                    if showsDoseBeforeVisitCard, let currentAction {
+                        currentDoseActionCard(item: currentAction, mode: mode)
+                    }
+
                     switch mode {
                     case .quietAccumulation:
                         dailyStatusHero(state: state)
@@ -253,6 +258,12 @@ struct DashboardView: View {
                         visitDayBoardingPass(visit: visit)
                     case .postVisitCapture(let visit):
                         postVisitCaptureCard(visit: visit)
+                    }
+
+                    if shouldShowSeparateDoseAction(for: mode),
+                       !showsDoseBeforeVisitCard,
+                       let currentAction {
+                        currentDoseActionCard(item: currentAction, mode: mode)
                     }
 
                     if notificationStatus == .denied {
@@ -533,6 +544,20 @@ private extension DashboardView {
         return .quietAccumulation
     }
 
+    private func isVisitDayMode(_ mode: HomeMode) -> Bool {
+        if case .visitDay = mode { return true }
+        return false
+    }
+
+    private func shouldShowSeparateDoseAction(for mode: HomeMode) -> Bool {
+        switch mode {
+        case .quietAccumulation:
+            return false
+        case .lightPrep, .activePrep, .visitDay, .postVisitCapture:
+            return true
+        }
+    }
+
     private var recentCompletedVisitForCapture: DoctorVisit? {
         let now = Date()
         return store.completedDoctorVisits.first { visit in
@@ -639,6 +664,50 @@ private extension DashboardView {
                 .padding(.top, EditorialSpacing.xs)
             }
         }
+    }
+
+    private func currentDoseActionCard(item: MedSchedule, mode: HomeMode) -> some View {
+        Card {
+            VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+                Label(NSLocalizedString("Medication due now", comment: "Current medication action title"), systemImage: "pills.fill")
+                    .appFont(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(EditorialPalette.textPrimary)
+
+                VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                    Text(item.med.name)
+                        .appFont(.headline)
+                        .foregroundStyle(EditorialPalette.textPrimary)
+                    Text("\(item.med.dose) · \(item.time.formatted(date: .omitted, time: .shortened))")
+                        .appFont(.caption)
+                        .foregroundStyle(EditorialPalette.textSecondary)
+                    Text(doseActionSubtitle(for: mode))
+                        .appFont(.caption)
+                        .foregroundStyle(EditorialPalette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                HStack(spacing: EditorialSpacing.sm) {
+                    EditorialButton(NSLocalizedString("Take", comment: ""), kind: .primary) {
+                        beginTakeFlow(for: item)
+                    }
+
+                    EditorialButton(NSLocalizedString("Skip", comment: ""), kind: .secondary) {
+                        skipDose(for: item)
+                    }
+                }
+            }
+        }
+    }
+
+    private func doseActionSubtitle(for mode: HomeMode) -> String {
+        if case .visitDay = mode {
+            return NSLocalizedString("Keep today's medication log complete before the appointment.", comment: "Visit day medication action subtitle")
+        }
+        if case .postVisitCapture = mode {
+            return NSLocalizedString("Keep today's medication log current while you record the visit plan.", comment: "Post visit medication action subtitle")
+        }
+        return NSLocalizedString("Log today's dose so reminders and visit summaries stay accurate.", comment: "Medication action subtitle")
     }
 
     private func dailyMeasurementInlineSection() -> some View {
