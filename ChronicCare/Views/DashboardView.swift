@@ -681,10 +681,6 @@ private extension DashboardView {
                     Text("\(item.med.dose) · \(item.time.formatted(date: .omitted, time: .shortened))")
                         .appFont(.caption)
                         .foregroundStyle(EditorialPalette.textSecondary)
-                    Text(doseActionSubtitle(for: mode))
-                        .appFont(.caption)
-                        .foregroundStyle(EditorialPalette.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 HStack(spacing: EditorialSpacing.sm) {
@@ -698,16 +694,6 @@ private extension DashboardView {
                 }
             }
         }
-    }
-
-    private func doseActionSubtitle(for mode: HomeMode) -> String {
-        if case .visitDay = mode {
-            return NSLocalizedString("Keep today's medication log complete before the appointment.", comment: "Visit day medication action subtitle")
-        }
-        if case .postVisitCapture = mode {
-            return NSLocalizedString("Keep today's medication log current while you record the visit plan.", comment: "Post visit medication action subtitle")
-        }
-        return NSLocalizedString("Log today's dose so reminders and visit summaries stay accurate.", comment: "Medication action subtitle")
     }
 
     private func dailyMeasurementInlineSection() -> some View {
@@ -1193,10 +1179,6 @@ private extension DashboardView {
                     .appFont(.displayTitle)
                     .fontWeight(.bold)
                     .foregroundStyle(EditorialPalette.textPrimary)
-                Text(NSLocalizedString("Save the doctor's instructions while they are fresh.", comment: "Post visit capture subtitle"))
-                    .appFont(.body)
-                    .foregroundStyle(EditorialPalette.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
 
             AppDivider()
@@ -1246,11 +1228,6 @@ private extension DashboardView {
                 }
                 .buttonStyle(.bordered)
                 .tint(EditorialPalette.primary)
-
-                Text(NSLocalizedString("If the doctor changed a medication, update the medication list so reminders and the next visit summary stay accurate.", comment: "Post visit medication reminder"))
-                    .appFont(.caption)
-                    .foregroundStyle(EditorialPalette.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.vertical, EditorialSpacing.sm)

@@ -157,10 +157,6 @@ struct DoctorVisitFormView: View {
                 .appFont(.subheadline)
                 .fontWeight(.semibold)
                 .foregroundStyle(AppColor.textPrimary)
-            Text(NSLocalizedString("Record three things: what the doctor said, what changed in the medication plan, and when to return. This becomes the basis for daily tracking and the next visit summary.", comment: "Post visit capture guide detail"))
-                .appFont(.caption)
-                .foregroundStyle(AppColor.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.vertical, 4)
     }

@@ -845,9 +845,7 @@
 "Insights" = "洞察";
 "Add your first medication to build your daily schedule." = "添加第一种药物，开始建立你的每日用药安排。";
 "No medications match your search." = "没有匹配当前搜索的药物。";
-"Edit, pause, or add medications here. These records drive daily reminders and the next visit summary." = "在这里编辑、暂停或新增药物；这些记录会影响每日提醒和下次复诊摘要。";
 "Medication plan from the visit: %@" = "本次复诊用药方案：%@";
-"Check whether the doctor added, stopped, or changed any medication at the last visit." = "核对医生在上次复诊是否新增、停用或调整了任何药物。";
 "Needs Setup" = "需要设置";
 "Active Medications" = "正在使用的药物";
 "Safety & Support" = "安全与支持";
@@ -1317,14 +1315,12 @@
 "Medication plan" = "用药方案";
 "Added, stopped, changed dose/time, or no changes" = "新增、停用、剂量/时间调整，或无变化";
 "Before you leave the clinic" = "离开诊室前";
-"Record three things: what the doctor said, what changed in the medication plan, and when to return. This becomes the basis for daily tracking and the next visit summary." = "记录三件事：医生交代了什么、用药方案有什么变化、什么时候复诊。这会成为后续每日跟踪和下次复诊摘要的依据。";
 "Set next visit date" = "设置下次复诊";
 "Next visit" = "下次复诊";
 "After Last Visit" = "上次复诊后";
 "Complete Visit Plan" = "补全复诊计划";
 "Review Medication List" = "复核用药清单";
-"Apply medication changes to reminders and the next visit summary" = "把用药调整同步到提醒和下次复诊摘要";
-"Capture the doctor's instructions while they are fresh so daily reminders and the next visit summary stay accurate." = "趁记忆清楚记录医生交代，后续每日提醒和下次复诊摘要才会准确。";
+"Add, pause, or edit medications" = "新增、暂停或编辑用药";
 "Post-visit plan saved." = "复诊后计划已保存。";
 "Still needs: %@" = "还需补充：%@";
 "doctor instructions" = "医生交代";
@@ -1464,9 +1460,6 @@
 "Today is documented" = "今天已记录完整";
 "%lld doses left today" = "今天还剩 %lld 次用药";
 "Medication due now" = "现在该处理用药";
-"Keep today's medication log complete before the appointment." = "复诊前也要保持今天的用药记录完整。";
-"Keep today's medication log current while you record the visit plan." = "记录复诊计划时，也同步保持今天的用药记录。";
-"Log today's dose so reminders and visit summaries stay accurate." = "记录今天这次用药，让提醒和复诊摘要保持准确。";
 "Appointment in %lld days" = "距离复诊 %lld 天";
 "30d readings" = "30天测量";
 "30d feelings" = "30天感觉";
@@ -1482,7 +1475,6 @@
 "Not scheduled yet" = "尚未安排";
 "Record Visit Notes" = "记录本次复诊";
 "Update Medication List" = "更新用药清单";
-"If the doctor changed a medication, update the medication list so reminders and the next visit summary stay accurate." = "如果医生调整了用药，请同步更新用药清单，这样提醒和下次复诊摘要才会准确。";
 "Visit prep materials" = "复诊资料准备";
 "Review current medications" = "当前用药核对";
 "%lld medications to review" = "需要核对 %lld 种用药";

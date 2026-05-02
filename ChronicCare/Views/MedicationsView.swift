@@ -34,8 +34,6 @@ struct MedicationsView: View {
                     if let visit = recentPostVisitMedicationReview {
                         Section {
                             postVisitMedicationReviewRow(for: visit)
-                        } footer: {
-                            Text(NSLocalizedString("Edit, pause, or add medications here. These records drive daily reminders and the next visit summary.", comment: "Post visit medication review footer"))
                         }
                     }
 
@@ -230,7 +228,7 @@ private extension MedicationsView {
         return store.completedDoctorVisits.first { visit in
             let completedDay = calendar.startOfDay(for: visit.completedDate ?? visit.scheduledDate)
             let days = calendar.dateComponents([.day], from: completedDay, to: today).day ?? Int.max
-            return days >= 0 && days <= 14 && (visit.needsPostVisitCapture || visit.hasMedicationPlan)
+            return days >= 0 && days <= 14 && visit.hasMedicationPlan
         }
     }
 
@@ -257,19 +255,21 @@ private extension MedicationsView {
                 .fontWeight(.semibold)
                 .foregroundStyle(AppColor.textPrimary)
 
-            Text(postVisitMedicationReviewText(for: visit))
-                .appFont(.caption)
-                .foregroundStyle(AppColor.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+            if let text = postVisitMedicationReviewText(for: visit) {
+                Text(text)
+                    .appFont(.caption)
+                    .foregroundStyle(AppColor.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(.vertical, 4)
     }
 
-    private func postVisitMedicationReviewText(for visit: DoctorVisit) -> String {
+    private func postVisitMedicationReviewText(for visit: DoctorVisit) -> String? {
         if let summary = visit.medicationChangesSummary?.trimmingCharacters(in: .whitespacesAndNewlines), !summary.isEmpty {
             return String(format: NSLocalizedString("Medication plan from the visit: %@", comment: "Post visit medication review summary"), summary)
         }
-        return NSLocalizedString("Check whether the doctor added, stopped, or changed any medication at the last visit.", comment: "Post visit medication review prompt")
+        return nil
     }
 
     /// Single condensed row per medication. The surrounding section header

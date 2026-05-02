@@ -80,15 +80,13 @@ struct DoctorVisitsView: View {
                     } label: {
                         visitActionRow(
                             title: NSLocalizedString("Review Medication List", comment: "Post visit medication review action"),
-                            subtitle: NSLocalizedString("Apply medication changes to reminders and the next visit summary", comment: "Post visit medication review subtitle"),
+                            subtitle: NSLocalizedString("Add, pause, or edit medications", comment: "Post visit medication review subtitle"),
                             systemImage: "pills.fill",
                             tint: AppColor.primary
                         )
                     }
                 } header: {
                     Text(NSLocalizedString("After Last Visit", comment: "Post visit section title"))
-                } footer: {
-                    Text(NSLocalizedString("Capture the doctor's instructions while they are fresh so daily reminders and the next visit summary stay accurate.", comment: "Post visit section footer"))
                 }
             }
 
