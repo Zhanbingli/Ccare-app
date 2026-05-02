@@ -51,6 +51,13 @@ struct AIConfiguration: Codable {
     }
 }
 
+private enum AIModelCatalog {
+    static let openAIJSON = "gpt-4o"
+    static let openAIText = "gpt-4o-mini"
+    static let anthropicJSON = "claude-sonnet-4-20250514"
+    static let anthropicText = "claude-haiku-4-5-20251001"
+}
+
 struct DrugInteractionRequest: Codable {
     let medications: [MedicationInfo]
 
@@ -59,6 +66,16 @@ struct DrugInteractionRequest: Codable {
         let dose: String
         let category: String?
     }
+}
+
+struct AITrendInsightRequest {
+    let measurementType: String
+    let recentMeasurements: [String]
+    let relatedMedications: [DrugInteractionRequest.MedicationInfo]
+    let latest: String
+    let change: String
+    let sevenDayAverage: String
+    let sevenDayInRange: String
 }
 
 struct DrugInteractionResponse: Codable {
@@ -173,6 +190,10 @@ class AIService {
         return configuration
     }
 
+    var isConfigured: Bool {
+        !configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     func analyzeDrugInteractions(medications: [Medication]) async throws -> DrugInteractionResponse {
         guard hasUserConsent else {
             throw AIServiceError.consentRequired
@@ -199,6 +220,23 @@ class AIService {
         }
     }
 
+    func analyzeTrendInsights(_ request: AITrendInsightRequest) async throws -> String {
+        guard hasUserConsent else {
+            throw AIServiceError.consentRequired
+        }
+        guard !configuration.apiKey.isEmpty else {
+            throw AIServiceError.invalidAPIKey
+        }
+
+        let prompt = createTrendPrompt(request)
+        switch configuration.provider {
+        case .openai:
+            return try await generateOpenAIText(prompt: prompt)
+        case .anthropic:
+            return try await generateAnthropicText(prompt: prompt)
+        }
+    }
+
     private func analyzeWithOpenAI(request: DrugInteractionRequest) async throws -> DrugInteractionResponse {
         let url = URL(string: "https://api.openai.com/v1/chat/completions")!
         var urlRequest = URLRequest(url: url)
@@ -210,12 +248,12 @@ class AIService {
         let prompt = createAnalysisPrompt(medications: request.medications)
 
         let body: [String: Any] = [
-            "model": "gpt-4o",
+            "model": AIModelCatalog.openAIJSON,
             "messages": [
-                ["role": "system", "content": "You are a medical expert specializing in pharmacology and drug interactions. Provide detailed analysis of medication interactions, focusing on therapeutic effects and side effects. Always respond in valid JSON format."],
+                ["role": "system", "content": "You summarize possible medication interaction risks for patient self-management. Do not diagnose, do not recommend starting or stopping medication, and always advise discussing changes with a licensed clinician. Always respond in valid JSON format."],
                 ["role": "user", "content": prompt]
             ],
-            "temperature": 0.7,
+            "temperature": 0.2,
             "response_format": ["type": "json_object"]
         ]
 
@@ -251,9 +289,9 @@ class AIService {
         let prompt = createAnalysisPrompt(medications: request.medications)
 
         let body: [String: Any] = [
-            "model": "claude-sonnet-4-20250514",
+            "model": AIModelCatalog.anthropicJSON,
             "max_tokens": 4096,
-            "system": "You are a medical expert specializing in pharmacology and drug interactions. Provide detailed analysis of medication interactions, focusing on therapeutic effects and side effects. Always respond in valid JSON format.",
+            "system": "You summarize possible medication interaction risks for patient self-management. Do not diagnose, do not recommend starting or stopping medication, and always advise discussing changes with a licensed clinician. Always respond in valid JSON format.",
             "messages": [
                 [
                     "role": "user",
@@ -315,6 +353,137 @@ class AIService {
 
         Be thorough but concise. Prioritize patient safety.
         """
+    }
+
+    private func createTrendPrompt(_ request: AITrendInsightRequest) -> String {
+        let measurements = request.recentMeasurements.joined(separator: "\n")
+        let medications = request.relatedMedications.map { med in
+            "- \(med.name) (\(med.dose))\(med.category.map { " - \($0)" } ?? "")"
+        }.joined(separator: "\n")
+
+        return """
+        Review this patient-entered \(request.measurementType) tracking summary.
+
+        Recent readings:
+        \(measurements)
+
+        \(medications.isEmpty ? "Related medications: none provided" : "Related medications:\n\(medications)")
+
+        Current stats:
+        - Latest: \(request.latest)
+        - Change from previous: \(request.change)
+        - 7-day average: \(request.sevenDayAverage)
+        - 7-day in target range: \(request.sevenDayInRange)
+
+        Write a concise, patient-friendly summary with three short sections:
+        1. Pattern
+        2. What to watch
+        3. Questions for your clinician
+
+        Safety rules:
+        - Do not diagnose.
+        - Do not recommend changing medication or dose.
+        - Mention urgent care only for clearly concerning readings or symptoms.
+        - Do not claim certainty from sparse data.
+        """
+    }
+
+    private func generateOpenAIText(prompt: String) async throws -> String {
+        let url = URL(string: "https://api.openai.com/v1/chat/completions")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(configuration.apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30
+
+        let body: [String: Any] = [
+            "model": AIModelCatalog.openAIText,
+            "messages": [
+                ["role": "system", "content": "You are a careful health tracking summarizer. Be concise, conservative, and clear that the user should discuss medical decisions with a clinician."],
+                ["role": "user", "content": prompt]
+            ],
+            "temperature": 0.2,
+            "max_tokens": 500
+        ]
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIServiceError.networkError("Invalid response")
+        }
+        if httpResponse.statusCode == 429 {
+            throw AIServiceError.rateLimitExceeded
+        }
+        guard httpResponse.statusCode == 200 else {
+            throw AIServiceError.networkError("HTTP \(httpResponse.statusCode)")
+        }
+
+        struct OpenAIResponse: Codable {
+            struct Choice: Codable {
+                struct Message: Codable {
+                    let content: String
+                }
+                let message: Message
+            }
+            let choices: [Choice]
+        }
+
+        let result = try JSONDecoder().decode(OpenAIResponse.self, from: data)
+        guard let content = result.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines),
+              !content.isEmpty else {
+            throw AIServiceError.invalidResponse
+        }
+        return content
+    }
+
+    private func generateAnthropicText(prompt: String) async throws -> String {
+        let url = URL(string: "https://api.anthropic.com/v1/messages")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue(configuration.apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        request.timeoutInterval = 30
+
+        let body: [String: Any] = [
+            "model": AIModelCatalog.anthropicText,
+            "max_tokens": 500,
+            "system": "You are a careful health tracking summarizer. Be concise, conservative, and clear that the user should discuss medical decisions with a clinician.",
+            "messages": [
+                [
+                    "role": "user",
+                    "content": prompt
+                ]
+            ]
+        ]
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIServiceError.networkError("Invalid response")
+        }
+        if httpResponse.statusCode == 429 {
+            throw AIServiceError.rateLimitExceeded
+        }
+        guard httpResponse.statusCode == 200 else {
+            throw AIServiceError.networkError("HTTP \(httpResponse.statusCode)")
+        }
+
+        struct AnthropicResponse: Codable {
+            struct Content: Codable {
+                let text: String
+            }
+            let content: [Content]
+        }
+
+        let result = try JSONDecoder().decode(AnthropicResponse.self, from: data)
+        guard let content = result.content.first?.text.trimmingCharacters(in: .whitespacesAndNewlines),
+              !content.isEmpty else {
+            throw AIServiceError.invalidResponse
+        }
+        return content
     }
 
     private func parseOpenAIResponse(data: Data) throws -> DrugInteractionResponse {

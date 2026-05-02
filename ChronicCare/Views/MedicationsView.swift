@@ -31,6 +31,14 @@ struct MedicationsView: View {
                         }
                     }
 
+                    if let visit = recentPostVisitMedicationReview {
+                        Section {
+                            postVisitMedicationReviewRow(for: visit)
+                        } footer: {
+                            Text(NSLocalizedString("Edit, pause, or add medications here. These records drive daily reminders and the next visit summary.", comment: "Post visit medication review footer"))
+                        }
+                    }
+
                     if store.medications.isEmpty {
                         Section {
                             EmptyStateView(
@@ -214,6 +222,16 @@ private extension MedicationsView {
         }
     }
 
+    var recentPostVisitMedicationReview: DoctorVisit? {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        return store.completedDoctorVisits.first { visit in
+            let completedDay = calendar.startOfDay(for: visit.completedDate ?? visit.scheduledDate)
+            let days = calendar.dateComponents([.day], from: completedDay, to: today).day ?? Int.max
+            return days >= 0 && days <= 14 && (visit.needsPostVisitCapture || visit.hasMedicationPlan)
+        }
+    }
+
     var warningRow: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "bell.slash.fill")
@@ -228,6 +246,38 @@ private extension MedicationsView {
                     .foregroundStyle(AppColor.textSecondary)
             }
         }
+    }
+
+    private func postVisitMedicationReviewRow(for visit: DoctorVisit) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(NSLocalizedString("After Last Visit", comment: "Post visit medication review title"), systemImage: "stethoscope")
+                .appFont(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(AppColor.textPrimary)
+
+            Text(postVisitMedicationReviewText(for: visit))
+                .appFont(.caption)
+                .foregroundStyle(AppColor.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                showAdd = true
+            } label: {
+                Label(NSLocalizedString("Add Medication", comment: ""), systemImage: "plus.circle")
+                    .fontWeight(.semibold)
+            }
+            .buttonStyle(.bordered)
+            .tint(AppColor.primary)
+            .padding(.top, 2)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func postVisitMedicationReviewText(for visit: DoctorVisit) -> String {
+        if let summary = visit.medicationChangesSummary?.trimmingCharacters(in: .whitespacesAndNewlines), !summary.isEmpty {
+            return String(format: NSLocalizedString("Medication plan from the visit: %@", comment: "Post visit medication review summary"), summary)
+        }
+        return NSLocalizedString("Check whether the doctor added, stopped, or changed any medication at the last visit.", comment: "Post visit medication review prompt")
     }
 
     /// Single condensed row per medication. The surrounding section header

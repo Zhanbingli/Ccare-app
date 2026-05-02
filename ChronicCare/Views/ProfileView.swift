@@ -197,7 +197,7 @@ struct ProfileView: View {
                                 }
                             }
                         }
-                        Text(NSLocalizedString("Used for drug interaction analysis and trend insights. Your API key is stored securely in Keychain.", comment: ""))
+                        Text(NSLocalizedString("Used for drug interaction checks and trend insights. Before provider analysis runs, the app shows what data will be sent. Your API key is stored securely in Keychain.", comment: ""))
                             .appFont(.caption)
                             .foregroundStyle(AppColor.textSecondary)
                     } label: {
@@ -505,12 +505,12 @@ struct ProfileView: View {
 
     private var aiSummary: String {
         if !aiOptIn {
-            return NSLocalizedString("Off. Drug interaction and trend analysis stay on device only.", comment: "")
+            return NSLocalizedString("Off. Trend summaries can still run on device; provider analysis requires approval.", comment: "")
         }
         if aiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return NSLocalizedString("Enabled, but an API key is still needed.", comment: "")
         }
-        return String(format: NSLocalizedString("%@ analysis is enabled.", comment: ""), aiProvider.rawValue)
+        return String(format: NSLocalizedString("%@ analysis is enabled with per-use data disclosure.", comment: ""), aiProvider.rawValue)
     }
 
     private var dataSummary: String {

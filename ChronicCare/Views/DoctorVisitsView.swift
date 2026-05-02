@@ -18,6 +18,10 @@ struct DoctorVisitsView: View {
         store.overdueDoctorVisits.filter { $0.id != highlightedVisitID }
     }
 
+    private var incompletePostVisit: DoctorVisit? {
+        store.completedDoctorVisits.first { $0.needsPostVisitCapture }
+    }
+
     var body: some View {
         List {
             Section {
@@ -57,6 +61,36 @@ struct DoctorVisitsView: View {
             }
             .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
             .listRowBackground(AppColor.surface)
+
+            if let visit = incompletePostVisit {
+                Section {
+                    NavigationLink {
+                        DoctorVisitFormView(editing: visit, showsCancelButton: false)
+                    } label: {
+                        visitActionRow(
+                            title: NSLocalizedString("Complete Visit Plan", comment: "Post visit action title"),
+                            subtitle: postVisitMissingSummary(visit),
+                            systemImage: "checklist",
+                            tint: AppColor.warning
+                        )
+                    }
+
+                    NavigationLink {
+                        MedicationsView()
+                    } label: {
+                        visitActionRow(
+                            title: NSLocalizedString("Review Medication List", comment: "Post visit medication review action"),
+                            subtitle: NSLocalizedString("Apply medication changes to reminders and the next visit summary", comment: "Post visit medication review subtitle"),
+                            systemImage: "pills.fill",
+                            tint: AppColor.primary
+                        )
+                    }
+                } header: {
+                    Text(NSLocalizedString("After Last Visit", comment: "Post visit section title"))
+                } footer: {
+                    Text(NSLocalizedString("Capture the doctor's instructions while they are fresh so daily reminders and the next visit summary stay accurate.", comment: "Post visit section footer"))
+                }
+            }
 
             if !secondaryUpcomingVisits.isEmpty {
                 Section(NSLocalizedString("Upcoming", comment: "")) {
@@ -215,12 +249,26 @@ struct DoctorVisitsView: View {
 
     private func visitSubtitle(_ visit: DoctorVisit) -> String {
         if let completed = visit.completedDate {
+            if visit.needsPostVisitCapture {
+                return postVisitMissingSummary(visit)
+            }
             return String(format: NSLocalizedString("Completed %@", comment: ""), completed.formatted(date: .abbreviated, time: .omitted))
         }
         if let reason = visit.reason, !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return reason
         }
         return NSLocalizedString("Tap to add doctor, department, and reason.", comment: "")
+    }
+
+    private func postVisitMissingSummary(_ visit: DoctorVisit) -> String {
+        let missing = visit.postVisitMissingItems
+        guard !missing.isEmpty else {
+            return NSLocalizedString("Post-visit plan saved.", comment: "Post visit complete detail")
+        }
+        return String(
+            format: NSLocalizedString("Still needs: %@", comment: "Post visit missing detail"),
+            missing.joined(separator: ", ")
+        )
     }
 
     private func prepTitle(for visit: DoctorVisit) -> String {

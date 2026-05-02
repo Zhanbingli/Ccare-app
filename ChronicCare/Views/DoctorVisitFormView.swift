@@ -54,10 +54,24 @@ struct DoctorVisitFormView: View {
                 Toggle(NSLocalizedString("Visit completed", comment: ""), isOn: $isCompleted)
 
                 if showsAfterVisitFields {
-                    TextField(NSLocalizedString("Doctor notes", comment: ""), text: $notes, axis: .vertical)
-                        .lineLimit(3...7)
-                    TextField(NSLocalizedString("Medication changes", comment: ""), text: $medicationChangesSummary, axis: .vertical)
-                        .lineLimit(3...7)
+                    postVisitCaptureGuide
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(NSLocalizedString("Doctor instructions", comment: "Post visit notes field label"))
+                            .appFont(.caption)
+                            .foregroundStyle(AppColor.textSecondary)
+                        TextField(NSLocalizedString("What should you do or watch before the next visit?", comment: "Post visit notes placeholder"), text: $notes, axis: .vertical)
+                            .lineLimit(3...7)
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(NSLocalizedString("Medication plan", comment: "Post visit medication field label"))
+                            .appFont(.caption)
+                            .foregroundStyle(AppColor.textSecondary)
+                        TextField(NSLocalizedString("Added, stopped, changed dose/time, or no changes", comment: "Post visit medication placeholder"), text: $medicationChangesSummary, axis: .vertical)
+                            .lineLimit(3...7)
+                    }
+
                     Toggle(NSLocalizedString("Set next visit date", comment: ""), isOn: $hasNextVisitDate)
                     if hasNextVisitDate {
                         DatePicker(NSLocalizedString("Next visit", comment: ""), selection: $nextVisitDate, displayedComponents: [.date])
@@ -135,6 +149,20 @@ struct DoctorVisitFormView: View {
         }
         createNextVisitIfNeeded(from: visit)
         dismiss()
+    }
+
+    private var postVisitCaptureGuide: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(NSLocalizedString("Before you leave the clinic", comment: "Post visit capture guide title"), systemImage: "checklist")
+                .appFont(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(AppColor.textPrimary)
+            Text(NSLocalizedString("Record three things: what the doctor said, what changed in the medication plan, and when to return. This becomes the basis for daily tracking and the next visit summary.", comment: "Post visit capture guide detail"))
+                .appFont(.caption)
+                .foregroundStyle(AppColor.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 4)
     }
 
     private func trimmedOrNil(_ value: String) -> String? {

@@ -39,7 +39,8 @@ struct RootViewV2: View {
                     pendingMeasurementType = type
                     showLogSheet = true
                 },
-                onOpenProfile: { showProfileDrawer = true }
+                onOpenProfile: { showProfileDrawer = true },
+                onOpenMedications: { showMedicationSheet = true }
             )
         }
         .dynamicTypeSize(.xSmall ... .accessibility5)

@@ -8,6 +8,7 @@ struct DashboardView: View {
     var onOpenCalendar: (() -> Void)? = nil
     var onLogMeasurement: ((MeasurementType) -> Void)? = nil
     var onOpenProfile: (() -> Void)? = nil
+    var onOpenMedications: (() -> Void)? = nil
 
     @EnvironmentObject var store: DataStore
     @State private var showAddMedication = false
@@ -542,9 +543,7 @@ private extension DashboardView {
     }
 
     private func needsPostVisitCapture(_ visit: DoctorVisit) -> Bool {
-        let notesEmpty = visit.notes?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
-        let changesEmpty = visit.medicationChangesSummary?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
-        return notesEmpty || changesEmpty || visit.nextVisitDate == nil
+        visit.needsPostVisitCapture
     }
 
     /// How many days since the last intake log for any scheduled medication. Nil if no scheduled meds.
@@ -1136,7 +1135,14 @@ private extension DashboardView {
             VStack(alignment: .leading, spacing: EditorialSpacing.md) {
                 postVisitStatusLine(
                     title: NSLocalizedString("Doctor notes", comment: "Post visit status"),
-                    value: visit.notes?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                    value: visit.hasDoctorNotes
+                        ? NSLocalizedString("Saved", comment: "")
+                        : NSLocalizedString("Not saved yet", comment: "")
+                )
+                AppDivider()
+                postVisitStatusLine(
+                    title: NSLocalizedString("Medication plan", comment: "Post visit status"),
+                    value: visit.hasMedicationPlan
                         ? NSLocalizedString("Saved", comment: "")
                         : NSLocalizedString("Not saved yet", comment: "")
                 )
@@ -1147,15 +1153,36 @@ private extension DashboardView {
                 )
             }
 
-            Button {
-                editingDoctorVisit = visit
-            } label: {
-                Label(NSLocalizedString("Record Visit Notes", comment: "Post visit capture action"), systemImage: "square.and.pencil")
-                    .fontWeight(.semibold)
-                    .frame(maxWidth: .infinity, minHeight: 52)
+            VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
+                Button {
+                    editingDoctorVisit = visit
+                } label: {
+                    Label(NSLocalizedString("Record Visit Notes", comment: "Post visit capture action"), systemImage: "square.and.pencil")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(EditorialPalette.primary)
+
+                Button {
+                    if let onOpenMedications {
+                        onOpenMedications()
+                    } else {
+                        showAddMedication = true
+                    }
+                } label: {
+                    Label(NSLocalizedString("Update Medication List", comment: "Post visit medication action"), systemImage: "pills.fill")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                }
+                .buttonStyle(.bordered)
+                .tint(EditorialPalette.primary)
+
+                Text(NSLocalizedString("If the doctor changed a medication, update the medication list so reminders and the next visit summary stay accurate.", comment: "Post visit medication reminder"))
+                    .appFont(.caption)
+                    .foregroundStyle(EditorialPalette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(EditorialPalette.primary)
         }
         .padding(.vertical, EditorialSpacing.sm)
     }
