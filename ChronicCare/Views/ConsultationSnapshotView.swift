@@ -23,6 +23,7 @@ struct ConsultationSnapshotView: View {
     @State private var pdfErrorMessage: String?
     @State private var showPDFError = false
     @State private var aiQuestions: [DoctorQuestion]?
+    @State private var aiQuestionsGeneratedAt: Date?
     @State private var isDraftingAIQuestions = false
     @State private var showAIQuestionDisclosure = false
 
@@ -35,6 +36,18 @@ struct ConsultationSnapshotView: View {
         let systemImage: String
         let tint: Color
     }
+
+    private struct CachedAIQuestions: Codable {
+        let questions: [String]
+        let generatedAt: Date
+    }
+
+    private static let aiGeneratedFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter
+    }()
 
     private var snapshotVisit: DoctorVisit? {
         visit ?? store.nextDoctorVisit
@@ -150,7 +163,14 @@ struct ConsultationSnapshotView: View {
 
         return VStack(alignment: .leading, spacing: EditorialSpacing.md) {
             HStack(alignment: .center) {
-                sectionLabel(NSLocalizedString("Questions to Ask", comment: "Doctor questions section title"))
+                VStack(alignment: .leading, spacing: 3) {
+                    sectionLabel(NSLocalizedString("Questions to Ask", comment: "Doctor questions section title"))
+                    if aiQuestions != nil, let aiQuestionsGeneratedAt {
+                        Text(aiQuestionsGeneratedText(aiQuestionsGeneratedAt))
+                            .appFont(.caption)
+                            .foregroundStyle(AppColor.textSecondary)
+                    }
+                }
                 Spacer()
                 if AIService.shared.isConfigured {
                     Button {
@@ -333,18 +353,38 @@ struct ConsultationSnapshotView: View {
     }
 
     private func loadCachedAIQuestions() {
-        guard let data = UserDefaults.standard.data(forKey: aiQuestionsCacheKey),
-              let questions = try? JSONDecoder().decode([String].self, from: data),
-              !questions.isEmpty else {
+        guard let data = UserDefaults.standard.data(forKey: aiQuestionsCacheKey) else {
             aiQuestions = nil
+            aiQuestionsGeneratedAt = nil
             return
         }
-        aiQuestions = aiDoctorQuestions(from: questions)
+        if let cached = try? JSONDecoder().decode(CachedAIQuestions.self, from: data),
+           !cached.questions.isEmpty {
+            aiQuestions = aiDoctorQuestions(from: cached.questions)
+            aiQuestionsGeneratedAt = cached.generatedAt
+            return
+        }
+        if let questions = try? JSONDecoder().decode([String].self, from: data),
+           !questions.isEmpty {
+            aiQuestions = aiDoctorQuestions(from: questions)
+            aiQuestionsGeneratedAt = nil
+            return
+        }
+        aiQuestions = nil
+        aiQuestionsGeneratedAt = nil
     }
 
     private func cacheAIQuestions(_ questions: [String]) {
-        guard let data = try? JSONEncoder().encode(questions) else { return }
+        let generatedAt = Date()
+        aiQuestionsGeneratedAt = generatedAt
+        let cached = CachedAIQuestions(questions: questions, generatedAt: generatedAt)
+        guard let data = try? JSONEncoder().encode(cached) else { return }
         UserDefaults.standard.set(data, forKey: aiQuestionsCacheKey)
+    }
+
+    private func aiQuestionsGeneratedText(_ generatedAt: Date) -> String {
+        let time = Self.aiGeneratedFormatter.string(from: generatedAt)
+        return String(format: NSLocalizedString("AI refined %@", comment: "AI visit questions generated metadata"), time)
     }
 
     private func aiVisitQuestionRequest(summary: DoctorReportSummary) -> AIVisitQuestionRequest {

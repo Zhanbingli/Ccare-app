@@ -209,6 +209,23 @@ class AIService {
         !configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    func testConfiguration(_ config: AIConfiguration) async throws {
+        let key = config.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else {
+            throw AIServiceError.invalidAPIKey
+        }
+
+        let prompt = "Reply with only: OK"
+        switch config.provider {
+        case .openai:
+            _ = try await generateOpenAIText(prompt: prompt, apiKey: key, maxTokens: 8)
+        case .anthropic:
+            _ = try await generateAnthropicText(prompt: prompt, apiKey: key, maxTokens: 8)
+        case .deepseek:
+            _ = try await generateDeepSeekText(prompt: prompt, apiKey: key, maxTokens: 8)
+        }
+    }
+
     func analyzeDrugInteractions(medications: [Medication]) async throws -> DrugInteractionResponse {
         guard hasUserConsent else {
             throw AIServiceError.consentRequired
@@ -526,11 +543,11 @@ class AIService {
             .filter { !$0.isEmpty }
     }
 
-    private func generateOpenAIText(prompt: String) async throws -> String {
+    private func generateOpenAIText(prompt: String, apiKey: String? = nil, maxTokens: Int = 500) async throws -> String {
         let url = URL(string: "https://api.openai.com/v1/chat/completions")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(configuration.apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(apiKey ?? configuration.apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 30
 
@@ -541,7 +558,7 @@ class AIService {
                 ["role": "user", "content": prompt]
             ],
             "temperature": 0.2,
-            "max_tokens": 500
+            "max_tokens": maxTokens
         ]
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -575,11 +592,11 @@ class AIService {
         return content
     }
 
-    private func generateDeepSeekText(prompt: String) async throws -> String {
+    private func generateDeepSeekText(prompt: String, apiKey: String? = nil, maxTokens: Int = 500) async throws -> String {
         let url = URL(string: "https://api.deepseek.com/chat/completions")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(configuration.apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(apiKey ?? configuration.apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 30
 
@@ -590,7 +607,7 @@ class AIService {
                 ["role": "user", "content": prompt]
             ],
             "temperature": 0.2,
-            "max_tokens": 500
+            "max_tokens": maxTokens
         ]
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -624,18 +641,18 @@ class AIService {
         return content
     }
 
-    private func generateAnthropicText(prompt: String) async throws -> String {
+    private func generateAnthropicText(prompt: String, apiKey: String? = nil, maxTokens: Int = 500) async throws -> String {
         let url = URL(string: "https://api.anthropic.com/v1/messages")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue(configuration.apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue(apiKey ?? configuration.apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         request.timeoutInterval = 30
 
         let body: [String: Any] = [
             "model": AIModelCatalog.anthropicText,
-            "max_tokens": 500,
+            "max_tokens": maxTokens,
             "system": "You are a careful health tracking summarizer. Be concise, conservative, and clear that the user should discuss medical decisions with a clinician.",
             "messages": [
                 [

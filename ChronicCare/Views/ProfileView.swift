@@ -31,6 +31,7 @@ struct ProfileView: View {
     @State private var aiApiKey: String = ""
     @State private var aiOptIn: Bool = false
     @State private var aiSettingsSaved: Bool = true
+    @State private var isTestingAIConnection: Bool = false
     @AppStorage("goals.glucose.low") private var glucoseLow: Double = 70
     @AppStorage("goals.glucose.high") private var glucoseHigh: Double = 180
     @AppStorage("goals.hr.low") private var hrLow: Double = 50
@@ -185,6 +186,24 @@ struct ProfileView: View {
                                 .buttonStyle(.borderedProminent)
                                 .tint(AppColor.primary)
                                 .disabled(aiSettingsSaved)
+                                Button {
+                                    testAIConnection()
+                                } label: {
+                                    if isTestingAIConnection {
+                                        HStack {
+                                            ProgressView()
+                                                .controlSize(.small)
+                                            Text(NSLocalizedString("Testing...", comment: "AI connection test loading"))
+                                        }
+                                        .appFont(.subheadline)
+                                    } else {
+                                        Label(NSLocalizedString("Test Connection", comment: "AI connection test action"), systemImage: "network")
+                                            .appFont(.subheadline)
+                                    }
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(AppColor.primary)
+                                .disabled(aiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isTestingAIConnection)
                                 Button {
                                     let urlStr: String
                                     switch aiProvider {
@@ -420,9 +439,42 @@ struct ProfileView: View {
     #endif
 
     private func saveAIConfig() {
-        AIService.shared.updateConfiguration(AIConfiguration(provider: aiProvider, apiKey: aiApiKey))
+        AIService.shared.updateConfiguration(currentAIConfiguration)
         aiSettingsSaved = true
         Haptics.success()
+    }
+
+    private var currentAIConfiguration: AIConfiguration {
+        AIConfiguration(provider: aiProvider, apiKey: aiApiKey)
+    }
+
+    private func testAIConnection() {
+        guard !isTestingAIConnection else { return }
+        let config = currentAIConfiguration
+        isTestingAIConnection = true
+        Task {
+            do {
+                try await AIService.shared.testConfiguration(config)
+                await MainActor.run {
+                    AIService.shared.updateConfiguration(config)
+                    aiSettingsSaved = true
+                    isTestingAIConnection = false
+                    successMessage = NSLocalizedString("AI connection works.", comment: "AI connection test success")
+                    showSuccessAlert = true
+                    Haptics.success()
+                }
+            } catch {
+                await MainActor.run {
+                    isTestingAIConnection = false
+                    errorMessage = String(
+                        format: NSLocalizedString("Could not test AI connection: %@", comment: "AI connection test failure"),
+                        error.localizedDescription
+                    )
+                    showErrorAlert = true
+                    Haptics.notification(.warning)
+                }
+            }
+        }
     }
 
     // MARK: - Permissions

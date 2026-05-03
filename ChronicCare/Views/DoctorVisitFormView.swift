@@ -65,9 +65,17 @@ struct DoctorVisitFormView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(NSLocalizedString("Medication plan", comment: "Post visit medication field label"))
-                            .appFont(.caption)
-                            .foregroundStyle(AppColor.textSecondary)
+                        HStack {
+                            Text(NSLocalizedString("Medication plan", comment: "Post visit medication field label"))
+                                .appFont(.caption)
+                                .foregroundStyle(AppColor.textSecondary)
+                            Spacer()
+                            Button(NSLocalizedString("No changes", comment: "Post visit no medication changes action")) {
+                                medicationChangesSummary = NSLocalizedString("No medication changes.", comment: "Post visit no medication changes saved text")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.mini)
+                        }
                         TextField(NSLocalizedString("Added, stopped, changed dose/time, or no changes", comment: "Post visit medication placeholder"), text: $medicationChangesSummary, axis: .vertical)
                             .lineLimit(3...7)
                     }

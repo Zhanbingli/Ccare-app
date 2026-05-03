@@ -10,6 +10,7 @@ struct EnhancedTrendsView: View {
     @State private var editingMeasurement: Measurement?
     @State private var deleteTarget: Measurement?
     @State private var aiInsights: String?
+    @State private var aiInsightsGeneratedAt: Date?
     @State private var isLoadingInsights = false
     @State private var showAIDataDisclosure = false
     @AppStorage("units.glucose") private var glucoseUnitRaw: String = GlucoseUnit.mgdL.rawValue
@@ -41,6 +42,18 @@ struct EnhancedTrendsView: View {
             set: { if !$0 { deleteTarget = nil } }
         )
     }
+
+    private struct CachedAIInsight: Codable {
+        let text: String
+        let generatedAt: Date
+    }
+
+    private static let aiGeneratedFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter
+    }()
 
     private struct BPPoint: Identifiable {
         let id: UUID
@@ -305,6 +318,15 @@ struct EnhancedTrendsView: View {
                         .appFont(.caption)
                         .foregroundStyle(AppColor.textPrimary)
                         .lineSpacing(5)
+
+                    if let generatedAt = aiInsightsGeneratedAt {
+                        HStack(spacing: 6) {
+                            Image(systemName: "clock")
+                            Text(aiInsightGeneratedText(generatedAt))
+                        }
+                        .appFont(.caption)
+                        .foregroundStyle(AppColor.textSecondary)
+                    }
                 }
             }
             .padding(AppSpacing.medium)
@@ -789,11 +811,30 @@ struct EnhancedTrendsView: View {
     }
 
     private func loadCachedAIInsights() {
-        aiInsights = UserDefaults.standard.string(forKey: aiInsightCacheKey)
+        let defaults = UserDefaults.standard
+        if let data = defaults.data(forKey: aiInsightCacheKey),
+           let cached = try? JSONDecoder().decode(CachedAIInsight.self, from: data) {
+            aiInsights = cached.text
+            aiInsightsGeneratedAt = cached.generatedAt
+            return
+        }
+        aiInsights = defaults.string(forKey: aiInsightCacheKey)
+        aiInsightsGeneratedAt = nil
     }
 
     private func cacheAIInsights(_ insights: String) {
-        UserDefaults.standard.set(insights, forKey: aiInsightCacheKey)
+        let generatedAt = Date()
+        aiInsightsGeneratedAt = generatedAt
+        let cached = CachedAIInsight(text: insights, generatedAt: generatedAt)
+        guard let data = try? JSONEncoder().encode(cached) else { return }
+        UserDefaults.standard.set(data, forKey: aiInsightCacheKey)
+    }
+
+    private func aiInsightGeneratedText(_ generatedAt: Date) -> String {
+        let time = Self.aiGeneratedFormatter.string(from: generatedAt)
+        let range = String(format: NSLocalizedString("%lldd", comment: "AI generated range label"), Int64(rangeDays))
+        let count = String(format: NSLocalizedString("%lld readings", comment: "AI generated reading count"), Int64(filtered.count))
+        return String(format: NSLocalizedString("Generated %@ · %@ · %@", comment: "AI generated metadata"), time, range, count)
     }
 
     private func generateTrendInsights() async throws -> String {

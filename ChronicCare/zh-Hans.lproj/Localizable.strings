@@ -262,6 +262,10 @@
 "Allow AI Analysis" = "允许 AI 分析";
 "Save AI Settings" = "保存 AI 设置";
 "API settings have unsaved changes." = "AI 设置有未保存的更改。";
+"Test Connection" = "测试连接";
+"Testing..." = "测试中…";
+"AI connection works." = "AI 连接可用。";
+"Could not test AI connection: %@" = "无法测试 AI 连接：%@";
 "AI insights enabled" = "AI 洞察已启用";
 "Used for trend insights and visit question drafting. Before provider analysis runs, the app shows what data will be sent. Your API key is stored securely in Keychain." = "用于趋势洞察和复诊问题整理。调用服务商分析前，应用会说明将发送哪些数据。API 密钥安全存储在钥匙串中。";
 "Generate an on-device summary now. Add an API key in Settings to use provider analysis." = "现在可生成本机摘要。如需使用服务商分析，请在设置中添加 API 密钥。";
@@ -270,6 +274,10 @@
 "Send Data for AI Analysis?" = "发送数据进行 AI 分析？";
 "Analyze with AI" = "使用 AI 分析";
 "Use On-Device Summary" = "使用本机摘要";
+"Generated %@ · %@ · %@" = "%@ 生成 · %@ · %@";
+"%lldd" = "%lld天";
+"%lld readings" = "%lld 次记录";
+"AI refined %@" = "AI 于 %@ 整理";
 "This sends up to 20 recent readings for the selected measurement type, related medication names and doses, and aggregate stats to your selected AI provider. Notes, contacts, emergency info, and raw backups are not sent." = "这会将所选测量类型最多 20 条近期读数、相关药物名称和剂量，以及汇总统计发送给你选择的 AI 服务商。备注、联系人、紧急信息和原始备份不会发送。";
 "Send Data for AI Questions?" = "发送数据整理复诊问题？";
 "Use AI" = "使用 AI";
@@ -1319,6 +1327,8 @@
 "Doctor instructions" = "医生交代";
 "What should you do or watch before the next visit?" = "下次复诊前需要做什么、观察什么？";
 "Medication plan" = "用药方案";
+"No changes" = "无变更";
+"No medication changes." = "本次无用药变更。";
 "Added, stopped, changed dose/time, or no changes" = "新增、停用、剂量/时间调整，或无变化";
 "Before you leave the clinic" = "离开诊室前";
 "Set next visit date" = "设置下次复诊";
