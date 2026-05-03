@@ -22,6 +22,11 @@ struct EnhancedTrendsView: View {
             .sorted(by: { $0.date < $1.date })
     }
 
+    private var aiInsightCacheKey: String {
+        let latestID = filtered.last?.id.uuidString ?? "none"
+        return "ai.trendInsights.\(selectedType.rawValue).\(rangeDays).\(glucoseUnitRaw).\(filtered.count).\(latestID)"
+    }
+
     private var sevenDaySlice: [Measurement] {
         let now = Date()
         let start = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
@@ -118,6 +123,12 @@ struct EnhancedTrendsView: View {
                 }
             } message: {
                 Text(NSLocalizedString("This measurement will be removed from trends and future visit summaries.", comment: ""))
+            }
+            .onAppear {
+                loadCachedAIInsights()
+            }
+            .onChange(of: store.reportDataRevision) { _ in
+                loadCachedAIInsights()
             }
         }
     }
@@ -346,7 +357,7 @@ struct EnhancedTrendsView: View {
             .onChange(of: selectedType) { _ in
                 withAnimation {
                     selectedDataPoint = nil
-                    aiInsights = nil
+                    loadCachedAIInsights()
                 }
             }
 
@@ -360,6 +371,7 @@ struct EnhancedTrendsView: View {
             .onChange(of: rangeDays) { _ in
                 withAnimation {
                     selectedDataPoint = nil
+                    loadCachedAIInsights()
                 }
             }
         }
@@ -750,15 +762,18 @@ struct EnhancedTrendsView: View {
                 let insights = try await generateTrendInsights()
                 await MainActor.run {
                     self.aiInsights = insights
+                    self.cacheAIInsights(insights)
                     self.isLoadingInsights = false
                     Haptics.success()
                 }
             } catch {
                 await MainActor.run {
-                    self.aiInsights = String(
+                    let fallback = String(
                         format: NSLocalizedString("AI analysis could not be completed. Showing an on-device summary instead.\n\n%@", comment: "AI failure local fallback"),
                         generateLocalInsights()
                     )
+                    self.aiInsights = fallback
+                    self.cacheAIInsights(fallback)
                     self.isLoadingInsights = false
                     Haptics.notification(.warning)
                 }
@@ -767,8 +782,18 @@ struct EnhancedTrendsView: View {
     }
 
     private func generateLocalOnlyInsights() {
-        aiInsights = generateLocalInsights()
+        let insights = generateLocalInsights()
+        aiInsights = insights
+        cacheAIInsights(insights)
         Haptics.success()
+    }
+
+    private func loadCachedAIInsights() {
+        aiInsights = UserDefaults.standard.string(forKey: aiInsightCacheKey)
+    }
+
+    private func cacheAIInsights(_ insights: String) {
+        UserDefaults.standard.set(insights, forKey: aiInsightCacheKey)
     }
 
     private func generateTrendInsights() async throws -> String {

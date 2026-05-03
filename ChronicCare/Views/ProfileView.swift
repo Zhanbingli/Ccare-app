@@ -30,6 +30,7 @@ struct ProfileView: View {
     @State private var aiProvider: AIProvider = .openai
     @State private var aiApiKey: String = ""
     @State private var aiOptIn: Bool = false
+    @State private var aiSettingsSaved: Bool = true
     @AppStorage("goals.glucose.low") private var glucoseLow: Double = 70
     @AppStorage("goals.glucose.high") private var glucoseHigh: Double = 180
     @AppStorage("goals.hr.low") private var hrLow: Double = 50
@@ -164,14 +165,26 @@ struct ProfileView: View {
 
                         if aiOptIn {
                             DisclosureGroup(NSLocalizedString("Provider & API Access", comment: "")) {
-                                Picker(NSLocalizedString("Provider", comment: ""), selection: $aiProvider) {
+                                Picker(NSLocalizedString("Provider", comment: ""), selection: aiProviderBinding) {
                                     ForEach(AIProvider.allCases, id: \.self) { p in
                                         Text(p.rawValue).tag(p)
                                     }
                                 }
-                                SecureField(NSLocalizedString("API Key", comment: ""), text: $aiApiKey)
+                                SecureField(NSLocalizedString("API Key", comment: ""), text: aiApiKeyBinding)
                                     .textContentType(.password)
                                     .autocorrectionDisabled()
+                                Button {
+                                    saveAIConfig()
+                                } label: {
+                                    Label(
+                                        aiSettingsSaved ? NSLocalizedString("Saved", comment: "") : NSLocalizedString("Save AI Settings", comment: ""),
+                                        systemImage: aiSettingsSaved ? "checkmark.circle" : "checkmark"
+                                    )
+                                    .appFont(.subheadline)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(AppColor.primary)
+                                .disabled(aiSettingsSaved)
                                 Button {
                                     let urlStr: String
                                     switch aiProvider {
@@ -185,16 +198,6 @@ struct ProfileView: View {
                                 } label: {
                                     Label(String(format: NSLocalizedString("Get %@ API Key", comment: ""), aiProvider.rawValue), systemImage: "key.fill")
                                         .appFont(.subheadline)
-                                }
-                            }
-
-                            if !aiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                HStack {
-                                    Image(systemName: "checkmark.circle")
-                                        .foregroundStyle(AppColor.primary)
-                                    Text(NSLocalizedString("AI insights enabled", comment: ""))
-                                        .appFont(.caption)
-                                        .foregroundStyle(AppColor.primary)
                                 }
                             }
                         }
@@ -327,17 +330,36 @@ struct ProfileView: View {
             let config = AIService.shared.getConfiguration()
             aiProvider = config.provider
             aiApiKey = config.apiKey
+            aiSettingsSaved = true
             aiOptIn = AIService.shared.hasUserConsent
         }
         .onChange(of: graceMinutes) { _ in refreshNotificationConfiguration() }
         .onChange(of: refillThresholdDays) { _ in refreshNotificationConfiguration() }
         .onChange(of: courseEndThresholdDays) { _ in refreshNotificationConfiguration() }
-        .onChange(of: aiProvider) { _ in saveAIConfig() }
-        .onChange(of: aiApiKey) { _ in saveAIConfig() }
         .onChange(of: aiOptIn) { newVal in AIService.shared.hasUserConsent = newVal }
     }
 
     // MARK: - Actions
+
+    private var aiProviderBinding: Binding<AIProvider> {
+        Binding(
+            get: { aiProvider },
+            set: { newValue in
+                aiProvider = newValue
+                aiSettingsSaved = false
+            }
+        )
+    }
+
+    private var aiApiKeyBinding: Binding<String> {
+        Binding(
+            get: { aiApiKey },
+            set: { newValue in
+                aiApiKey = newValue
+                aiSettingsSaved = false
+            }
+        )
+    }
 
     private func refreshNotificationConfiguration() {
         store.syncNotifications()
@@ -399,6 +421,8 @@ struct ProfileView: View {
 
     private func saveAIConfig() {
         AIService.shared.updateConfiguration(AIConfiguration(provider: aiProvider, apiKey: aiApiKey))
+        aiSettingsSaved = true
+        Haptics.success()
     }
 
     // MARK: - Permissions
@@ -510,6 +534,9 @@ struct ProfileView: View {
         }
         if aiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return NSLocalizedString("Enabled, but an API key is still needed.", comment: "")
+        }
+        if !aiSettingsSaved {
+            return NSLocalizedString("API settings have unsaved changes.", comment: "")
         }
         return String(format: NSLocalizedString("%@ analysis is enabled with per-use data disclosure.", comment: ""), aiProvider.rawValue)
     }

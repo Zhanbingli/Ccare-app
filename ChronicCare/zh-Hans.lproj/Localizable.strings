@@ -260,6 +260,8 @@
 "Provider" = "服务商";
 "API Key" = "API 密钥";
 "Allow AI Analysis" = "允许 AI 分析";
+"Save AI Settings" = "保存 AI 设置";
+"API settings have unsaved changes." = "AI 设置有未保存的更改。";
 "AI insights enabled" = "AI 洞察已启用";
 "Used for trend insights and visit question drafting. Before provider analysis runs, the app shows what data will be sent. Your API key is stored securely in Keychain." = "用于趋势洞察和复诊问题整理。调用服务商分析前，应用会说明将发送哪些数据。API 密钥安全存储在钥匙串中。";
 "Generate an on-device summary now. Add an API key in Settings to use provider analysis." = "现在可生成本机摘要。如需使用服务商分析，请在设置中添加 API 密钥。";

@@ -44,6 +44,11 @@ struct ConsultationSnapshotView: View {
         DoctorReportSummaryBuilder.build(store: store, days: daysWindow, visit: snapshotVisit)
     }
 
+    private var aiQuestionsCacheKey: String {
+        let visitID = snapshotVisit?.id.uuidString ?? "current"
+        return "ai.visitQuestions.\(visitID).\(store.reportDataRevision)"
+    }
+
     var body: some View {
         let summary = cachedSummary ?? doctorSummary
 
@@ -301,13 +306,13 @@ struct ConsultationSnapshotView: View {
             do {
                 let questions = try await AIService.shared.draftVisitQuestions(request)
                 await MainActor.run {
+                    cacheAIQuestions(questions)
                     aiQuestions = aiDoctorQuestions(from: questions)
                     isDraftingAIQuestions = false
                     Haptics.success()
                 }
             } catch {
                 await MainActor.run {
-                    aiQuestions = nil
                     isDraftingAIQuestions = false
                     Haptics.notification(.warning)
                 }
@@ -325,6 +330,21 @@ struct ConsultationSnapshotView: View {
                 tint: AppColor.primary
             )
         }
+    }
+
+    private func loadCachedAIQuestions() {
+        guard let data = UserDefaults.standard.data(forKey: aiQuestionsCacheKey),
+              let questions = try? JSONDecoder().decode([String].self, from: data),
+              !questions.isEmpty else {
+            aiQuestions = nil
+            return
+        }
+        aiQuestions = aiDoctorQuestions(from: questions)
+    }
+
+    private func cacheAIQuestions(_ questions: [String]) {
+        guard let data = try? JSONEncoder().encode(questions) else { return }
+        UserDefaults.standard.set(data, forKey: aiQuestionsCacheKey)
     }
 
     private func aiVisitQuestionRequest(summary: DoctorReportSummary) -> AIVisitQuestionRequest {
@@ -969,7 +989,7 @@ struct ConsultationSnapshotView: View {
 
     private func refreshSummary() {
         cachedSummary = DoctorReportSummaryBuilder.build(store: store, days: daysWindow, visit: snapshotVisit)
-        aiQuestions = nil
+        loadCachedAIQuestions()
     }
 
     @MainActor
