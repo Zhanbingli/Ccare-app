@@ -78,6 +78,18 @@ struct AITrendInsightRequest {
     let sevenDayInRange: String
 }
 
+struct AIVisitQuestionRequest {
+    let localeIdentifier: String
+    let visitTitle: String?
+    let reason: String?
+    let allergies: String?
+    let medications: [String]
+    let adherenceGaps: [String]
+    let measurements: [String]
+    let symptoms: [String]
+    let missingPostVisitItems: [String]
+}
+
 struct DrugInteractionResponse: Codable {
     let analysis: String
     let interactions: [Interaction]
@@ -237,6 +249,30 @@ class AIService {
         }
     }
 
+    func draftVisitQuestions(_ request: AIVisitQuestionRequest) async throws -> [String] {
+        guard hasUserConsent else {
+            throw AIServiceError.consentRequired
+        }
+        guard !configuration.apiKey.isEmpty else {
+            throw AIServiceError.invalidAPIKey
+        }
+
+        let prompt = createVisitQuestionPrompt(request)
+        let text: String
+        switch configuration.provider {
+        case .openai:
+            text = try await generateOpenAIText(prompt: prompt)
+        case .anthropic:
+            text = try await generateAnthropicText(prompt: prompt)
+        }
+
+        let questions = parseQuestionLines(text)
+        guard !questions.isEmpty else {
+            throw AIServiceError.invalidResponse
+        }
+        return Array(questions.prefix(3))
+    }
+
     private func analyzeWithOpenAI(request: DrugInteractionRequest) async throws -> DrugInteractionResponse {
         let url = URL(string: "https://api.openai.com/v1/chat/completions")!
         var urlRequest = URLRequest(url: url)
@@ -386,6 +422,59 @@ class AIService {
         - Mention urgent care only for clearly concerning readings or symptoms.
         - Do not claim certainty from sparse data.
         """
+    }
+
+    private func createVisitQuestionPrompt(_ request: AIVisitQuestionRequest) -> String {
+        func list(_ title: String, _ values: [String]) -> String {
+            guard !values.isEmpty else { return "\(title): none provided" }
+            return "\(title):\n" + values.map { "- \($0)" }.joined(separator: "\n")
+        }
+
+        return """
+        Draft exactly 3 questions this patient can ask their clinician during a follow-up visit.
+
+        Output rules:
+        - Return only the 3 questions, one per line.
+        - No introduction.
+        - Keep each question short and practical.
+        - Write in the user's locale: \(request.localeIdentifier).
+
+        Safety rules:
+        - Do not diagnose.
+        - Do not recommend starting, stopping, or changing medication.
+        - Focus on clarifying the clinician's plan, target ranges, monitoring, and follow-up.
+        - Use only the data below.
+
+        Visit:
+        - Title: \(request.visitTitle ?? "none provided")
+        - Reason: \(request.reason ?? "none provided")
+        - Allergies: \(request.allergies ?? "none provided")
+
+        \(list("Current medications", request.medications))
+
+        \(list("Adherence gaps", request.adherenceGaps))
+
+        \(list("Home measurements", request.measurements))
+
+        \(list("Symptoms", request.symptoms))
+
+        \(list("Missing post-visit plan items", request.missingPostVisitItems))
+        """
+    }
+
+    private func parseQuestionLines(_ text: String) -> [String] {
+        text
+            .split(whereSeparator: \.isNewline)
+            .map { line -> String in
+                var value = String(line).trimmingCharacters(in: .whitespacesAndNewlines)
+                value = value.replacingOccurrences(
+                    of: #"^\s*(?:[-*•]|\d+[\.)、])\s*"#,
+                    with: "",
+                    options: .regularExpression
+                )
+                return value.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            .filter { !$0.isEmpty }
     }
 
     private func generateOpenAIText(prompt: String) async throws -> String {

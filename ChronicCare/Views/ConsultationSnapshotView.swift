@@ -22,6 +22,9 @@ struct ConsultationSnapshotView: View {
     @State private var isGeneratingPDF = false
     @State private var pdfErrorMessage: String?
     @State private var showPDFError = false
+    @State private var aiQuestions: [DoctorQuestion]?
+    @State private var isDraftingAIQuestions = false
+    @State private var showAIQuestionDisclosure = false
 
     private let daysWindow: Int = 30
 
@@ -117,6 +120,15 @@ struct ConsultationSnapshotView: View {
                 Text(pdfErrorMessage)
             }
         }
+        .alert(NSLocalizedString("Send Data for AI Questions?", comment: "AI visit questions consent title"), isPresented: $showAIQuestionDisclosure) {
+            Button(NSLocalizedString("Use AI", comment: "AI visit questions consent action")) {
+                AIService.shared.hasUserConsent = true
+                draftAIQuestions(summary: cachedSummary ?? doctorSummary)
+            }
+            Button(NSLocalizedString("Cancel", comment: ""), role: .cancel) {}
+        } message: {
+            Text(NSLocalizedString("This sends visit reason, medication names and doses, adherence gaps, measurement summaries, and symptom summaries to your AI provider.", comment: "AI visit questions consent detail"))
+        }
         .onAppear {
             refreshSummary()
         }
@@ -129,10 +141,30 @@ struct ConsultationSnapshotView: View {
     }
 
     private func doctorQuestionsSection(summary: DoctorReportSummary) -> some View {
-        let questions = doctorQuestions(summary: summary)
+        let questions = aiQuestions ?? doctorQuestions(summary: summary)
 
         return VStack(alignment: .leading, spacing: EditorialSpacing.md) {
-            sectionLabel(NSLocalizedString("Questions to Ask", comment: "Doctor questions section title"))
+            HStack(alignment: .center) {
+                sectionLabel(NSLocalizedString("Questions to Ask", comment: "Doctor questions section title"))
+                Spacer()
+                if AIService.shared.isConfigured {
+                    Button {
+                        handleAIQuestionDraft(summary: summary)
+                    } label: {
+                        if isDraftingAIQuestions {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Label(NSLocalizedString("Refine", comment: "AI visit questions action"), systemImage: "sparkles")
+                                .appFont(.caption)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(AppColor.primary)
+                    .disabled(isDraftingAIQuestions)
+                    .accessibilityLabel(NSLocalizedString("Refine Questions", comment: "AI visit questions accessibility"))
+                }
+            }
 
             AppDivider()
 
@@ -249,6 +281,71 @@ struct ConsultationSnapshotView: View {
         }
 
         return Array(questions.prefix(4))
+    }
+
+    private func handleAIQuestionDraft(summary: DoctorReportSummary) {
+        guard AIService.shared.isConfigured else { return }
+        if !AIService.shared.hasUserConsent {
+            showAIQuestionDisclosure = true
+            return
+        }
+        draftAIQuestions(summary: summary)
+    }
+
+    private func draftAIQuestions(summary: DoctorReportSummary) {
+        guard !isDraftingAIQuestions else { return }
+        isDraftingAIQuestions = true
+        let request = aiVisitQuestionRequest(summary: summary)
+
+        Task {
+            do {
+                let questions = try await AIService.shared.draftVisitQuestions(request)
+                await MainActor.run {
+                    aiQuestions = aiDoctorQuestions(from: questions)
+                    isDraftingAIQuestions = false
+                    Haptics.success()
+                }
+            } catch {
+                await MainActor.run {
+                    aiQuestions = nil
+                    isDraftingAIQuestions = false
+                    Haptics.notification(.warning)
+                }
+            }
+        }
+    }
+
+    private func aiDoctorQuestions(from questions: [String]) -> [DoctorQuestion] {
+        questions.enumerated().map { index, question in
+            DoctorQuestion(
+                id: "ai-question-\(index)",
+                question: question,
+                detail: nil,
+                systemImage: "sparkles",
+                tint: AppColor.primary
+            )
+        }
+    }
+
+    private func aiVisitQuestionRequest(summary: DoctorReportSummary) -> AIVisitQuestionRequest {
+        AIVisitQuestionRequest(
+            localeIdentifier: Locale.current.identifier,
+            visitTitle: summary.visit?.displayTitle,
+            reason: summary.visit?.reason,
+            allergies: summary.allergies,
+            medications: summary.medications.prefix(8).map { "\($0.name) \($0.dose), \($0.schedule)" },
+            adherenceGaps: summary.adherenceGaps.prefix(3).map { "\($0.medicationName): \($0.missedDays.count) missed days" },
+            measurements: summary.measurements.map { "\($0.type.displayName): latest \($0.latestValue), \($0.outOfRangeCount)/\($0.entryCount) out of range" },
+            symptoms: summary.symptoms.prefix(3).map { symptom in
+                [symptom.summary, symptom.note?.trimmingCharacters(in: .whitespacesAndNewlines)]
+                    .compactMap { value in
+                        guard let value, !value.isEmpty else { return nil }
+                        return value
+                    }
+                    .joined(separator: ": ")
+            },
+            missingPostVisitItems: summary.visit?.postVisitMissingItems ?? []
+        )
     }
 
     private func snapshotSummaryStrip(summary: DoctorReportSummary) -> some View {
@@ -872,6 +969,7 @@ struct ConsultationSnapshotView: View {
 
     private func refreshSummary() {
         cachedSummary = DoctorReportSummaryBuilder.build(store: store, days: daysWindow, visit: snapshotVisit)
+        aiQuestions = nil
     }
 
     @MainActor

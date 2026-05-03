@@ -34,7 +34,7 @@ struct PrivacyPolicyView: View {
 
                     policySection(
                         title: NSLocalizedString("AI Features", comment: ""),
-                        body: NSLocalizedString("If you choose to use AI-powered features (such as drug interaction checks), the text you enter for that AI request is sent to the configured AI service for processing. No medication or health data is sent automatically unless you explicitly include it in your query. The AI API key is stored securely in your device's Keychain.", comment: "")
+                        body: NSLocalizedString("If you choose to use AI-powered features, the limited summary shown before that request is sent to the configured AI service for processing. No AI request is sent until you approve it. The AI API key is stored securely in your device's Keychain.", comment: "")
                     )
 
                     policySection(

@@ -261,8 +261,7 @@
 "API Key" = "API 密钥";
 "Allow AI Analysis" = "允许 AI 分析";
 "AI insights enabled" = "AI 洞察已启用";
-"Used for drug interaction analysis and trend insights. Your API key is stored securely in Keychain." = "用于药物相互作用分析和趋势洞察。API 密钥安全存储在钥匙串中。";
-"Used for drug interaction checks and trend insights. Before provider analysis runs, the app shows what data will be sent. Your API key is stored securely in Keychain." = "用于药物相互作用检查和趋势洞察。在调用服务商分析前，应用会说明将发送哪些数据。API 密钥安全存储在钥匙串中。";
+"Used for trend insights and visit question drafting. Before provider analysis runs, the app shows what data will be sent. Your API key is stored securely in Keychain." = "用于趋势洞察和复诊问题整理。调用服务商分析前，应用会说明将发送哪些数据。API 密钥安全存储在钥匙串中。";
 "Generate an on-device summary now. Add an API key in Settings to use provider analysis." = "现在可生成本机摘要。如需使用服务商分析，请在设置中添加 API 密钥。";
 "Provider analysis is off until you approve sending a limited trend summary." = "在你同意发送有限趋势摘要前，服务商分析处于关闭状态。";
 "Uses a limited trend summary: recent readings, related medication names and doses, and aggregate stats." = "仅使用有限趋势摘要：近期读数、相关药物名称和剂量，以及汇总统计。";
@@ -270,6 +269,11 @@
 "Analyze with AI" = "使用 AI 分析";
 "Use On-Device Summary" = "使用本机摘要";
 "This sends up to 20 recent readings for the selected measurement type, related medication names and doses, and aggregate stats to your selected AI provider. Notes, contacts, emergency info, and raw backups are not sent." = "这会将所选测量类型最多 20 条近期读数、相关药物名称和剂量，以及汇总统计发送给你选择的 AI 服务商。备注、联系人、紧急信息和原始备份不会发送。";
+"Send Data for AI Questions?" = "发送数据整理复诊问题？";
+"Use AI" = "使用 AI";
+"This sends visit reason, medication names and doses, adherence gaps, measurement summaries, and symptom summaries to your AI provider." = "这会将复诊原因、药物名称和剂量、漏服情况、测量摘要和症状摘要发送给你的 AI 服务商。";
+"Refine" = "整理";
+"Refine Questions" = "整理复诊问题";
 "Analyzing..." = "正在分析...";
 "AI analysis could not be completed. Showing an on-device summary instead.\n\n%@" = "无法完成 AI 分析。已改为显示本机摘要。\n\n%@";
 "%@ Summary" = "%@摘要";
@@ -1019,7 +1023,7 @@
 "Notifications" = "通知";
 "With your permission, Ccare sends local notifications to remind you of medication doses. These notifications are scheduled on-device and do not involve any external server." = "经您许可，药时护会发送本地通知提醒您服药。这些通知在设备上调度，不涉及任何外部服务器。";
 "AI Features" = "AI 功能";
-"If you choose to use AI-powered features (such as drug interaction checks), the text you enter for that AI request is sent to the configured AI service for processing. No medication or health data is sent automatically unless you explicitly include it in your query. The AI API key is stored securely in your device's Keychain." = "如果您使用 AI 功能（如药物相互作用检查），您为该 AI 请求输入的文本会被发送到配置的 AI 服务进行处理。除非您主动写入查询，否则不会自动发送药物或健康数据。AI API 密钥安全存储在设备的钥匙串中。";
+"If you choose to use AI-powered features, the limited summary shown before that request is sent to the configured AI service for processing. No AI request is sent until you approve it. The AI API key is stored securely in your device's Keychain." = "如果你选择使用 AI 功能，应用会先展示本次请求会发送的有限摘要；只有你确认后才会发送给配置的 AI 服务处理。AI API 密钥安全存储在设备钥匙串中。";
 "No Analytics or Tracking" = "无分析或追踪";
 "Ccare does not use any analytics, crash reporting, or advertising frameworks. We do not track your usage or behavior in any way." = "药时护不使用任何分析、崩溃报告或广告框架。我们不会以任何方式追踪您的使用情况或行为。";
 "Data Deletion" = "数据删除";

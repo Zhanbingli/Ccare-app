@@ -197,7 +197,7 @@ struct ProfileView: View {
                                 }
                             }
                         }
-                        Text(NSLocalizedString("Used for drug interaction checks and trend insights. Before provider analysis runs, the app shows what data will be sent. Your API key is stored securely in Keychain.", comment: ""))
+                        Text(NSLocalizedString("Used for trend insights and visit question drafting. Before provider analysis runs, the app shows what data will be sent. Your API key is stored securely in Keychain.", comment: ""))
                             .appFont(.caption)
                             .foregroundStyle(AppColor.textSecondary)
                     } label: {
