@@ -177,6 +177,7 @@ struct ProfileView: View {
                                     switch aiProvider {
                                     case .openai: urlStr = "https://platform.openai.com/api-keys"
                                     case .anthropic: urlStr = "https://console.anthropic.com/settings/keys"
+                                    case .deepseek: urlStr = "https://platform.deepseek.com/api_keys"
                                     }
                                     if let url = URL(string: urlStr) {
                                         UIApplication.shared.open(url)

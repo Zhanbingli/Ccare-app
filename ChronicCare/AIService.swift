@@ -40,6 +40,7 @@ private enum KeychainHelper {
 enum AIProvider: String, CaseIterable, Codable {
     case openai = "OpenAI"
     case anthropic = "Anthropic"
+    case deepseek = "DeepSeek"
 }
 
 struct AIConfiguration: Codable {
@@ -56,6 +57,8 @@ private enum AIModelCatalog {
     static let openAIText = "gpt-4o-mini"
     static let anthropicJSON = "claude-sonnet-4-20250514"
     static let anthropicText = "claude-haiku-4-5-20251001"
+    static let deepSeekJSON = "deepseek-v4-flash"
+    static let deepSeekText = "deepseek-v4-flash"
 }
 
 struct DrugInteractionRequest: Codable {
@@ -229,6 +232,8 @@ class AIService {
             return try await analyzeWithOpenAI(request: request)
         case .anthropic:
             return try await analyzeWithAnthropic(request: request)
+        case .deepseek:
+            return try await analyzeWithDeepSeek(request: request)
         }
     }
 
@@ -246,6 +251,8 @@ class AIService {
             return try await generateOpenAIText(prompt: prompt)
         case .anthropic:
             return try await generateAnthropicText(prompt: prompt)
+        case .deepseek:
+            return try await generateDeepSeekText(prompt: prompt)
         }
     }
 
@@ -264,6 +271,8 @@ class AIService {
             text = try await generateOpenAIText(prompt: prompt)
         case .anthropic:
             text = try await generateAnthropicText(prompt: prompt)
+        case .deepseek:
+            text = try await generateDeepSeekText(prompt: prompt)
         }
 
         let questions = parseQuestionLines(text)
@@ -285,6 +294,46 @@ class AIService {
 
         let body: [String: Any] = [
             "model": AIModelCatalog.openAIJSON,
+            "messages": [
+                ["role": "system", "content": "You summarize possible medication interaction risks for patient self-management. Do not diagnose, do not recommend starting or stopping medication, and always advise discussing changes with a licensed clinician. Always respond in valid JSON format."],
+                ["role": "user", "content": prompt]
+            ],
+            "temperature": 0.2,
+            "response_format": ["type": "json_object"]
+        ]
+
+        urlRequest.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: urlRequest)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIServiceError.networkError("Invalid response")
+        }
+
+        if httpResponse.statusCode == 429 {
+            throw AIServiceError.rateLimitExceeded
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+            throw AIServiceError.networkError("HTTP \(httpResponse.statusCode): \(errorMessage)")
+        }
+
+        return try parseOpenAIResponse(data: data)
+    }
+
+    private func analyzeWithDeepSeek(request: DrugInteractionRequest) async throws -> DrugInteractionResponse {
+        let url = URL(string: "https://api.deepseek.com/chat/completions")!
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("Bearer \(configuration.apiKey)", forHTTPHeaderField: "Authorization")
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.timeoutInterval = 30
+
+        let prompt = createAnalysisPrompt(medications: request.medications)
+
+        let body: [String: Any] = [
+            "model": AIModelCatalog.deepSeekJSON,
             "messages": [
                 ["role": "system", "content": "You summarize possible medication interaction risks for patient self-management. Do not diagnose, do not recommend starting or stopping medication, and always advise discussing changes with a licensed clinician. Always respond in valid JSON format."],
                 ["role": "user", "content": prompt]
@@ -519,6 +568,55 @@ class AIService {
         }
 
         let result = try JSONDecoder().decode(OpenAIResponse.self, from: data)
+        guard let content = result.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines),
+              !content.isEmpty else {
+            throw AIServiceError.invalidResponse
+        }
+        return content
+    }
+
+    private func generateDeepSeekText(prompt: String) async throws -> String {
+        let url = URL(string: "https://api.deepseek.com/chat/completions")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(configuration.apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30
+
+        let body: [String: Any] = [
+            "model": AIModelCatalog.deepSeekText,
+            "messages": [
+                ["role": "system", "content": "You are a careful health tracking summarizer. Be concise, conservative, and clear that the user should discuss medical decisions with a clinician."],
+                ["role": "user", "content": prompt]
+            ],
+            "temperature": 0.2,
+            "max_tokens": 500
+        ]
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIServiceError.networkError("Invalid response")
+        }
+        if httpResponse.statusCode == 429 {
+            throw AIServiceError.rateLimitExceeded
+        }
+        guard httpResponse.statusCode == 200 else {
+            throw AIServiceError.networkError("HTTP \(httpResponse.statusCode)")
+        }
+
+        struct DeepSeekResponse: Codable {
+            struct Choice: Codable {
+                struct Message: Codable {
+                    let content: String
+                }
+                let message: Message
+            }
+            let choices: [Choice]
+        }
+
+        let result = try JSONDecoder().decode(DeepSeekResponse.self, from: data)
         guard let content = result.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines),
               !content.isEmpty else {
             throw AIServiceError.invalidResponse
