@@ -1330,6 +1330,10 @@
 "No changes" = "无变更";
 "No medication changes." = "本次无用药变更。";
 "Added, stopped, changed dose/time, or no changes" = "新增、停用、剂量/时间调整，或无变化";
+"Tests or checks" = "检查或复查";
+"None needed" = "无需检查";
+"No tests or checks before the next visit." = "下次复诊前无需额外检查。";
+"Labs, imaging, home readings to bring, or none" = "化验、影像、需要带来的家庭读数，或无";
 "Before you leave the clinic" = "离开诊室前";
 "Set next visit date" = "设置下次复诊";
 "Next visit" = "下次复诊";
@@ -1341,6 +1345,7 @@
 "Still needs: %@" = "还需补充：%@";
 "doctor instructions" = "医生交代";
 "medication plan" = "用药方案";
+"tests or checks" = "检查或复查";
 "next visit" = "下次复诊";
 "Doctor-facing summary for the appointment" = "给医生看的本次复诊摘要";
 "Time, doctor, department, and reason" = "时间、医生、科室和复诊原因";
@@ -1356,6 +1361,7 @@
 "Completed %@" = "完成于 %@";
 "Tap to add doctor, department, and reason." = "点击补充医生、科室和复诊原因。";
 "Prepared For" = "本次复诊";
+"Before this visit" = "本次复诊前";
 "Questions to Ask" = "要问医生的问题";
 "Should I keep taking each medication at the current dose and time?" = "每种药是否继续按当前剂量和时间服用？";
 "%lld medications are listed in the snapshot." = "摘要中列出了 %lld 种用药。";

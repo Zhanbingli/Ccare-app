@@ -90,6 +90,7 @@ struct AIVisitQuestionRequest {
     let adherenceGaps: [String]
     let measurements: [String]
     let symptoms: [String]
+    let followUpChecks: String?
     let missingPostVisitItems: [String]
 }
 
@@ -523,6 +524,8 @@ class AIService {
         \(list("Home measurements", request.measurements))
 
         \(list("Symptoms", request.symptoms))
+
+        Follow-up checks before next visit: \(request.followUpChecks ?? "none provided")
 
         \(list("Missing post-visit plan items", request.missingPostVisitItems))
         """

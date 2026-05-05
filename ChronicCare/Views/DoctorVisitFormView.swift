@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Form for scheduling a new doctor visit or editing an existing one.
 /// The "After Visit" section is what turns this into an iterative care
-/// log: notes + medication changes + next visit date close the loop
+/// log: notes + medication changes + follow-up checks + next visit date close the loop
 /// from one consultation to the next.
 struct DoctorVisitFormView: View {
     @EnvironmentObject var store: DataStore
@@ -19,6 +19,7 @@ struct DoctorVisitFormView: View {
     @State private var isCompleted: Bool
     @State private var notes: String
     @State private var medicationChangesSummary: String
+    @State private var followUpChecksSummary: String
     @State private var nextVisitDate: Date
     @State private var hasNextVisitDate: Bool
     @State private var showDeleteConfirm = false
@@ -35,6 +36,7 @@ struct DoctorVisitFormView: View {
         _isCompleted = State(initialValue: editing?.isCompleted ?? false)
         _notes = State(initialValue: editing?.notes ?? "")
         _medicationChangesSummary = State(initialValue: editing?.medicationChangesSummary ?? "")
+        _followUpChecksSummary = State(initialValue: editing?.followUpChecksSummary ?? "")
         _nextVisitDate = State(initialValue: editing?.nextVisitDate ?? Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date())
         _hasNextVisitDate = State(initialValue: editing?.nextVisitDate != nil)
     }
@@ -78,6 +80,22 @@ struct DoctorVisitFormView: View {
                         }
                         TextField(NSLocalizedString("Added, stopped, changed dose/time, or no changes", comment: "Post visit medication placeholder"), text: $medicationChangesSummary, axis: .vertical)
                             .lineLimit(3...7)
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text(NSLocalizedString("Tests or checks", comment: "Post visit follow-up checks field label"))
+                                .appFont(.caption)
+                                .foregroundStyle(AppColor.textSecondary)
+                            Spacer()
+                            Button(NSLocalizedString("None needed", comment: "Post visit no follow-up checks action")) {
+                                followUpChecksSummary = NSLocalizedString("No tests or checks before the next visit.", comment: "Post visit no follow-up checks saved text")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.mini)
+                        }
+                        TextField(NSLocalizedString("Labs, imaging, home readings to bring, or none", comment: "Post visit follow-up checks placeholder"), text: $followUpChecksSummary, axis: .vertical)
+                            .lineLimit(2...5)
                     }
 
                     Toggle(NSLocalizedString("Set next visit date", comment: ""), isOn: $hasNextVisitDate)
@@ -148,6 +166,7 @@ struct DoctorVisitFormView: View {
         visit.reason = trimmedOrNil(reason)
         visit.notes = trimmedOrNil(notes)
         visit.medicationChangesSummary = trimmedOrNil(medicationChangesSummary)
+        visit.followUpChecksSummary = trimmedOrNil(followUpChecksSummary)
         visit.nextVisitDate = hasNextVisitDate ? nextVisitDate : nil
 
         if editing == nil {
@@ -175,7 +194,7 @@ struct DoctorVisitFormView: View {
     }
 
     private var showsAfterVisitFields: Bool {
-        isCompleted || hasText(notes) || hasText(medicationChangesSummary) || hasNextVisitDate
+        isCompleted || hasText(notes) || hasText(medicationChangesSummary) || hasText(followUpChecksSummary) || hasNextVisitDate
     }
 
     private var createsFollowUpVisit: Bool {

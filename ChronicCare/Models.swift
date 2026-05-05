@@ -389,6 +389,7 @@ struct DoctorVisit: Identifiable, Codable {
     // Post-visit reflection — filled after the visit.
     var notes: String?
     var medicationChangesSummary: String?
+    var followUpChecksSummary: String?
     var nextVisitDate: Date?
 }
 
@@ -403,12 +404,16 @@ extension DoctorVisit {
         medicationChangesSummary?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
     }
 
+    var hasFollowUpChecksPlan: Bool {
+        followUpChecksSummary?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
     var hasNextVisitPlan: Bool {
         nextVisitDate != nil
     }
 
     var needsPostVisitCapture: Bool {
-        isCompleted && (!hasDoctorNotes || !hasMedicationPlan || !hasNextVisitPlan)
+        isCompleted && (!hasDoctorNotes || !hasMedicationPlan || !hasFollowUpChecksPlan || !hasNextVisitPlan)
     }
 
     var postVisitMissingItems: [String] {
@@ -418,6 +423,9 @@ extension DoctorVisit {
         }
         if !hasMedicationPlan {
             items.append(NSLocalizedString("medication plan", comment: "Post visit missing item"))
+        }
+        if !hasFollowUpChecksPlan {
+            items.append(NSLocalizedString("tests or checks", comment: "Post visit missing item"))
         }
         if !hasNextVisitPlan {
             items.append(NSLocalizedString("next visit", comment: "Post visit missing item"))

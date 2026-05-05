@@ -404,6 +404,7 @@ struct ConsultationSnapshotView: View {
                     }
                     .joined(separator: ": ")
             },
+            followUpChecks: followUpChecksForVisit(summary.visit),
             missingPostVisitItems: summary.visit?.postVisitMissingItems ?? []
         )
     }
@@ -475,6 +476,16 @@ struct ConsultationSnapshotView: View {
                             .foregroundStyle(AppColor.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                }
+
+                if let checks = followUpChecksForVisit(visit) {
+                    AppDivider()
+                    snapshotSummaryLine(
+                        title: NSLocalizedString("Before this visit", comment: "Consultation snapshot pre-visit checks title"),
+                        value: checks,
+                        systemImage: "checklist.checked",
+                        tint: AppColor.primary
+                    )
                 }
             }
         }
@@ -966,6 +977,25 @@ struct ConsultationSnapshotView: View {
     }
 
     // MARK: - Helpers
+
+    private func followUpChecksForVisit(_ visit: DoctorVisit?) -> String? {
+        if let checks = visit?.followUpChecksSummary?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !checks.isEmpty {
+            return checks
+        }
+
+        let cutoff = visit?.scheduledDate ?? Date()
+        guard let previousChecks = store.completedDoctorVisits
+            .first(where: { completed in
+                (completed.completedDate ?? completed.scheduledDate) < cutoff
+            })?
+            .followUpChecksSummary?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !previousChecks.isEmpty else {
+            return nil
+        }
+        return previousChecks
+    }
 
     private func sectionLabel(_ text: String, count: Int? = nil) -> some View {
         HStack(spacing: 6) {

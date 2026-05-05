@@ -1199,6 +1199,13 @@ private extension DashboardView {
                 )
                 AppDivider()
                 postVisitStatusLine(
+                    title: NSLocalizedString("Tests or checks", comment: "Post visit status"),
+                    value: visit.hasFollowUpChecksPlan
+                        ? NSLocalizedString("Saved", comment: "")
+                        : NSLocalizedString("Not saved yet", comment: "")
+                )
+                AppDivider()
+                postVisitStatusLine(
                     title: NSLocalizedString("Next visit", comment: "Post visit status"),
                     value: visit.nextVisitDate?.formatted(date: .abbreviated, time: .omitted) ?? NSLocalizedString("Not set", comment: "")
                 )
