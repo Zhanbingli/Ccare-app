@@ -42,6 +42,13 @@ struct ConsultationSnapshotView: View {
         let generatedAt: Date
     }
 
+    private struct VisitPlanItem: Identifiable {
+        let id: String
+        let title: String
+        let value: String
+        let systemImage: String
+    }
+
     private static let aiGeneratedFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .none
@@ -404,6 +411,7 @@ struct ConsultationSnapshotView: View {
                     }
                     .joined(separator: ": ")
             },
+            previousVisitPlan: previousVisitPlanItems(for: summary.visit).map { "\($0.title): \($0.value)" },
             followUpChecks: followUpChecksForVisit(summary.visit),
             missingPostVisitItems: summary.visit?.postVisitMissingItems ?? []
         )
@@ -454,6 +462,7 @@ struct ConsultationSnapshotView: View {
     @ViewBuilder
     private func visitPrepSection(summary: DoctorReportSummary) -> some View {
         if let visit = summary.visit {
+            let planItems = previousVisitPlanItems(for: visit)
             VStack(alignment: .leading, spacing: EditorialSpacing.md) {
                 HStack(alignment: .firstTextBaseline) {
                     sectionLabel(NSLocalizedString("Prepared For", comment: ""))
@@ -478,14 +487,24 @@ struct ConsultationSnapshotView: View {
                     }
                 }
 
-                if let checks = followUpChecksForVisit(visit) {
+                if !planItems.isEmpty {
                     AppDivider()
-                    snapshotSummaryLine(
-                        title: NSLocalizedString("Before this visit", comment: "Consultation snapshot pre-visit checks title"),
-                        value: checks,
-                        systemImage: "checklist.checked",
-                        tint: AppColor.primary
-                    )
+                    VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
+                        sectionLabel(visit.isCompleted
+                                     ? NSLocalizedString("Plan from this visit", comment: "Consultation snapshot current visit plan title")
+                                     : NSLocalizedString("Plan from last visit", comment: "Consultation snapshot previous visit plan title"))
+                        ForEach(Array(planItems.enumerated()), id: \.element.id) { index, item in
+                            snapshotSummaryLine(
+                                title: item.title,
+                                value: item.value,
+                                systemImage: item.systemImage,
+                                tint: AppColor.primary
+                            )
+                            if index < planItems.count - 1 {
+                                AppDivider()
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -978,23 +997,54 @@ struct ConsultationSnapshotView: View {
 
     // MARK: - Helpers
 
-    private func followUpChecksForVisit(_ visit: DoctorVisit?) -> String? {
-        if let checks = visit?.followUpChecksSummary?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !checks.isEmpty {
-            return checks
+    private func previousVisitPlanItems(for visit: DoctorVisit?) -> [VisitPlanItem] {
+        guard let source = visitPlanSource(for: visit) else { return [] }
+        var items: [VisitPlanItem] = []
+        if let notes = trimmed(source.notes) {
+            items.append(VisitPlanItem(
+                id: "doctor-instructions",
+                title: NSLocalizedString("Doctor instructions", comment: "Visit plan doctor instructions"),
+                value: notes,
+                systemImage: "stethoscope"
+            ))
         }
+        if let medicationPlan = trimmed(source.medicationChangesSummary) {
+            items.append(VisitPlanItem(
+                id: "medication-plan",
+                title: NSLocalizedString("Medication plan", comment: "Visit plan medication"),
+                value: medicationPlan,
+                systemImage: "pills"
+            ))
+        }
+        if let checks = trimmed(source.followUpChecksSummary) {
+            items.append(VisitPlanItem(
+                id: "follow-up-checks",
+                title: visit?.isCompleted == true ? NSLocalizedString("Before next visit", comment: "Visit plan checks title") : NSLocalizedString("Before this visit", comment: "Consultation snapshot pre-visit checks title"),
+                value: checks,
+                systemImage: "checklist.checked"
+            ))
+        }
+        return items
+    }
 
-        let cutoff = visit?.scheduledDate ?? Date()
-        guard let previousChecks = store.completedDoctorVisits
-            .first(where: { completed in
-                (completed.completedDate ?? completed.scheduledDate) < cutoff
-            })?
-            .followUpChecksSummary?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-              !previousChecks.isEmpty else {
-            return nil
+    private func visitPlanSource(for visit: DoctorVisit?) -> DoctorVisit? {
+        if let visit, visit.isCompleted {
+            return visit
         }
-        return previousChecks
+        let cutoff = visit?.scheduledDate ?? Date()
+        return store.completedDoctorVisits.first { completed in
+            (completed.completedDate ?? completed.scheduledDate) < cutoff
+        }
+    }
+
+    private func followUpChecksForVisit(_ visit: DoctorVisit?) -> String? {
+        visitPlanSource(for: visit)
+            .flatMap { trimmed($0.followUpChecksSummary) }
+    }
+
+    private func trimmed(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        return trimmed
     }
 
     private func sectionLabel(_ text: String, count: Int? = nil) -> some View {

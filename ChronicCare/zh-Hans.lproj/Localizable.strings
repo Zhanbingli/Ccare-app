@@ -1361,7 +1361,10 @@
 "Completed %@" = "完成于 %@";
 "Tap to add doctor, department, and reason." = "点击补充医生、科室和复诊原因。";
 "Prepared For" = "本次复诊";
+"Plan from last visit" = "上次复诊计划";
+"Plan from this visit" = "本次复诊计划";
 "Before this visit" = "本次复诊前";
+"Before next visit" = "下次复诊前";
 "Questions to Ask" = "要问医生的问题";
 "Should I keep taking each medication at the current dose and time?" = "每种药是否继续按当前剂量和时间服用？";
 "%lld medications are listed in the snapshot." = "摘要中列出了 %lld 种用药。";
