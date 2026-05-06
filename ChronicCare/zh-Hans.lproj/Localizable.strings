@@ -851,6 +851,36 @@
 "No medications currently meet the missed-dose support threshold." = "目前没有药物达到漏服支持触发阈值。";
 "Prepare Status Update" = "准备状态更新";
 "Support Network" = "支持网络";
+"Action needed" = "需要处理";
+"Add one trusted person for routine missed-dose support." = "添加一位可信联系人，用于日常漏服支持。";
+"Call %@" = "拨打 %@";
+"Caregiver follow-up is needed" = "需要照护者跟进";
+"Caregiver support" = "照护者支持";
+"Caregiver support is ready" = "照护者支持已就绪";
+"Caregivers are not messaged automatically. The app only helps you prepare and share a clear update." = "应用不会自动联系照护者，只会帮你准备一条清楚的状态更新。";
+"Caregivers saved, support off" = "已保存照护者，支持未开启";
+"Choose who can help when medication routines slip." = "选择在用药节奏中断时可以帮忙的人。";
+"Contacts are saved. Turn support on for the people who should help with missed doses." = "联系人已保存。请为需要参与漏服支持的人开启支持。";
+"Current Need" = "当前需要";
+"Include this person in the current status update." = "将此人纳入当前状态更新。";
+"Missed-dose support" = "漏服支持";
+"Need help" = "需帮助";
+"People" = "联系人";
+"Prepare one clear update instead of explaining missed doses from memory." = "准备一条清楚的更新，不用凭记忆解释漏服情况。";
+"Ready" = "已就绪";
+"Remove %@" = "移除 %@";
+"Remove Caregiver?" = "移除照护者？";
+"Setup needed" = "需要设置";
+"Support on" = "支持开启";
+"This only removes the saved caregiver contact. Medication records stay unchanged." = "这只会移除保存的照护者联系人，用药记录不会改变。";
+"Turn on missed-dose support for at least one caregiver before sharing this update." = "分享此更新前，请至少为一位照护者开启漏服支持。";
+"Turn on support for a saved caregiver to make this useful when doses are missed." = "为已保存的照护者开启支持，漏服时这个功能才有用。";
+"%lld caregiver(s) will be included when missed-dose support is triggered." = "触发漏服支持时会纳入 %lld 位照护者。";
+"%lld days missed" = "漏服 %lld 天";
+"%lld medications meet the missed-dose support threshold." = "%lld 种药物达到漏服支持阈值。";
+"%lld of %lld caregivers are set for missed-dose support." = "%lld / %lld 位照护者已开启漏服支持。";
+"%lld saved" = "已保存 %lld 位";
+"%@ has been missed for %lld days." = "%@ 已漏服 %lld 天。";
 
 /* EmergencyInfoView */
 "Add Emergency Info" = "添加紧急信息";
