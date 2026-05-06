@@ -4,6 +4,8 @@ struct HypertensionFollowUpReportView: View {
     @EnvironmentObject var store: DataStore
     var visit: DoctorVisit? = nil
     var days: Int = 30
+    @State private var showShareSheet = false
+    @State private var shareText: String?
 
     private var report: HypertensionFollowUpReport {
         HypertensionFollowUpReportBuilder.build(store: store, visit: visit, days: days)
@@ -28,6 +30,22 @@ struct HypertensionFollowUpReportView: View {
         .background(AppColor.background)
         .navigationTitle(NSLocalizedString("Hypertension Report", comment: "Hypertension report title"))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    shareText = HypertensionFollowUpReportTextExporter.plainText(report)
+                    showShareSheet = true
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .accessibilityLabel(NSLocalizedString("Share Report", comment: "Hypertension report share action"))
+            }
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if let shareText {
+                ShareSheet(activityItems: [shareText])
+            }
+        }
     }
 
     private func header(_ report: HypertensionFollowUpReport) -> some View {

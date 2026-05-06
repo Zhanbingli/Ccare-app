@@ -505,3 +505,83 @@ enum HypertensionFollowUpReportBuilder {
         return "\(Int(reading.value)) mmHg"
     }
 }
+
+enum HypertensionFollowUpReportTextExporter {
+    static func plainText(_ report: HypertensionFollowUpReport) -> String {
+        var lines: [String] = []
+
+        lines.append(NSLocalizedString("Hypertension follow-up report", comment: "Hypertension report heading"))
+        lines.append(String(format: NSLocalizedString("Generated: %@", comment: "Hypertension report share generated"), dateTime(report.generatedAt)))
+        lines.append(String(format: NSLocalizedString("Period: %@ to %@", comment: "Hypertension report share period"), date(report.periodStart), date(report.periodEnd)))
+        if let visitTitle = report.visitTitle {
+            lines.append(String(format: NSLocalizedString("Visit: %@", comment: "Hypertension report share visit"), visitTitle))
+        }
+        lines.append("")
+
+        appendSection(NSLocalizedString("Rule-Based Safety Signals", comment: "Hypertension report section"), to: &lines)
+        if report.redFlags.isEmpty {
+            lines.append("- \(NSLocalizedString("No rule-based safety signal in this report period.", comment: "Hypertension report share empty safety"))")
+        } else {
+            for flag in report.redFlags {
+                lines.append("- \(flag.title): \(flag.detail)")
+            }
+        }
+        lines.append("")
+
+        appendSection(NSLocalizedString("Doctor-Facing Summary", comment: "Hypertension report section"), to: &lines)
+        for line in report.doctorSummaryLines {
+            lines.append("- \(line)")
+        }
+        lines.append("")
+
+        appendSection(NSLocalizedString("Patient Prep", comment: "Hypertension report section"), to: &lines)
+        if report.patientInsights.isEmpty {
+            lines.append("- \(NSLocalizedString("No strong pattern detected yet. Keep recording blood pressure, medication intake, and symptoms before the visit.", comment: "Hypertension report empty insights"))")
+        } else {
+            for insight in report.patientInsights {
+                lines.append("- \(insight.title): \(insight.detail)")
+            }
+        }
+        lines.append("")
+
+        appendSection(NSLocalizedString("Questions for Doctor", comment: "Hypertension report section"), to: &lines)
+        for question in report.doctorQuestions {
+            lines.append("- \(question.prompt)")
+        }
+        lines.append("")
+
+        appendSection(NSLocalizedString("Blood Pressure Appendix", comment: "Hypertension report section"), to: &lines)
+        if report.rawBloodPressureRows.isEmpty {
+            lines.append("- \(NSLocalizedString("No blood pressure readings in this report period.", comment: "Hypertension report empty raw data"))")
+        } else {
+            for row in report.rawBloodPressureRows {
+                let value = row.diastolic.map { "\(row.systolic)/\($0) mmHg" } ?? "\(row.systolic) mmHg"
+                let note = row.note?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let suffix = (note?.isEmpty == false) ? " - \(note!)" : ""
+                lines.append("- \(dateTime(row.date)): \(value)\(suffix)")
+            }
+        }
+        lines.append("")
+        lines.append(report.disclaimer)
+
+        return lines.joined(separator: "\n")
+    }
+
+    private static func appendSection(_ title: String, to lines: inout [String]) {
+        lines.append(title.uppercased())
+    }
+
+    private static func date(_ value: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter.string(from: value)
+    }
+
+    private static func dateTime(_ value: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: value)
+    }
+}
