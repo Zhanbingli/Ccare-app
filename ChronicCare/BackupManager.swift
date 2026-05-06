@@ -10,6 +10,7 @@ struct AppBackup: Codable {
     var caregivers: [CaregiverContact]?
     var symptomEntries: [SymptomEntry]?
     var doctorVisits: [DoctorVisit]?
+    var agentInboxItems: [AgentInboxItem]?
     var medicationImagesByPath: [String: Data]?
 }
 
@@ -50,6 +51,7 @@ enum BackupManager {
             caregivers: store.caregivers,
             symptomEntries: store.symptomEntries,
             doctorVisits: store.doctorVisits,
+            agentInboxItems: store.agentInboxItems,
             medicationImagesByPath: medicationImagesByPath.isEmpty ? nil : medicationImagesByPath
         )
         let data = try JSONEncoder().encode(backup)
@@ -58,7 +60,7 @@ enum BackupManager {
         return url
     }
 
-    static let currentVersion = 3
+    static let currentVersion = 4
 
     static func loadBackup(from url: URL) throws -> AppBackup {
         let data = try Data(contentsOf: url)
@@ -78,6 +80,11 @@ enum BackupManager {
             // v2 -> v3: doctor visit anchors were added for pre-visit prep.
             if result.doctorVisits == nil { result.doctorVisits = [] }
             result.version = 3
+        }
+        if result.version < 4 {
+            // v3 -> v4: local agent inbox state was added.
+            if result.agentInboxItems == nil { result.agentInboxItems = [] }
+            result.version = 4
         }
         return result
     }

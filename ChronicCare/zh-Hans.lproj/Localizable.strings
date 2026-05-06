@@ -882,6 +882,53 @@
 "%lld saved" = "已保存 %lld 位";
 "%@ has been missed for %lld days." = "%@ 已漏服 %lld 天。";
 
+/* Agent Inbox */
+"Agent Inbox" = "Agent 收件箱";
+"Refresh Agent Inbox" = "刷新 Agent 收件箱";
+"A local follow-up agent turns daily records into the next useful action." = "本地复诊 Agent 会把日常记录整理成下一步可执行事项。";
+"Open Items" = "待处理事项";
+"No open agent items" = "暂无待处理 Agent 事项";
+"%lld open agent items" = "%lld 个待处理 Agent 事项";
+"%lld open" = "%lld 个待处理";
+"Nothing needs attention right now." = "当前没有需要处理的事项。";
+"Keep recording medication intake, measurements, symptoms, and visit dates." = "继续记录服药、测量、症状和复诊日期。";
+"Dismissed" = "已忽略";
+"%lld dismissed" = "已忽略 %lld 个";
+"Urgent" = "紧急";
+"Reports" = "报告";
+"Safety signals are rule-based. AI may draft summaries elsewhere, but it does not decide medical risk or medication changes." = "安全信号由规则触发。AI 可在其他页面辅助生成摘要，但不判断医疗风险，也不建议调整用药。";
+"Rule" = "规则";
+"Dismiss" = "忽略";
+"Reopen" = "重新打开";
+"Log BP" = "记录血压";
+"Log Glucose" = "记录血糖";
+"Open Report" = "打开报告";
+"Open Visit Prep" = "打开复诊准备";
+"Open Caregivers" = "打开照护者";
+"Open Medications" = "打开用药";
+"Mark Done" = "标记完成";
+"Safety" = "安全";
+"Missing Data" = "缺失数据";
+"Clarify" = "澄清";
+"Report" = "报告";
+"Caregiver" = "照护者";
+"Blood pressure record is stale" = "血压记录已过期";
+"No home blood pressure has been recorded yet. Add a reading so the follow-up report has useful context." = "还没有家庭血压记录。添加一次读数，让复诊报告有可用背景。";
+"No home blood pressure has been recorded for %lld days. Add a reading before the next follow-up report." = "已有 %lld 天未记录家庭血压。下次生成复诊报告前请补充一次读数。";
+"Glucose record is stale" = "血糖记录已过期";
+"No home glucose has been recorded yet. Add a reading so the follow-up report has useful context." = "还没有家庭血糖记录。添加一次读数，让复诊报告有可用背景。";
+"No home glucose has been recorded for %lld days. Add a reading before the next follow-up report." = "已有 %lld 天未记录家庭血糖。下次生成复诊报告前请补充一次读数。";
+"Repeated missed doses" = "连续漏服";
+"%@ has been missed for %lld days. Prepare a status update or review the medication routine." = "%@ 已连续漏服 %lld 天。请准备状态更新，或检查用药流程。";
+"Clarify symptom context" = "补充症状背景";
+"Symptom" = "症状";
+"Add timing, relation to medication, nearby measurement, or red-flag symptoms for %@." = "为 %@ 补充发生时间、与用药关系、附近测量值或危险症状。";
+"Hypertension follow-up report is ready" = "高血压复诊报告已可查看";
+"Diabetes follow-up report is ready" = "糖尿病复诊报告已可查看";
+"%@ is overdue. Review the report before updating the visit plan." = "%@ 已逾期。更新复诊计划前请先查看报告。";
+"%@ is today. Review patient questions and doctor-facing summary." = "%@ 就在今天。请查看患者问题和给医生看的摘要。";
+"%@ is in %lld days. Review the report while there is still time to fill gaps." = "%@ 将在 %lld 天后进行。趁还有时间，请查看报告并补齐缺口。";
+
 /* EmergencyInfoView */
 "Add Emergency Info" = "添加紧急信息";
 "Add blood type, allergies, conditions, or emergency contacts so this card is useful when you need it." = "添加血型、过敏、疾病或紧急联系人，让这张卡在需要时真正有用。";

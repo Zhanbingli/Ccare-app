@@ -32,6 +32,16 @@ struct ProfileDrawerV2: View {
 
                 Section(NSLocalizedString("Review", comment: "")) {
                     navRow(
+                        icon: "tray.full.fill",
+                        tint: agentInboxTint,
+                        title: NSLocalizedString("Agent Inbox", comment: "Agent inbox drawer title"),
+                        subtitle: agentInboxSubtitle
+                    ) {
+                        AgentInboxView()
+                            .environmentObject(store)
+                    }
+
+                    navRow(
                         icon: "chart.line.uptrend.xyaxis",
                         tint: AppColor.primary,
                         title: NSLocalizedString("Trends", comment: ""),
@@ -87,6 +97,9 @@ struct ProfileDrawerV2: View {
             .background(AppColor.background)
             .navigationTitle(NSLocalizedString("Profile", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                store.refreshAgentInbox()
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(NSLocalizedString("Done", comment: "")) { dismiss() }
@@ -119,6 +132,20 @@ struct ProfileDrawerV2: View {
             return NSLocalizedString("No measurements yet", comment: "")
         }
         return String(format: NSLocalizedString("%d measurements", comment: ""), store.measurements.count)
+    }
+
+    private var agentInboxSubtitle: String {
+        let count = store.openAgentInboxItems.count
+        if count == 0 {
+            return NSLocalizedString("No open agent items", comment: "Agent inbox drawer subtitle")
+        }
+        return String(format: NSLocalizedString("%lld open agent items", comment: "Agent inbox drawer subtitle"), Int64(count))
+    }
+
+    private var agentInboxTint: Color {
+        store.openAgentInboxItems.contains { $0.severity == .urgent || $0.severity == .caution }
+            ? AppColor.warning
+            : AppColor.primary
     }
 
     private var visitPrepSubtitle: String {

@@ -896,4 +896,58 @@ struct ChronicCareTests {
         #expect(flags.first?.severity == .urgent)
     }
 
+    @MainActor
+    @Test func agentInboxCreatesBloodPressureGapItemForHypertensionContext() {
+        let store = DataStore()
+        store.clearAll()
+        let medication = Medication(
+            name: "Amlodipine",
+            dose: "5mg",
+            timesOfDay: [DateComponents(hour: 8, minute: 0)],
+            remindersEnabled: true,
+            category: .antihypertensive
+        )
+        #expect(store.addMedication(medication) == nil)
+
+        store.refreshAgentInbox(now: Date())
+
+        #expect(store.openAgentInboxItems.contains { $0.stableKey == "measurement_gap.bp" })
+    }
+
+    @Test func agentInboxMergePreservesDismissedStateForStableKey() {
+        let now = Date()
+        let previous = AgentInboxItem(
+            stableKey: "measurement_gap.bp",
+            title: "Old",
+            detail: "Old detail",
+            category: .missingData,
+            severity: .information,
+            source: .localSummary,
+            action: .logBloodPressure,
+            relatedID: nil,
+            generatedAt: now,
+            updatedAt: now,
+            status: .dismissed
+        )
+        let generated = AgentInboxItem(
+            stableKey: "measurement_gap.bp",
+            title: "New",
+            detail: "New detail",
+            category: .missingData,
+            severity: .caution,
+            source: .localSummary,
+            action: .logBloodPressure,
+            relatedID: nil,
+            generatedAt: now.addingTimeInterval(60),
+            updatedAt: now.addingTimeInterval(60)
+        )
+
+        let merged = AgentInboxGenerator.merge(generated: [generated], existing: [previous], now: now.addingTimeInterval(120))
+
+        #expect(merged.count == 1)
+        #expect(merged.first?.id == previous.id)
+        #expect(merged.first?.status == .dismissed)
+        #expect(merged.first?.title == "New")
+    }
+
 }

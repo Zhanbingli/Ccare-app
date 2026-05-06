@@ -14,6 +14,7 @@ final class DataStore: ObservableObject {
     @Published private(set) var caregivers: [CaregiverContact] = []
     @Published private(set) var symptomEntries: [SymptomEntry] = []
     @Published private(set) var doctorVisits: [DoctorVisit] = []
+    @Published private(set) var agentInboxItems: [AgentInboxItem] = []
     @Published private(set) var reportDataRevision: Int = 0
 
     private var cancellables: Set<AnyCancellable> = []
@@ -25,6 +26,7 @@ final class DataStore: ObservableObject {
     private let caregiversURL: URL
     private let symptomEntriesURL: URL
     private let doctorVisitsURL: URL
+    private let agentInboxItemsURL: URL
     private let goalsDefaults = UserDefaults.standard
 
     init() {
@@ -37,6 +39,7 @@ final class DataStore: ObservableObject {
         self.caregiversURL = docs.appendingPathComponent("caregivers.json")
         self.symptomEntriesURL = docs.appendingPathComponent("symptom_entries.json")
         self.doctorVisitsURL = docs.appendingPathComponent("doctor_visits.json")
+        self.agentInboxItemsURL = docs.appendingPathComponent("agent_inbox_items.json")
 
         load()
 
@@ -82,6 +85,12 @@ final class DataStore: ObservableObject {
             .dropFirst()
             .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.saveDoctorVisits() }
+            .store(in: &cancellables)
+
+        $agentInboxItems
+            .dropFirst()
+            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+            .sink { [weak self] _ in self?.saveAgentInboxItems() }
             .store(in: &cancellables)
     }
 
@@ -399,8 +408,10 @@ final class DataStore: ObservableObject {
         caregivers.removeAll()
         symptomEntries.removeAll()
         doctorVisits.removeAll()
+        agentInboxItems.removeAll()
         saveEmergencyInfo()
         saveDoctorVisits()
+        saveAgentInboxItems()
         markReportDataChanged()
     }
 
@@ -519,6 +530,26 @@ final class DataStore: ObservableObject {
         }
     }
 
+    // MARK: - Agent Inbox
+    var openAgentInboxItems: [AgentInboxItem] {
+        agentInboxItems.filter(\.isOpen)
+    }
+
+    func refreshAgentInbox(now: Date = Date()) {
+        let generated = AgentInboxGenerator.generate(store: self, now: now)
+        agentInboxItems = AgentInboxGenerator.merge(generated: generated, existing: agentInboxItems, now: now)
+    }
+
+    func dismissAgentInboxItem(_ item: AgentInboxItem) {
+        guard let idx = agentInboxItems.firstIndex(where: { $0.id == item.id }) else { return }
+        agentInboxItems[idx].status = .dismissed
+    }
+
+    func reopenAgentInboxItem(_ item: AgentInboxItem) {
+        guard let idx = agentInboxItems.firstIndex(where: { $0.id == item.id }) else { return }
+        agentInboxItems[idx].status = .open
+    }
+
     // MARK: - Import Backup
     func importBackup(_ backup: AppBackup) {
         medications.forEach { deleteMedicationImage(path: $0.imagePath) }
@@ -545,6 +576,7 @@ final class DataStore: ObservableObject {
         caregivers = backup.caregivers ?? []
         symptomEntries = (backup.symptomEntries ?? []).sorted(by: { $0.date > $1.date })
         doctorVisits = (backup.doctorVisits ?? []).sorted(by: { $0.scheduledDate < $1.scheduledDate })
+        agentInboxItems = backup.agentInboxItems ?? []
         markReportDataChanged()
     }
 
@@ -560,6 +592,7 @@ final class DataStore: ObservableObject {
         self.caregivers = loadResilient(from: caregiversURL, label: "caregivers")
         self.symptomEntries = loadResilient(from: symptomEntriesURL, label: "symptom entries").sorted(by: { $0.date > $1.date })
         self.doctorVisits = loadResilient(from: doctorVisitsURL, label: "doctor visits").sorted(by: { $0.scheduledDate < $1.scheduledDate })
+        self.agentInboxItems = loadResilient(from: agentInboxItemsURL, label: "agent inbox items")
         updateWidgetData()
     }
 
@@ -619,6 +652,11 @@ final class DataStore: ObservableObject {
     private func saveDoctorVisits() {
         let snapshot = doctorVisits
         persist(snapshot, to: doctorVisitsURL, label: "doctor visits")
+    }
+
+    private func saveAgentInboxItems() {
+        let snapshot = agentInboxItems
+        persist(snapshot, to: agentInboxItemsURL, label: "agent inbox items")
     }
 
     private func saveIntakeLogs() {
