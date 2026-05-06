@@ -2368,7 +2368,7 @@ private extension DashboardView {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title).appFont(.headline)
                     ForEach(items, id: \.self) { item in
-                        Text("• \(item)")
+                        Text(item)
                             .appFont(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
