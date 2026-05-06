@@ -1113,4 +1113,63 @@ struct ChronicCareTests {
         #expect(text.contains("Blood Pressure Appendix") == false)
     }
 
+    @Test func diabetesDoctorOnePageExportOmitsRawAppendix() {
+        let now = Date()
+        let report = DiabetesFollowUpReport(
+            id: UUID(),
+            generatedAt: now,
+            periodStart: now.addingTimeInterval(-29 * 24 * 60 * 60),
+            periodEnd: now,
+            visitTitle: "Endocrinology",
+            glucose: DiabetesFollowUpReport.GlucoseSummary(
+                totalReadings: 10,
+                averageGlucose: 142,
+                morningAverageGlucose: 150,
+                eveningAverageGlucose: 132,
+                lowReadingsCount: 1,
+                veryLowReadingsCount: 0,
+                highReadingsCount: 2,
+                measurementGapDays: 1,
+                latestReading: "138 mg/dL"
+            ),
+            adherence: DiabetesFollowUpReport.AdherenceSummary(
+                medicationCount: 1,
+                scheduledDoseCount: 30,
+                takenDoseCount: 26,
+                missedDoseCount: 4,
+                adherenceRate: 0.86,
+                worstMissedTimeLabel: "20:00"
+            ),
+            symptoms: DiabetesFollowUpReport.SymptomSummary(
+                count: 1,
+                severeCount: 0,
+                summaries: ["May 6, 2026: dizziness (Moderate); clarified: nearby measurement: 68 mg/dL"]
+            ),
+            redFlags: [],
+            patientInsights: [],
+            doctorSummaryLines: [],
+            doctorQuestions: [
+                AgentQuestion(
+                    prompt: "What glucose target range should I use at home?",
+                    reason: nil
+                )
+            ],
+            rawGlucoseRows: [
+                DiabetesFollowUpReport.RawGlucoseRow(
+                    date: now,
+                    glucose: 138,
+                    note: "raw glucose appendix note"
+                )
+            ],
+            disclaimer: "Safety disclaimer"
+        )
+
+        let text = DiabetesFollowUpReportTextExporter.doctorOnePageText(report)
+
+        #expect(text.contains("Clinical snapshot"))
+        #expect(text.contains("What glucose target range should I use at home?"))
+        #expect(text.contains("raw glucose appendix note") == false)
+        #expect(text.contains("Glucose Appendix") == false)
+    }
+
 }

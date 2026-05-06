@@ -450,6 +450,58 @@ enum DiabetesFollowUpReportBuilder {
 }
 
 enum DiabetesFollowUpReportTextExporter {
+    static func doctorOnePageText(_ report: DiabetesFollowUpReport) -> String {
+        var lines: [String] = []
+        lines.append(NSLocalizedString("Diabetes follow-up doctor summary", comment: "Diabetes report one-page export title"))
+        lines.append(String(format: NSLocalizedString("Period: %@ to %@", comment: "Diabetes report share period"), date(report.periodStart), date(report.periodEnd)))
+        if let visitTitle = report.visitTitle {
+            lines.append(String(format: NSLocalizedString("Visit: %@", comment: "Diabetes report share visit"), visitTitle))
+        }
+        lines.append("")
+
+        appendSection(NSLocalizedString("Clinical snapshot", comment: "Diabetes report one-page export section"), to: &lines)
+        lines.append("- \(String(format: NSLocalizedString("Average home glucose %@ from %lld readings.", comment: "Diabetes report one-page line"), formattedGlucoseAverage(report.glucose.averageGlucose), Int64(report.glucose.totalReadings)))")
+        lines.append("- \(String(format: NSLocalizedString("Morning average %@; evening average %@.", comment: "Diabetes report one-page line"), formattedGlucoseAverage(report.glucose.morningAverageGlucose), formattedGlucoseAverage(report.glucose.eveningAverageGlucose)))")
+        lines.append("- \(String(format: NSLocalizedString("Low / high glucose readings: %lld below 70, %lld at or above 240.", comment: "Diabetes report one-page line"), Int64(report.glucose.lowReadingsCount), Int64(report.glucose.highReadingsCount)))")
+        lines.append("- \(String(format: NSLocalizedString("Antidiabetic adherence %@; %lld missed scheduled doses.", comment: "Diabetes report one-page line"), adherenceValue(report), Int64(report.adherence.missedDoseCount)))")
+        if let worstTime = report.adherence.worstMissedTimeLabel {
+            lines.append("- \(String(format: NSLocalizedString("Missed doses clustered around %@.", comment: "Diabetes report one-page line"), worstTime))")
+        }
+        if let gap = report.glucose.measurementGapDays, gap >= 7 {
+            lines.append("- \(String(format: NSLocalizedString("Latest home glucose record is %lld days old.", comment: "Diabetes report one-page line"), Int64(gap)))")
+        }
+        lines.append("")
+
+        appendSection(NSLocalizedString("Rule-Based Safety Signals", comment: "Diabetes report section"), to: &lines)
+        if report.redFlags.isEmpty {
+            lines.append("- \(NSLocalizedString("No rule-based diabetes safety signal in this report period.", comment: "Diabetes report share empty safety"))")
+        } else {
+            for flag in report.redFlags {
+                lines.append("- \(flag.title): \(flag.detail)")
+            }
+        }
+        lines.append("")
+
+        appendSection(NSLocalizedString("Symptom Context", comment: "Diabetes report subsection"), to: &lines)
+        if report.symptoms.summaries.isEmpty {
+            lines.append("- \(NSLocalizedString("No symptoms logged in this report period.", comment: "Diabetes report one-page export empty symptoms"))")
+        } else {
+            for symptom in report.symptoms.summaries.prefix(3) {
+                lines.append("- \(symptom)")
+            }
+        }
+        lines.append("")
+
+        appendSection(NSLocalizedString("Questions for Doctor", comment: "Diabetes report section"), to: &lines)
+        for question in report.doctorQuestions.prefix(3) {
+            lines.append("- \(question.prompt)")
+        }
+
+        lines.append("")
+        lines.append(report.disclaimer)
+        return lines.joined(separator: "\n")
+    }
+
     static func plainText(_ report: DiabetesFollowUpReport) -> String {
         var lines: [String] = []
         lines.append(NSLocalizedString("Diabetes follow-up report", comment: "Diabetes report heading"))
@@ -515,5 +567,13 @@ enum DiabetesFollowUpReportTextExporter {
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter.string(from: value)
+    }
+
+    private static func formattedGlucoseAverage(_ value: Double?) -> String {
+        value.map { DiabetesFollowUpReportBuilder.formattedGlucose($0) } ?? NSLocalizedString("not enough data", comment: "Diabetes report missing value")
+    }
+
+    private static func adherenceValue(_ report: DiabetesFollowUpReport) -> String {
+        report.adherence.adherenceRate.map { "\(Int(($0 * 100).rounded()))%" } ?? NSLocalizedString("not enough data", comment: "Diabetes report missing value")
     }
 }
