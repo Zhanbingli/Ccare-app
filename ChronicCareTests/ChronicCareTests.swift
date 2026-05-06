@@ -1052,4 +1052,65 @@ struct ChronicCareTests {
         #expect(record?.draft == second)
     }
 
+    @Test func hypertensionDoctorOnePageExportOmitsRawAppendix() {
+        let now = Date()
+        let report = HypertensionFollowUpReport(
+            id: UUID(),
+            generatedAt: now,
+            periodStart: now.addingTimeInterval(-29 * 24 * 60 * 60),
+            periodEnd: now,
+            visitTitle: "Cardiology",
+            bloodPressure: HypertensionFollowUpReport.BloodPressureSummary(
+                totalReadings: 8,
+                averageSystolic: 138,
+                averageDiastolic: 86,
+                morningAverageSystolic: 145,
+                morningAverageDiastolic: 90,
+                eveningAverageSystolic: 130,
+                eveningAverageDiastolic: 82,
+                aboveTargetCount: 3,
+                measurementGapDays: 2,
+                latestReading: "136/84 mmHg"
+            ),
+            adherence: HypertensionFollowUpReport.AdherenceSummary(
+                medicationCount: 1,
+                scheduledDoseCount: 30,
+                takenDoseCount: 27,
+                missedDoseCount: 3,
+                adherenceRate: 0.9,
+                worstMissedTimeLabel: "08:00"
+            ),
+            symptoms: HypertensionFollowUpReport.SymptomSummary(
+                count: 1,
+                severeCount: 0,
+                summaries: ["Moderate: dizziness; clarified: after medication"]
+            ),
+            redFlags: [],
+            patientInsights: [],
+            doctorSummaryLines: [],
+            doctorQuestions: [
+                AgentQuestion(
+                    prompt: "Should we review medication timing?",
+                    reason: nil
+                )
+            ],
+            rawBloodPressureRows: [
+                HypertensionFollowUpReport.RawBloodPressureRow(
+                    date: now,
+                    systolic: 136,
+                    diastolic: 84,
+                    note: "raw appendix note"
+                )
+            ],
+            disclaimer: "Safety disclaimer"
+        )
+
+        let text = HypertensionFollowUpReportTextExporter.doctorOnePageText(report)
+
+        #expect(text.contains("Clinical snapshot"))
+        #expect(text.contains("Should we review medication timing?"))
+        #expect(text.contains("raw appendix note") == false)
+        #expect(text.contains("Blood Pressure Appendix") == false)
+    }
+
 }

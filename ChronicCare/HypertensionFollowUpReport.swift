@@ -539,6 +539,65 @@ enum HypertensionFollowUpReportBuilder {
 }
 
 enum HypertensionFollowUpReportTextExporter {
+    static func doctorOnePageText(_ report: HypertensionFollowUpReport, aiDraft: HypertensionFollowUpLLMDraft? = nil) -> String {
+        var lines: [String] = []
+
+        lines.append(NSLocalizedString("Hypertension follow-up doctor summary", comment: "Hypertension report one-page export title"))
+        lines.append(String(format: NSLocalizedString("Period: %@ to %@", comment: "Hypertension report share period"), date(report.periodStart), date(report.periodEnd)))
+        if let visitTitle = report.visitTitle {
+            lines.append(String(format: NSLocalizedString("Visit: %@", comment: "Hypertension report share visit"), visitTitle))
+        }
+        lines.append("")
+
+        appendSection(NSLocalizedString("Clinical snapshot", comment: "Hypertension report one-page export section"), to: &lines)
+        lines.append("- \(String(format: NSLocalizedString("Average home BP %@ from %lld readings; %lld above target.", comment: "Hypertension report one-page line"), HypertensionFollowUpReportBuilder.formatAverageBP(report.bloodPressure.averageSystolic, report.bloodPressure.averageDiastolic), Int64(report.bloodPressure.totalReadings), Int64(report.bloodPressure.aboveTargetCount)))")
+        lines.append("- \(String(format: NSLocalizedString("Morning average %@; evening average %@.", comment: "Hypertension report one-page line"), HypertensionFollowUpReportBuilder.formatAverageBP(report.bloodPressure.morningAverageSystolic, report.bloodPressure.morningAverageDiastolic), HypertensionFollowUpReportBuilder.formatAverageBP(report.bloodPressure.eveningAverageSystolic, report.bloodPressure.eveningAverageDiastolic)))")
+        lines.append("- \(String(format: NSLocalizedString("Antihypertensive adherence %@; %lld missed scheduled doses.", comment: "Hypertension report one-page line"), adherenceValue(report), Int64(report.adherence.missedDoseCount)))")
+        if let worstTime = report.adherence.worstMissedTimeLabel {
+            lines.append("- \(String(format: NSLocalizedString("Missed doses clustered around %@.", comment: "Hypertension report one-page line"), worstTime))")
+        }
+        if let gap = report.bloodPressure.measurementGapDays, gap >= 7 {
+            lines.append("- \(String(format: NSLocalizedString("Latest home BP record is %lld days old.", comment: "Hypertension report one-page line"), Int64(gap)))")
+        }
+        lines.append("")
+
+        appendSection(NSLocalizedString("Rule-Based Safety Signals", comment: "Hypertension report section"), to: &lines)
+        if report.redFlags.isEmpty {
+            lines.append("- \(NSLocalizedString("No rule-based safety signal in this report period.", comment: "Hypertension report share empty safety"))")
+        } else {
+            for flag in report.redFlags {
+                lines.append("- \(flag.title): \(flag.detail)")
+            }
+        }
+        lines.append("")
+
+        appendSection(NSLocalizedString("Symptom Context", comment: "Hypertension report subsection"), to: &lines)
+        if report.symptoms.summaries.isEmpty {
+            lines.append("- \(NSLocalizedString("No symptoms logged in this report period.", comment: "Hypertension report one-page export empty symptoms"))")
+        } else {
+            for symptom in report.symptoms.summaries.prefix(3) {
+                lines.append("- \(symptom)")
+            }
+        }
+        lines.append("")
+
+        appendSection(NSLocalizedString("Questions for Doctor", comment: "Hypertension report section"), to: &lines)
+        for question in report.doctorQuestions.prefix(3) {
+            lines.append("- \(question.prompt)")
+        }
+
+        if let doctorSummary = aiDraft?.doctorSummary {
+            lines.append("")
+            appendSection(NSLocalizedString("AI drafted wording", comment: "Hypertension report one-page export section"), to: &lines)
+            lines.append(doctorSummary)
+        }
+
+        lines.append("")
+        lines.append(report.disclaimer)
+
+        return lines.joined(separator: "\n")
+    }
+
     static func plainText(_ report: HypertensionFollowUpReport, aiDraft: HypertensionFollowUpLLMDraft? = nil) -> String {
         var lines: [String] = []
 
@@ -632,5 +691,9 @@ enum HypertensionFollowUpReportTextExporter {
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter.string(from: value)
+    }
+
+    private static func adherenceValue(_ report: HypertensionFollowUpReport) -> String {
+        report.adherence.adherenceRate.map { "\(Int(($0 * 100).rounded()))%" } ?? NSLocalizedString("not enough data", comment: "Hypertension report missing value")
     }
 }
