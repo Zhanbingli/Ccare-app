@@ -37,9 +37,364 @@ private enum KeychainHelper {
     }
 }
 
+enum HypertensionFollowUpDraftParser {
+    static func parse(_ text: String) throws -> HypertensionFollowUpLLMDraft {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let json = extractJSONObject(from: value),
+           let draft = decodeFlexibleJSONDraft(json) {
+            return try normalize(draft)
+        }
+        if let draft = parsePlainTextDraft(value) {
+            return try normalize(draft)
+        }
+        throw AIServiceError.invalidResponse
+    }
+
+    private static func decodeFlexibleJSONDraft(_ json: String) -> HypertensionFollowUpLLMDraft? {
+        guard let data = json.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data),
+              let dictionary = draftDictionary(from: object) else {
+            return nil
+        }
+
+        let patientSummary = summaryString(
+            for: [
+                "patientSummary",
+                "patient_summary",
+                "patientFacingSummary",
+                "patient_facing_summary",
+                "patient"
+            ],
+            in: dictionary
+        )
+        let doctorSummary = summaryString(
+            for: [
+                "doctorSummary",
+                "doctor_summary",
+                "clinicianSummary",
+                "clinician_summary",
+                "doctor"
+            ],
+            in: dictionary
+        )
+        let questions = questionStrings(
+            for: [
+                "questions",
+                "doctorQuestions",
+                "doctor_questions",
+                "patientQuestions",
+                "patient_questions"
+            ],
+            in: dictionary
+        )
+
+        return HypertensionFollowUpLLMDraft(
+            patientSummary: patientSummary,
+            doctorSummary: doctorSummary,
+            questions: questions
+        )
+    }
+
+    private static func draftDictionary(from object: Any) -> [String: Any]? {
+        guard let dictionary = object as? [String: Any] else { return nil }
+        if containsDraftKeys(dictionary) {
+            return dictionary
+        }
+
+        for key in ["draft", "report", "output", "result", "data"] {
+            if let nested = dictionary[key] as? [String: Any], containsDraftKeys(nested) {
+                return nested
+            }
+        }
+        return nil
+    }
+
+    private static func containsDraftKeys(_ dictionary: [String: Any]) -> Bool {
+        let keys = Set(dictionary.keys)
+        return !keys.intersection([
+            "patientSummary",
+            "patient_summary",
+            "patientFacingSummary",
+            "patient_facing_summary",
+            "doctorSummary",
+            "doctor_summary",
+            "clinicianSummary",
+            "clinician_summary",
+            "questions",
+            "doctorQuestions",
+            "doctor_questions",
+            "patientQuestions",
+            "patient_questions"
+        ]).isEmpty
+    }
+
+    private static func summaryString(for keys: [String], in dictionary: [String: Any]) -> String? {
+        for key in keys {
+            guard let value = dictionary[key] else { continue }
+            let parts = strings(from: value)
+            let joined = parts
+                .map(cleanLine)
+                .filter { !$0.isEmpty }
+                .joined(separator: "\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !joined.isEmpty {
+                return joined
+            }
+        }
+        return nil
+    }
+
+    private static func questionStrings(for keys: [String], in dictionary: [String: Any]) -> [String] {
+        for key in keys {
+            guard let value = dictionary[key] else { continue }
+            let questions = strings(from: value)
+                .flatMap(splitQuestionLines)
+                .map(cleanLine)
+                .filter { !$0.isEmpty }
+            if !questions.isEmpty {
+                return questions
+            }
+        }
+        return []
+    }
+
+    private static func strings(from value: Any) -> [String] {
+        if let string = value as? String {
+            return [string]
+        }
+        if let array = value as? [Any] {
+            return array.flatMap(strings)
+        }
+        if let dictionary = value as? [String: Any] {
+            for key in ["question", "prompt", "text", "summary", "content", "title", "detail"] {
+                if let value = dictionary[key] {
+                    let result = strings(from: value)
+                    if !result.isEmpty {
+                        return result
+                    }
+                }
+            }
+
+            let title = dictionary["title"] as? String
+            let detail = dictionary["detail"] as? String
+            if let title, let detail {
+                return ["\(title): \(detail)"]
+            }
+        }
+        return []
+    }
+
+    private static func parsePlainTextDraft(_ text: String) -> HypertensionFollowUpLLMDraft? {
+        enum Section {
+            case patient
+            case doctor
+            case questions
+        }
+
+        var section = Section.patient
+        var sawDraftHeading = false
+        var patientLines: [String] = []
+        var doctorLines: [String] = []
+        var questionLines: [String] = []
+
+        for rawLine in text.split(whereSeparator: \.isNewline) {
+            let line = cleanLine(String(rawLine))
+            guard !line.isEmpty else { continue }
+            let lower = line.lowercased()
+
+            if isPatientHeading(lower) {
+                section = .patient
+                sawDraftHeading = true
+                if let content = inlineHeadingContent(from: line) {
+                    patientLines.append(content)
+                }
+                continue
+            }
+            if isDoctorHeading(lower) {
+                section = .doctor
+                sawDraftHeading = true
+                if let content = inlineHeadingContent(from: line) {
+                    doctorLines.append(content)
+                }
+                continue
+            }
+            if isQuestionHeading(lower) {
+                section = .questions
+                sawDraftHeading = true
+                if let content = inlineHeadingContent(from: line) {
+                    questionLines.append(content)
+                }
+                continue
+            }
+
+            if line.contains("?") || line.contains("？") {
+                questionLines.append(line)
+                continue
+            }
+
+            switch section {
+            case .patient:
+                patientLines.append(line)
+            case .doctor:
+                doctorLines.append(line)
+            case .questions:
+                questionLines.append(line)
+            }
+        }
+
+        let patientSummary = patientLines.prefix(4).joined(separator: "\n")
+        let doctorSummary = doctorLines.prefix(6).joined(separator: "\n")
+        let questions = questionLines.flatMap(splitQuestionLines)
+
+        guard sawDraftHeading,
+              !patientSummary.isEmpty || !doctorSummary.isEmpty || !questions.isEmpty else {
+            return nil
+        }
+        return HypertensionFollowUpLLMDraft(
+            patientSummary: patientSummary,
+            doctorSummary: doctorSummary,
+            questions: questions
+        )
+    }
+
+    private static func normalize(_ draft: HypertensionFollowUpLLMDraft) throws -> HypertensionFollowUpLLMDraft {
+        let patientSummary = trimmedOrNil(draft.patientSummary)
+        let doctorSummary = trimmedOrNil(draft.doctorSummary)
+        let questions = draft.questions
+            .flatMap(splitQuestionLines)
+            .map(cleanLine)
+            .filter { !$0.isEmpty }
+            .prefix(3)
+
+        guard patientSummary != nil || doctorSummary != nil || !questions.isEmpty else {
+            throw AIServiceError.invalidResponse
+        }
+
+        return HypertensionFollowUpLLMDraft(
+            patientSummary: patientSummary,
+            doctorSummary: doctorSummary,
+            questions: Array(questions)
+        )
+    }
+
+    private static func extractJSONObject(from text: String) -> String? {
+        let value = text
+            .replacingOccurrences(of: #"```(?:json|JSON)?"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: "```", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        var start: String.Index?
+        var depth = 0
+        var inString = false
+        var isEscaped = false
+
+        for index in value.indices {
+            let character = value[index]
+
+            if inString {
+                if isEscaped {
+                    isEscaped = false
+                } else if character == "\\" {
+                    isEscaped = true
+                } else if character == "\"" {
+                    inString = false
+                }
+                continue
+            }
+
+            if character == "\"" {
+                inString = true
+            } else if character == "{" {
+                if depth == 0 {
+                    start = index
+                }
+                depth += 1
+            } else if character == "}" {
+                depth -= 1
+                if depth == 0, let start {
+                    return String(value[start...index])
+                }
+            }
+        }
+        return nil
+    }
+
+    private static func splitQuestionLines(_ value: String) -> [String] {
+        let lines = value
+            .split(whereSeparator: \.isNewline)
+            .map { cleanLine(String($0)) }
+            .filter { !$0.isEmpty }
+
+        if lines.count > 1 {
+            return lines
+        }
+        return [cleanLine(value)].filter { !$0.isEmpty }
+    }
+
+    private static func cleanLine(_ value: String) -> String {
+        value
+            .replacingOccurrences(
+                of: #"^\s*(?:[-*•]|\d+[\.)、])\s*"#,
+                with: "",
+                options: .regularExpression
+            )
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func trimmedOrNil(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
+    }
+
+    private static func inlineHeadingContent(from value: String) -> String? {
+        guard let separator = value.firstIndex(where: { $0 == ":" || $0 == "：" }) else {
+            return nil
+        }
+        let content = value[value.index(after: separator)...]
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return content.isEmpty ? nil : content
+    }
+
+    private static func isPatientHeading(_ value: String) -> Bool {
+        value == "patient summary"
+        || value == "patient-facing summary"
+        || value == "patient prep"
+        || value.hasPrefix("patient summary:")
+        || value.hasPrefix("patient-facing summary:")
+        || value == "患者摘要"
+        || value == "患者准备"
+    }
+
+    private static func isDoctorHeading(_ value: String) -> Bool {
+        value == "doctor summary"
+        || value == "doctor-facing summary"
+        || value == "clinician summary"
+        || value == "doctor-facing output"
+        || value.hasPrefix("doctor summary:")
+        || value.hasPrefix("doctor-facing summary:")
+        || value.hasPrefix("clinician summary:")
+        || value == "医生摘要"
+        || value == "给医生看的摘要"
+    }
+
+    private static func isQuestionHeading(_ value: String) -> Bool {
+        value == "questions"
+        || value == "questions for doctor"
+        || value == "doctor questions"
+        || value.hasPrefix("questions:")
+        || value.hasPrefix("questions for doctor:")
+        || value.hasPrefix("doctor questions:")
+        || value == "问题"
+        || value == "要问医生的问题"
+    }
+}
+
 enum AIProvider: String, CaseIterable, Codable {
     case openai = "OpenAI"
     case anthropic = "Anthropic"
+    case deepseek = "DeepSeek"
 }
 
 struct AIConfiguration: Codable {
@@ -51,6 +406,15 @@ struct AIConfiguration: Codable {
     }
 }
 
+private enum AIModelCatalog {
+    static let openAIJSON = "gpt-4o"
+    static let openAIText = "gpt-4o-mini"
+    static let anthropicJSON = "claude-sonnet-4-20250514"
+    static let anthropicText = "claude-haiku-4-5-20251001"
+    static let deepSeekJSON = "deepseek-v4-flash"
+    static let deepSeekText = "deepseek-v4-flash"
+}
+
 struct DrugInteractionRequest: Codable {
     let medications: [MedicationInfo]
 
@@ -59,6 +423,30 @@ struct DrugInteractionRequest: Codable {
         let dose: String
         let category: String?
     }
+}
+
+struct AITrendInsightRequest {
+    let measurementType: String
+    let recentMeasurements: [String]
+    let relatedMedications: [DrugInteractionRequest.MedicationInfo]
+    let latest: String
+    let change: String
+    let sevenDayAverage: String
+    let sevenDayInRange: String
+}
+
+struct AIVisitQuestionRequest {
+    let localeIdentifier: String
+    let visitTitle: String?
+    let reason: String?
+    let allergies: String?
+    let medications: [String]
+    let adherenceGaps: [String]
+    let measurements: [String]
+    let symptoms: [String]
+    let previousVisitPlan: [String]
+    let followUpChecks: String?
+    let missingPostVisitItems: [String]
 }
 
 struct DrugInteractionResponse: Codable {
@@ -173,6 +561,27 @@ class AIService {
         return configuration
     }
 
+    var isConfigured: Bool {
+        !configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    func testConfiguration(_ config: AIConfiguration) async throws {
+        let key = config.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else {
+            throw AIServiceError.invalidAPIKey
+        }
+
+        let prompt = "Reply with only: OK"
+        switch config.provider {
+        case .openai:
+            _ = try await generateOpenAIText(prompt: prompt, apiKey: key, maxTokens: 8)
+        case .anthropic:
+            _ = try await generateAnthropicText(prompt: prompt, apiKey: key, maxTokens: 8)
+        case .deepseek:
+            _ = try await generateDeepSeekText(prompt: prompt, apiKey: key, maxTokens: 8)
+        }
+    }
+
     func analyzeDrugInteractions(medications: [Medication]) async throws -> DrugInteractionResponse {
         guard hasUserConsent else {
             throw AIServiceError.consentRequired
@@ -196,7 +605,76 @@ class AIService {
             return try await analyzeWithOpenAI(request: request)
         case .anthropic:
             return try await analyzeWithAnthropic(request: request)
+        case .deepseek:
+            return try await analyzeWithDeepSeek(request: request)
         }
+    }
+
+    func analyzeTrendInsights(_ request: AITrendInsightRequest) async throws -> String {
+        guard hasUserConsent else {
+            throw AIServiceError.consentRequired
+        }
+        guard !configuration.apiKey.isEmpty else {
+            throw AIServiceError.invalidAPIKey
+        }
+
+        let prompt = createTrendPrompt(request)
+        switch configuration.provider {
+        case .openai:
+            return try await generateOpenAIText(prompt: prompt)
+        case .anthropic:
+            return try await generateAnthropicText(prompt: prompt)
+        case .deepseek:
+            return try await generateDeepSeekText(prompt: prompt)
+        }
+    }
+
+    func draftVisitQuestions(_ request: AIVisitQuestionRequest) async throws -> [String] {
+        guard hasUserConsent else {
+            throw AIServiceError.consentRequired
+        }
+        guard !configuration.apiKey.isEmpty else {
+            throw AIServiceError.invalidAPIKey
+        }
+
+        let prompt = createVisitQuestionPrompt(request)
+        let text: String
+        switch configuration.provider {
+        case .openai:
+            text = try await generateOpenAIText(prompt: prompt)
+        case .anthropic:
+            text = try await generateAnthropicText(prompt: prompt)
+        case .deepseek:
+            text = try await generateDeepSeekText(prompt: prompt)
+        }
+
+        let questions = parseQuestionLines(text)
+        guard !questions.isEmpty else {
+            throw AIServiceError.invalidResponse
+        }
+        return Array(questions.prefix(3))
+    }
+
+    func draftHypertensionFollowUpReport(_ context: HypertensionFollowUpLLMContext) async throws -> HypertensionFollowUpLLMDraft {
+        guard hasUserConsent else {
+            throw AIServiceError.consentRequired
+        }
+        guard !configuration.apiKey.isEmpty else {
+            throw AIServiceError.invalidAPIKey
+        }
+
+        let prompt = try createHypertensionFollowUpPrompt(context)
+        let text: String
+        switch configuration.provider {
+        case .openai:
+            text = try await generateOpenAIText(prompt: prompt, maxTokens: 900)
+        case .anthropic:
+            text = try await generateAnthropicText(prompt: prompt, maxTokens: 900)
+        case .deepseek:
+            text = try await generateDeepSeekText(prompt: prompt, maxTokens: 900)
+        }
+
+        return try parseHypertensionDraft(text)
     }
 
     private func analyzeWithOpenAI(request: DrugInteractionRequest) async throws -> DrugInteractionResponse {
@@ -210,12 +688,52 @@ class AIService {
         let prompt = createAnalysisPrompt(medications: request.medications)
 
         let body: [String: Any] = [
-            "model": "gpt-4o",
+            "model": AIModelCatalog.openAIJSON,
             "messages": [
-                ["role": "system", "content": "You are a medical expert specializing in pharmacology and drug interactions. Provide detailed analysis of medication interactions, focusing on therapeutic effects and side effects. Always respond in valid JSON format."],
+                ["role": "system", "content": "You summarize possible medication interaction risks for patient self-management. Do not diagnose, do not recommend starting or stopping medication, and always advise discussing changes with a licensed clinician. Always respond in valid JSON format."],
                 ["role": "user", "content": prompt]
             ],
-            "temperature": 0.7,
+            "temperature": 0.2,
+            "response_format": ["type": "json_object"]
+        ]
+
+        urlRequest.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: urlRequest)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIServiceError.networkError("Invalid response")
+        }
+
+        if httpResponse.statusCode == 429 {
+            throw AIServiceError.rateLimitExceeded
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+            throw AIServiceError.networkError("HTTP \(httpResponse.statusCode): \(errorMessage)")
+        }
+
+        return try parseOpenAIResponse(data: data)
+    }
+
+    private func analyzeWithDeepSeek(request: DrugInteractionRequest) async throws -> DrugInteractionResponse {
+        let url = URL(string: "https://api.deepseek.com/chat/completions")!
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("Bearer \(configuration.apiKey)", forHTTPHeaderField: "Authorization")
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.timeoutInterval = 30
+
+        let prompt = createAnalysisPrompt(medications: request.medications)
+
+        let body: [String: Any] = [
+            "model": AIModelCatalog.deepSeekJSON,
+            "messages": [
+                ["role": "system", "content": "You summarize possible medication interaction risks for patient self-management. Do not diagnose, do not recommend starting or stopping medication, and always advise discussing changes with a licensed clinician. Always respond in valid JSON format."],
+                ["role": "user", "content": prompt]
+            ],
+            "temperature": 0.2,
             "response_format": ["type": "json_object"]
         ]
 
@@ -251,9 +769,9 @@ class AIService {
         let prompt = createAnalysisPrompt(medications: request.medications)
 
         let body: [String: Any] = [
-            "model": "claude-sonnet-4-20250514",
+            "model": AIModelCatalog.anthropicJSON,
             "max_tokens": 4096,
-            "system": "You are a medical expert specializing in pharmacology and drug interactions. Provide detailed analysis of medication interactions, focusing on therapeutic effects and side effects. Always respond in valid JSON format.",
+            "system": "You summarize possible medication interaction risks for patient self-management. Do not diagnose, do not recommend starting or stopping medication, and always advise discussing changes with a licensed clinician. Always respond in valid JSON format.",
             "messages": [
                 [
                     "role": "user",
@@ -315,6 +833,287 @@ class AIService {
 
         Be thorough but concise. Prioritize patient safety.
         """
+    }
+
+    private func createTrendPrompt(_ request: AITrendInsightRequest) -> String {
+        let measurements = request.recentMeasurements.joined(separator: "\n")
+        let medications = request.relatedMedications.map { med in
+            "- \(med.name) (\(med.dose))\(med.category.map { " - \($0)" } ?? "")"
+        }.joined(separator: "\n")
+
+        return """
+        Review this patient-entered \(request.measurementType) tracking summary.
+
+        Recent readings:
+        \(measurements)
+
+        \(medications.isEmpty ? "Related medications: none provided" : "Related medications:\n\(medications)")
+
+        Current stats:
+        - Latest: \(request.latest)
+        - Change from previous: \(request.change)
+        - 7-day average: \(request.sevenDayAverage)
+        - 7-day in target range: \(request.sevenDayInRange)
+
+        Write a concise, patient-friendly summary with three short sections:
+        1. Pattern
+        2. What to watch
+        3. Questions for your clinician
+
+        Safety rules:
+        - Do not diagnose.
+        - Do not recommend changing medication or dose.
+        - Mention urgent care only for clearly concerning readings or symptoms.
+        - Do not claim certainty from sparse data.
+        """
+    }
+
+    private func createVisitQuestionPrompt(_ request: AIVisitQuestionRequest) -> String {
+        func list(_ title: String, _ values: [String]) -> String {
+            guard !values.isEmpty else { return "\(title): none provided" }
+            return "\(title):\n" + values.map { "- \($0)" }.joined(separator: "\n")
+        }
+
+        return """
+        Draft exactly 3 questions this patient can ask their clinician during a follow-up visit.
+
+        Output rules:
+        - Return only the 3 questions, one per line.
+        - No introduction.
+        - Keep each question short and practical.
+        - Write in the user's locale: \(request.localeIdentifier).
+
+        Safety rules:
+        - Do not diagnose.
+        - Do not recommend starting, stopping, or changing medication.
+        - Focus on clarifying the clinician's plan, target ranges, monitoring, and follow-up.
+        - Use only the data below.
+
+        Visit:
+        - Title: \(request.visitTitle ?? "none provided")
+        - Reason: \(request.reason ?? "none provided")
+        - Allergies: \(request.allergies ?? "none provided")
+
+        \(list("Current medications", request.medications))
+
+        \(list("Adherence gaps", request.adherenceGaps))
+
+        \(list("Home measurements", request.measurements))
+
+        \(list("Symptoms", request.symptoms))
+
+        \(list("Previous visit plan", request.previousVisitPlan))
+
+        Follow-up checks before next visit: \(request.followUpChecks ?? "none provided")
+
+        \(list("Missing post-visit plan items", request.missingPostVisitItems))
+        """
+    }
+
+    private func createHypertensionFollowUpPrompt(_ context: HypertensionFollowUpLLMContext) throws -> String {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.sortedKeys]
+        let data = try encoder.encode(context)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+
+        return """
+        You are drafting bounded follow-up preparation text for a hypertension patient.
+
+        Use only the structured report JSON below.
+
+        Output rules:
+        - Return valid JSON only, with no markdown fence and no extra commentary.
+        - JSON keys: patientSummary, doctorSummary, questions.
+        - patientSummary: one string with 2-4 short patient-facing sentences.
+        - doctorSummary: one string with 4-6 concise clinician-facing bullet-like sentences.
+        - questions: an array of exactly 3 short string questions the patient can ask the clinician.
+
+        Safety rules:
+        - Do not diagnose.
+        - Do not recommend starting, stopping, or changing medication or dose.
+        - Do not tell the user a medication timing change is needed.
+        - Use cautious wording such as "may be worth discussing with your doctor".
+        - Rule-based red flags are already determined by the app; do not create new red flags.
+        - If redFlags are present, preserve their seriousness and do not reassure against them.
+        - State that medication decisions should be made with a licensed clinician.
+
+        JSON schema:
+        {
+          "patientSummary": "string",
+          "doctorSummary": "string",
+          "questions": ["string", "string", "string"]
+        }
+
+        Structured report JSON:
+        \(json)
+        """
+    }
+
+    private func parseQuestionLines(_ text: String) -> [String] {
+        text
+            .split(whereSeparator: \.isNewline)
+            .map { line -> String in
+                var value = String(line).trimmingCharacters(in: .whitespacesAndNewlines)
+                value = value.replacingOccurrences(
+                    of: #"^\s*(?:[-*•]|\d+[\.)、])\s*"#,
+                    with: "",
+                    options: .regularExpression
+                )
+                return value.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            .filter { !$0.isEmpty }
+    }
+
+    private func parseHypertensionDraft(_ text: String) throws -> HypertensionFollowUpLLMDraft {
+        try HypertensionFollowUpDraftParser.parse(text)
+    }
+
+    private func generateOpenAIText(prompt: String, apiKey: String? = nil, maxTokens: Int = 500) async throws -> String {
+        let url = URL(string: "https://api.openai.com/v1/chat/completions")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey ?? configuration.apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30
+
+        let body: [String: Any] = [
+            "model": AIModelCatalog.openAIText,
+            "messages": [
+                ["role": "system", "content": "You are a careful health tracking summarizer. Be concise, conservative, and clear that the user should discuss medical decisions with a clinician."],
+                ["role": "user", "content": prompt]
+            ],
+            "temperature": 0.2,
+            "max_tokens": maxTokens
+        ]
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIServiceError.networkError("Invalid response")
+        }
+        if httpResponse.statusCode == 429 {
+            throw AIServiceError.rateLimitExceeded
+        }
+        guard httpResponse.statusCode == 200 else {
+            throw AIServiceError.networkError("HTTP \(httpResponse.statusCode)")
+        }
+
+        struct OpenAIResponse: Codable {
+            struct Choice: Codable {
+                struct Message: Codable {
+                    let content: String
+                }
+                let message: Message
+            }
+            let choices: [Choice]
+        }
+
+        let result = try JSONDecoder().decode(OpenAIResponse.self, from: data)
+        guard let content = result.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines),
+              !content.isEmpty else {
+            throw AIServiceError.invalidResponse
+        }
+        return content
+    }
+
+    private func generateDeepSeekText(prompt: String, apiKey: String? = nil, maxTokens: Int = 500) async throws -> String {
+        let url = URL(string: "https://api.deepseek.com/chat/completions")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey ?? configuration.apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30
+
+        let body: [String: Any] = [
+            "model": AIModelCatalog.deepSeekText,
+            "messages": [
+                ["role": "system", "content": "You are a careful health tracking summarizer. Be concise, conservative, and clear that the user should discuss medical decisions with a clinician."],
+                ["role": "user", "content": prompt]
+            ],
+            "temperature": 0.2,
+            "max_tokens": maxTokens
+        ]
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIServiceError.networkError("Invalid response")
+        }
+        if httpResponse.statusCode == 429 {
+            throw AIServiceError.rateLimitExceeded
+        }
+        guard httpResponse.statusCode == 200 else {
+            throw AIServiceError.networkError("HTTP \(httpResponse.statusCode)")
+        }
+
+        struct DeepSeekResponse: Codable {
+            struct Choice: Codable {
+                struct Message: Codable {
+                    let content: String
+                }
+                let message: Message
+            }
+            let choices: [Choice]
+        }
+
+        let result = try JSONDecoder().decode(DeepSeekResponse.self, from: data)
+        guard let content = result.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines),
+              !content.isEmpty else {
+            throw AIServiceError.invalidResponse
+        }
+        return content
+    }
+
+    private func generateAnthropicText(prompt: String, apiKey: String? = nil, maxTokens: Int = 500) async throws -> String {
+        let url = URL(string: "https://api.anthropic.com/v1/messages")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue(apiKey ?? configuration.apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        request.timeoutInterval = 30
+
+        let body: [String: Any] = [
+            "model": AIModelCatalog.anthropicText,
+            "max_tokens": maxTokens,
+            "system": "You are a careful health tracking summarizer. Be concise, conservative, and clear that the user should discuss medical decisions with a clinician.",
+            "messages": [
+                [
+                    "role": "user",
+                    "content": prompt
+                ]
+            ]
+        ]
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIServiceError.networkError("Invalid response")
+        }
+        if httpResponse.statusCode == 429 {
+            throw AIServiceError.rateLimitExceeded
+        }
+        guard httpResponse.statusCode == 200 else {
+            throw AIServiceError.networkError("HTTP \(httpResponse.statusCode)")
+        }
+
+        struct AnthropicResponse: Codable {
+            struct Content: Codable {
+                let text: String
+            }
+            let content: [Content]
+        }
+
+        let result = try JSONDecoder().decode(AnthropicResponse.self, from: data)
+        guard let content = result.content.first?.text.trimmingCharacters(in: .whitespacesAndNewlines),
+              !content.isEmpty else {
+            throw AIServiceError.invalidResponse
+        }
+        return content
     }
 
     private func parseOpenAIResponse(data: Data) throws -> DrugInteractionResponse {

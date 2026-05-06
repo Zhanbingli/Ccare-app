@@ -22,8 +22,39 @@ struct ConsultationSnapshotView: View {
     @State private var isGeneratingPDF = false
     @State private var pdfErrorMessage: String?
     @State private var showPDFError = false
+    @State private var aiQuestions: [DoctorQuestion]?
+    @State private var aiQuestionsGeneratedAt: Date?
+    @State private var isDraftingAIQuestions = false
+    @State private var showAIQuestionDisclosure = false
 
     private let daysWindow: Int = 30
+
+    private struct DoctorQuestion: Identifiable {
+        let id: String
+        let question: String
+        let detail: String?
+        let systemImage: String
+        let tint: Color
+    }
+
+    private struct CachedAIQuestions: Codable {
+        let questions: [String]
+        let generatedAt: Date
+    }
+
+    private struct VisitPlanItem: Identifiable {
+        let id: String
+        let title: String
+        let value: String
+        let systemImage: String
+    }
+
+    private static let aiGeneratedFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter
+    }()
 
     private var snapshotVisit: DoctorVisit? {
         visit ?? store.nextDoctorVisit
@@ -33,12 +64,19 @@ struct ConsultationSnapshotView: View {
         DoctorReportSummaryBuilder.build(store: store, days: daysWindow, visit: snapshotVisit)
     }
 
+    private var aiQuestionsCacheKey: String {
+        let visitID = snapshotVisit?.id.uuidString ?? "current"
+        return "ai.visitQuestions.\(visitID).\(store.reportDataRevision)"
+    }
+
     var body: some View {
         let summary = cachedSummary ?? doctorSummary
 
         ScrollView {
             VStack(alignment: .leading, spacing: EditorialSpacing.xl) {
                 header
+                doctorQuestionsSection(summary: summary)
+                snapshotSummaryStrip(summary: summary)
                 visitPrepSection(summary: summary)
                 allergiesWarning(summary: summary)
                 medicationsSection(summary: summary)
@@ -55,7 +93,15 @@ struct ConsultationSnapshotView: View {
         .navigationTitle(NSLocalizedString("Consultation Snapshot", comment: ""))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button {
+                    exportPDFReport()
+                } label: {
+                    Image(systemName: isGeneratingPDF ? "hourglass" : "doc.richtext")
+                }
+                .disabled(isGeneratingPDF)
+                .accessibilityLabel(NSLocalizedString("Export doctor PDF", comment: "Consultation snapshot PDF export action"))
+
                 Menu {
                     Button {
                         showNewSymptom = true
@@ -99,6 +145,15 @@ struct ConsultationSnapshotView: View {
                 Text(pdfErrorMessage)
             }
         }
+        .alert(NSLocalizedString("Send Data for AI Questions?", comment: "AI visit questions consent title"), isPresented: $showAIQuestionDisclosure) {
+            Button(NSLocalizedString("Use AI", comment: "AI visit questions consent action")) {
+                AIService.shared.hasUserConsent = true
+                draftAIQuestions(summary: cachedSummary ?? doctorSummary)
+            }
+            Button(NSLocalizedString("Cancel", comment: ""), role: .cancel) {}
+        } message: {
+            Text(NSLocalizedString("This sends visit reason, medication names and doses, adherence gaps, measurement summaries, and symptom summaries to your AI provider.", comment: "AI visit questions consent detail"))
+        }
         .onAppear {
             refreshSummary()
         }
@@ -110,9 +165,304 @@ struct ConsultationSnapshotView: View {
         }
     }
 
+    private func doctorQuestionsSection(summary: DoctorReportSummary) -> some View {
+        let questions = aiQuestions ?? doctorQuestions(summary: summary)
+
+        return VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 3) {
+                    sectionLabel(NSLocalizedString("Questions to Ask", comment: "Doctor questions section title"))
+                    if aiQuestions != nil, let aiQuestionsGeneratedAt {
+                        Text(aiQuestionsGeneratedText(aiQuestionsGeneratedAt))
+                            .appFont(.caption)
+                            .foregroundStyle(AppColor.textSecondary)
+                    }
+                }
+                Spacer()
+                if AIService.shared.isConfigured {
+                    Button {
+                        handleAIQuestionDraft(summary: summary)
+                    } label: {
+                        if isDraftingAIQuestions {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Label(NSLocalizedString("Refine", comment: "AI visit questions action"), systemImage: "sparkles")
+                                .appFont(.caption)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(AppColor.primary)
+                    .disabled(isDraftingAIQuestions)
+                    .accessibilityLabel(NSLocalizedString("Refine Questions", comment: "AI visit questions accessibility"))
+                }
+            }
+
+            AppDivider()
+
+            ForEach(Array(questions.enumerated()), id: \.element.id) { index, item in
+                doctorQuestionRow(item)
+                if index < questions.count - 1 {
+                    AppDivider()
+                }
+            }
+        }
+    }
+
+    private func doctorQuestionRow(_ item: DoctorQuestion) -> some View {
+        HStack(alignment: .top, spacing: EditorialSpacing.sm) {
+            Image(systemName: item.systemImage)
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(item.tint)
+                .frame(width: 24, alignment: .center)
+                .padding(.top, 1)
+
+            VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                Text(item.question)
+                    .appFont(.body)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(AppColor.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let detail = item.detail {
+                    Text(detail)
+                        .appFont(.caption)
+                        .foregroundStyle(AppColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: EditorialSpacing.sm)
+        }
+        .padding(.vertical, EditorialSpacing.xs)
+    }
+
+    private func doctorQuestions(summary: DoctorReportSummary) -> [DoctorQuestion] {
+        var questions: [DoctorQuestion] = []
+
+        if !summary.medications.isEmpty {
+            questions.append(
+                DoctorQuestion(
+                    id: "medication-plan",
+                    question: NSLocalizedString("Should I keep taking each medication at the current dose and time?", comment: "Doctor question medication plan"),
+                    detail: String(format: NSLocalizedString("%lld medications are listed in the snapshot.", comment: "Doctor question medication detail"), summary.medications.count),
+                    systemImage: "pills",
+                    tint: AppColor.primary
+                )
+            )
+        }
+
+        if let worstGap = summary.adherenceGaps.first {
+            questions.append(
+                DoctorQuestion(
+                    id: "missed-dose-\(worstGap.id.uuidString)",
+                    question: NSLocalizedString("What should I do when I miss a dose?", comment: "Doctor question missed dose"),
+                    detail: String(format: NSLocalizedString("%@ has %lld missed-dose days in this report window.", comment: "Doctor question missed dose detail"), worstGap.medicationName, worstGap.missedDays.count),
+                    systemImage: "clock.badge.exclamationmark",
+                    tint: AppColor.warning
+                )
+            )
+        }
+
+        if let abnormal = summary.measurements
+            .filter({ $0.outOfRangeCount > 0 })
+            .sorted(by: { $0.outOfRangeCount > $1.outOfRangeCount })
+            .first {
+            questions.append(
+                DoctorQuestion(
+                    id: "target-\(abnormal.id.rawValue)",
+                    question: String(format: NSLocalizedString("What target range should I use for %@ at home?", comment: "Doctor question measurement target"), abnormal.type.displayName),
+                    detail: String(format: NSLocalizedString("%lld readings were out of range; latest was %@.", comment: "Doctor question measurement detail"), abnormal.outOfRangeCount, abnormal.latestValue),
+                    systemImage: "target",
+                    tint: AppColor.warning
+                )
+            )
+        }
+
+        if let symptom = summary.symptoms.first {
+            questions.append(
+                DoctorQuestion(
+                    id: "symptom-\(symptom.id.uuidString)",
+                    question: NSLocalizedString("Which symptoms should make me contact you sooner?", comment: "Doctor question symptoms"),
+                    detail: symptom.summary,
+                    systemImage: "heart.text.square",
+                    tint: symptom.severity == .severe ? AppColor.warning : AppColor.primary
+                )
+            )
+        }
+
+        if let visit = summary.visit, visit.needsPostVisitCapture {
+            questions.append(
+                DoctorQuestion(
+                    id: "post-visit-plan",
+                    question: NSLocalizedString("Before I leave, can we confirm the plan until the next visit?", comment: "Doctor question confirm plan"),
+                    detail: String(format: NSLocalizedString("Still needs: %@", comment: "Post visit missing detail"), visit.postVisitMissingItems.joined(separator: ", ")),
+                    systemImage: "checklist",
+                    tint: AppColor.warning
+                )
+            )
+        } else {
+            questions.append(
+                DoctorQuestion(
+                    id: "follow-up",
+                    question: NSLocalizedString("When should I come back, and what should I track before then?", comment: "Doctor question follow up"),
+                    detail: nil,
+                    systemImage: "calendar.badge.clock",
+                    tint: AppColor.primary
+                )
+            )
+        }
+
+        return Array(questions.prefix(4))
+    }
+
+    private func handleAIQuestionDraft(summary: DoctorReportSummary) {
+        guard AIService.shared.isConfigured else { return }
+        if !AIService.shared.hasUserConsent {
+            showAIQuestionDisclosure = true
+            return
+        }
+        draftAIQuestions(summary: summary)
+    }
+
+    private func draftAIQuestions(summary: DoctorReportSummary) {
+        guard !isDraftingAIQuestions else { return }
+        isDraftingAIQuestions = true
+        let request = aiVisitQuestionRequest(summary: summary)
+
+        Task {
+            do {
+                let questions = try await AIService.shared.draftVisitQuestions(request)
+                await MainActor.run {
+                    cacheAIQuestions(questions)
+                    aiQuestions = aiDoctorQuestions(from: questions)
+                    isDraftingAIQuestions = false
+                    Haptics.success()
+                }
+            } catch {
+                await MainActor.run {
+                    isDraftingAIQuestions = false
+                    Haptics.notification(.warning)
+                }
+            }
+        }
+    }
+
+    private func aiDoctorQuestions(from questions: [String]) -> [DoctorQuestion] {
+        questions.enumerated().map { index, question in
+            DoctorQuestion(
+                id: "ai-question-\(index)",
+                question: question,
+                detail: nil,
+                systemImage: "sparkles",
+                tint: AppColor.primary
+            )
+        }
+    }
+
+    private func loadCachedAIQuestions() {
+        guard let data = UserDefaults.standard.data(forKey: aiQuestionsCacheKey) else {
+            aiQuestions = nil
+            aiQuestionsGeneratedAt = nil
+            return
+        }
+        if let cached = try? JSONDecoder().decode(CachedAIQuestions.self, from: data),
+           !cached.questions.isEmpty {
+            aiQuestions = aiDoctorQuestions(from: cached.questions)
+            aiQuestionsGeneratedAt = cached.generatedAt
+            return
+        }
+        if let questions = try? JSONDecoder().decode([String].self, from: data),
+           !questions.isEmpty {
+            aiQuestions = aiDoctorQuestions(from: questions)
+            aiQuestionsGeneratedAt = nil
+            return
+        }
+        aiQuestions = nil
+        aiQuestionsGeneratedAt = nil
+    }
+
+    private func cacheAIQuestions(_ questions: [String]) {
+        let generatedAt = Date()
+        aiQuestionsGeneratedAt = generatedAt
+        let cached = CachedAIQuestions(questions: questions, generatedAt: generatedAt)
+        guard let data = try? JSONEncoder().encode(cached) else { return }
+        UserDefaults.standard.set(data, forKey: aiQuestionsCacheKey)
+    }
+
+    private func aiQuestionsGeneratedText(_ generatedAt: Date) -> String {
+        let time = Self.aiGeneratedFormatter.string(from: generatedAt)
+        return String(format: NSLocalizedString("AI refined %@", comment: "AI visit questions generated metadata"), time)
+    }
+
+    private func aiVisitQuestionRequest(summary: DoctorReportSummary) -> AIVisitQuestionRequest {
+        AIVisitQuestionRequest(
+            localeIdentifier: Locale.current.identifier,
+            visitTitle: summary.visit?.displayTitle,
+            reason: summary.visit?.reason,
+            allergies: summary.allergies,
+            medications: summary.medications.prefix(8).map { "\($0.name) \($0.dose), \($0.schedule)" },
+            adherenceGaps: summary.adherenceGaps.prefix(3).map { "\($0.medicationName): \($0.missedDays.count) missed days" },
+            measurements: summary.measurements.map { "\($0.type.displayName): latest \($0.latestValue), \($0.outOfRangeCount)/\($0.entryCount) out of range" },
+            symptoms: summary.symptoms.prefix(3).map { symptom in
+                [symptom.summary, symptom.note?.trimmingCharacters(in: .whitespacesAndNewlines)]
+                    .compactMap { value in
+                        guard let value, !value.isEmpty else { return nil }
+                        return value
+                    }
+                    .joined(separator: ": ")
+            },
+            previousVisitPlan: previousVisitPlanItems(for: summary.visit).map { "\($0.title): \($0.value)" },
+            followUpChecks: followUpChecksForVisit(summary.visit),
+            missingPostVisitItems: summary.visit?.postVisitMissingItems ?? []
+        )
+    }
+
+    private func snapshotSummaryStrip(summary: DoctorReportSummary) -> some View {
+        let totalMissed = summary.adherenceGaps.reduce(0) { $0 + $1.missedDays.count }
+        let abnormalReadings = summary.measurements.reduce(0) { $0 + $1.outOfRangeCount }
+        let symptomCount = recentSymptoms.count
+        let concernCount = totalMissed + abnormalReadings + symptomCount
+
+        return VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+            HStack(alignment: .firstTextBaseline) {
+                sectionLabel(NSLocalizedString("At A Glance", comment: "Consultation snapshot quick summary section"))
+                Spacer()
+                Text(String(format: NSLocalizedString("Last %lld days", comment: "Consultation snapshot summary window"), daysWindow))
+                    .appFontNumeric(.caption)
+                    .foregroundStyle(AppColor.textSecondary)
+            }
+
+            VStack(spacing: EditorialSpacing.sm) {
+                snapshotSummaryLine(
+                    title: NSLocalizedString("Allergy", comment: "Consultation snapshot summary metric"),
+                    value: summary.allergies ?? NSLocalizedString("None recorded", comment: "Consultation snapshot allergy metric detail"),
+                    systemImage: summary.allergies == nil ? "checkmark.circle" : "exclamationmark.triangle",
+                    tint: summary.allergies == nil ? AppColor.success : AppColor.warning
+                )
+                AppDivider()
+                snapshotSummaryLine(
+                    title: NSLocalizedString("Medications", comment: "Consultation snapshot summary metric"),
+                    value: String(format: NSLocalizedString("%lld current medications", comment: "Consultation snapshot medication summary"), summary.medications.count),
+                    systemImage: "pills",
+                    tint: summary.medications.isEmpty ? AppColor.textSecondary : AppColor.primary
+                )
+                AppDivider()
+                snapshotSummaryLine(
+                    title: NSLocalizedString("Doctor should note", comment: "Consultation snapshot concern summary"),
+                    value: concernCount == 0
+                        ? NSLocalizedString("No major issues logged", comment: "Consultation snapshot no concerns")
+                        : String(format: NSLocalizedString("%lld items need review", comment: "Consultation snapshot concern count"), concernCount),
+                    systemImage: concernCount == 0 ? "checkmark.seal" : "exclamationmark.triangle",
+                    tint: concernCount == 0 ? AppColor.success : AppColor.warning
+                )
+            }
+        }
+    }
+
     @ViewBuilder
     private func visitPrepSection(summary: DoctorReportSummary) -> some View {
         if let visit = summary.visit {
+            let planItems = previousVisitPlanItems(for: visit)
             VStack(alignment: .leading, spacing: EditorialSpacing.md) {
                 HStack(alignment: .firstTextBaseline) {
                     sectionLabel(NSLocalizedString("Prepared For", comment: ""))
@@ -135,22 +485,24 @@ struct ConsultationSnapshotView: View {
                             .foregroundStyle(AppColor.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    Text(preVisitReadinessText(for: visit))
-                        .appFont(.caption)
-                        .foregroundStyle(AppColor.textSecondary)
                 }
 
-                VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
-                    ForEach(summary.talkingPoints, id: \.self) { point in
-                        HStack(alignment: .top, spacing: EditorialSpacing.sm) {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 12, weight: .regular))
-                                .foregroundStyle(AppColor.primary)
-                                .padding(.top, 2)
-                            Text(point)
-                                .appFont(.caption)
-                                .foregroundStyle(AppColor.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                if !planItems.isEmpty {
+                    AppDivider()
+                    VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
+                        sectionLabel(visit.isCompleted
+                                     ? NSLocalizedString("Plan from this visit", comment: "Consultation snapshot current visit plan title")
+                                     : NSLocalizedString("Plan from last visit", comment: "Consultation snapshot previous visit plan title"))
+                        ForEach(Array(planItems.enumerated()), id: \.element.id) { index, item in
+                            snapshotSummaryLine(
+                                title: item.title,
+                                value: item.value,
+                                systemImage: item.systemImage,
+                                tint: AppColor.primary
+                            )
+                            if index < planItems.count - 1 {
+                                AppDivider()
+                            }
                         }
                     }
                 }
@@ -253,16 +605,17 @@ struct ConsultationSnapshotView: View {
     @ViewBuilder
     private func medicationRow(_ med: DoctorReportSummary.MedicationLine) -> some View {
         VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("\(med.name) \(med.dose)")
-                    .appFont(.body)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(AppColor.textPrimary)
-                Spacer()
-                Text(med.schedule)
-                    .appFont(.caption)
-                    .foregroundStyle(AppColor.textSecondary)
-            }
+            Text("\(med.name) \(med.dose)")
+                .appFont(.body)
+                .fontWeight(.semibold)
+                .foregroundStyle(AppColor.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Label(med.schedule, systemImage: med.schedule == NSLocalizedString("PRN", comment: "As needed") ? "hand.raised" : "clock")
+                .appFont(.caption)
+                .foregroundStyle(AppColor.textSecondary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
 
             if let caption = med.caption {
                 Text(caption)
@@ -370,6 +723,10 @@ struct ConsultationSnapshotView: View {
 
     @ViewBuilder
     private func measurementRow(_ highlight: DoctorReportSummary.MeasurementHighlight) -> some View {
+        let latestIsOutOfRange = latestMeasurementIsOutOfRange(highlight)
+        let valueColor = latestIsOutOfRange ? AppColor.warning : AppColor.textPrimary
+        let rangeText = measurementRangeText(for: highlight.type)
+
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(highlight.type.displayName)
@@ -380,7 +737,13 @@ struct ConsultationSnapshotView: View {
                 Text(highlight.latestValue)
                     .appFontNumeric(.subheadline)
                     .fontWeight(.bold)
-                    .foregroundStyle(AppColor.textPrimary)
+                    .foregroundStyle(valueColor)
+
+                if let rangeText {
+                    Text(rangeText)
+                        .appFontNumeric(.footnote)
+                        .foregroundStyle(AppColor.textSecondary)
+                }
 
                 if highlight.outOfRangeCount > 0 {
                     Text(String(format: NSLocalizedString("Latest %@ · %lld entries · %lld out-of-range", comment: "Visit summary measurement warning caption"), dateShort(highlight.latestDate), highlight.entryCount, highlight.outOfRangeCount))
@@ -410,6 +773,14 @@ struct ConsultationSnapshotView: View {
             )
             .foregroundStyle(AppColor.primary.opacity(0.72))
             .interpolationMethod(.monotone)
+
+            if m.id == series.last?.id {
+                PointMark(
+                    x: .value("d", m.date),
+                    y: .value("v", primaryValue(m))
+                )
+                .foregroundStyle(m.isAbnormal ? AppColor.warning : AppColor.primary)
+            }
         }
         .chartXAxis(.hidden)
         .chartYAxis(.hidden)
@@ -420,6 +791,33 @@ struct ConsultationSnapshotView: View {
 
     private func primaryValue(_ m: Measurement) -> Double {
         m.value
+    }
+
+    private func latestMeasurementIsOutOfRange(_ highlight: DoctorReportSummary.MeasurementHighlight) -> Bool {
+        guard let latest = highlight.series.last else { return false }
+        return latest.isAbnormal
+    }
+
+    private func measurementRangeText(for type: MeasurementType) -> String? {
+        switch type {
+        case .bloodPressure:
+            let thresholds = store.bpThresholds()
+            let target = "\(Int(thresholds.systolicHigh))/\(Int(thresholds.diastolicHigh)) \(type.unit)"
+            return String(format: NSLocalizedString("Target <= %@", comment: "Consultation snapshot blood pressure target"), target)
+        case .bloodGlucose:
+            guard let range = store.customGoalRange(for: type) else { return nil }
+            let low = UnitPreferences.mgdlToPreferred(range.lowerBound)
+            let high = UnitPreferences.mgdlToPreferred(range.upperBound)
+            let formatter = UnitPreferences.glucoseUnit == .mgdL ? "%.0f" : "%.1f"
+            let target = "\(String(format: formatter, low))-\(String(format: formatter, high)) \(UnitPreferences.glucoseUnit.rawValue)"
+            return String(format: NSLocalizedString("Target %@", comment: "Consultation snapshot measurement target"), target)
+        case .heartRate:
+            guard let range = store.customGoalRange(for: type) else { return nil }
+            let target = "\(Int(range.lowerBound))-\(Int(range.upperBound)) \(type.unit)"
+            return String(format: NSLocalizedString("Target %@", comment: "Consultation snapshot measurement target"), target)
+        case .weight:
+            return nil
+        }
     }
 
     // MARK: - Symptoms
@@ -599,6 +997,56 @@ struct ConsultationSnapshotView: View {
 
     // MARK: - Helpers
 
+    private func previousVisitPlanItems(for visit: DoctorVisit?) -> [VisitPlanItem] {
+        guard let source = visitPlanSource(for: visit) else { return [] }
+        var items: [VisitPlanItem] = []
+        if let notes = trimmed(source.notes) {
+            items.append(VisitPlanItem(
+                id: "doctor-instructions",
+                title: NSLocalizedString("Doctor instructions", comment: "Visit plan doctor instructions"),
+                value: notes,
+                systemImage: "stethoscope"
+            ))
+        }
+        if let medicationPlan = trimmed(source.medicationChangesSummary) {
+            items.append(VisitPlanItem(
+                id: "medication-plan",
+                title: NSLocalizedString("Medication plan", comment: "Visit plan medication"),
+                value: medicationPlan,
+                systemImage: "pills"
+            ))
+        }
+        if let checks = trimmed(source.followUpChecksSummary) {
+            items.append(VisitPlanItem(
+                id: "follow-up-checks",
+                title: visit?.isCompleted == true ? NSLocalizedString("Before next visit", comment: "Visit plan checks title") : NSLocalizedString("Before this visit", comment: "Consultation snapshot pre-visit checks title"),
+                value: checks,
+                systemImage: "checklist.checked"
+            ))
+        }
+        return items
+    }
+
+    private func visitPlanSource(for visit: DoctorVisit?) -> DoctorVisit? {
+        if let visit, visit.isCompleted {
+            return visit
+        }
+        let cutoff = visit?.scheduledDate ?? Date()
+        return store.completedDoctorVisits.first { completed in
+            (completed.completedDate ?? completed.scheduledDate) < cutoff
+        }
+    }
+
+    private func followUpChecksForVisit(_ visit: DoctorVisit?) -> String? {
+        visitPlanSource(for: visit)
+            .flatMap { trimmed($0.followUpChecksSummary) }
+    }
+
+    private func trimmed(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        return trimmed
+    }
+
     private func sectionLabel(_ text: String, count: Int? = nil) -> some View {
         HStack(spacing: 6) {
             Text(text.uppercased())
@@ -611,6 +1059,27 @@ struct ConsultationSnapshotView: View {
                     .foregroundStyle(AppColor.textSecondary)
             }
         }
+    }
+
+    private func snapshotSummaryLine(title: String, value: String, systemImage: String, tint: Color) -> some View {
+        HStack(alignment: .top, spacing: EditorialSpacing.sm) {
+            Image(systemName: systemImage)
+                .font(.system(size: 18, weight: .regular))
+                .foregroundStyle(tint)
+                .frame(width: 24, alignment: .center)
+
+            VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                Text(title)
+                    .appFont(.body)
+                    .foregroundStyle(AppColor.textSecondary)
+                Text(value)
+                    .appFont(.headline)
+                    .foregroundStyle(AppColor.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: EditorialSpacing.sm)
+        }
+        .padding(.vertical, EditorialSpacing.xs)
     }
 
     private func editorialSourceTitle(_ source: MedicationSource) -> String {
@@ -638,21 +1107,9 @@ struct ConsultationSnapshotView: View {
         Self.shortDateFormatter.string(from: date)
     }
 
-    private func preVisitReadinessText(for visit: DoctorVisit) -> String {
-        guard let days = visit.daysUntil() else {
-            return NSLocalizedString("Completed visit. Keep notes here for the next follow-up.", comment: "")
-        }
-        if days == 0 {
-            return NSLocalizedString("Use this during the appointment to answer common doctor questions quickly.", comment: "")
-        }
-        if days > 0 {
-            return String(format: NSLocalizedString("Your appointment is in %lld days. Keep logging anything the doctor should know.", comment: ""), days)
-        }
-        return NSLocalizedString("This appointment is overdue. Update it after the visit or schedule the next one.", comment: "")
-    }
-
     private func refreshSummary() {
         cachedSummary = DoctorReportSummaryBuilder.build(store: store, days: daysWindow, visit: snapshotVisit)
+        loadCachedAIQuestions()
     }
 
     @MainActor

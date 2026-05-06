@@ -31,6 +31,12 @@ struct MedicationsView: View {
                         }
                     }
 
+                    if let visit = recentPostVisitMedicationReview {
+                        Section {
+                            postVisitMedicationReviewRow(for: visit)
+                        }
+                    }
+
                     if store.medications.isEmpty {
                         Section {
                             EmptyStateView(
@@ -95,8 +101,10 @@ struct MedicationsView: View {
             .navigationTitle(NSLocalizedString("Medications", comment: ""))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showAdd = true } label: { Image(systemName: "plus") }
-                        .accessibilityLabel(NSLocalizedString("Add Medication", comment: ""))
+                    if !store.medications.isEmpty {
+                        Button { showAdd = true } label: { Image(systemName: "plus") }
+                            .accessibilityLabel(NSLocalizedString("Add Medication", comment: ""))
+                    }
                 }
             }
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: NSLocalizedString("Search medications", comment: ""))
@@ -214,6 +222,16 @@ private extension MedicationsView {
         }
     }
 
+    var recentPostVisitMedicationReview: DoctorVisit? {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        return store.completedDoctorVisits.first { visit in
+            let completedDay = calendar.startOfDay(for: visit.completedDate ?? visit.scheduledDate)
+            let days = calendar.dateComponents([.day], from: completedDay, to: today).day ?? Int.max
+            return days >= 0 && days <= 14 && visit.hasMedicationPlan
+        }
+    }
+
     var warningRow: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "bell.slash.fill")
@@ -228,6 +246,30 @@ private extension MedicationsView {
                     .foregroundStyle(AppColor.textSecondary)
             }
         }
+    }
+
+    private func postVisitMedicationReviewRow(for visit: DoctorVisit) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(NSLocalizedString("After Last Visit", comment: "Post visit medication review title"), systemImage: "stethoscope")
+                .appFont(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(AppColor.textPrimary)
+
+            if let text = postVisitMedicationReviewText(for: visit) {
+                Text(text)
+                    .appFont(.caption)
+                    .foregroundStyle(AppColor.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func postVisitMedicationReviewText(for visit: DoctorVisit) -> String? {
+        if let summary = visit.medicationChangesSummary?.trimmingCharacters(in: .whitespacesAndNewlines), !summary.isEmpty {
+            return String(format: NSLocalizedString("Medication plan from the visit: %@", comment: "Post visit medication review summary"), summary)
+        }
+        return nil
     }
 
     /// Single condensed row per medication. The surrounding section header

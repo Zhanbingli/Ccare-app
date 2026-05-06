@@ -287,7 +287,7 @@ final class NotificationManager {
 
         medications.forEach { medication in
             medication.timesOfDay.forEach { timeComponents in
-                let strategy = AdaptiveReminderEngine.strategy(for: medication, intakeLogs: intakeLogs, now: now, scheduleTime: timeComponents)
+                let strategy = AdaptiveReminderEngine.schedulingStrategy(for: medication, intakeLogs: intakeLogs, now: now, scheduleTime: timeComponents)
                 upcomingFireDates(
                     for: timeComponents,
                     horizonDays: primarySchedulingHorizonDays,

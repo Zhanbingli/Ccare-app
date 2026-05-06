@@ -9,7 +9,10 @@ struct AppBackup: Codable {
     var emergencyInfo: EmergencyInfo?
     var caregivers: [CaregiverContact]?
     var symptomEntries: [SymptomEntry]?
+    var symptomClarifications: [SymptomClarification]?
     var doctorVisits: [DoctorVisit]?
+    var agentInboxItems: [AgentInboxItem]?
+    var hypertensionAIDrafts: [HypertensionFollowUpAIDraftRecord]?
     var medicationImagesByPath: [String: Data]?
 }
 
@@ -49,7 +52,10 @@ enum BackupManager {
             emergencyInfo: store.emergencyInfo,
             caregivers: store.caregivers,
             symptomEntries: store.symptomEntries,
+            symptomClarifications: store.symptomClarifications,
             doctorVisits: store.doctorVisits,
+            agentInboxItems: store.agentInboxItems,
+            hypertensionAIDrafts: store.hypertensionAIDrafts,
             medicationImagesByPath: medicationImagesByPath.isEmpty ? nil : medicationImagesByPath
         )
         let data = try JSONEncoder().encode(backup)
@@ -58,7 +64,7 @@ enum BackupManager {
         return url
     }
 
-    static let currentVersion = 3
+    static let currentVersion = 6
 
     static func loadBackup(from url: URL) throws -> AppBackup {
         let data = try Data(contentsOf: url)
@@ -78,6 +84,21 @@ enum BackupManager {
             // v2 -> v3: doctor visit anchors were added for pre-visit prep.
             if result.doctorVisits == nil { result.doctorVisits = [] }
             result.version = 3
+        }
+        if result.version < 4 {
+            // v3 -> v4: local agent inbox state was added.
+            if result.agentInboxItems == nil { result.agentInboxItems = [] }
+            result.version = 4
+        }
+        if result.version < 5 {
+            // v4 -> v5: bounded hypertension AI report drafts were added.
+            if result.hypertensionAIDrafts == nil { result.hypertensionAIDrafts = [] }
+            result.version = 5
+        }
+        if result.version < 6 {
+            // v5 -> v6: structured symptom clarifications were added.
+            if result.symptomClarifications == nil { result.symptomClarifications = [] }
+            result.version = 6
         }
         return result
     }

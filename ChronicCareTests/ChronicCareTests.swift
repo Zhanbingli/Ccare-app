@@ -327,6 +327,66 @@ struct ChronicCareTests {
         #expect(strategy.riskLevel == .low)
     }
 
+    @Test func adaptiveSchedulingUsesStandardUntilUserConfirms() {
+        let cal = Calendar.current
+        let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 8, hour: 10, minute: 0))!
+        let comps = DateComponents(hour: 8, minute: 0)
+        let medStart = cal.date(byAdding: .day, value: -6, to: now)!
+        let med = Medication(name: "Amlodipine", dose: "5mg", startDate: medStart, timesOfDay: [comps], remindersEnabled: true)
+        defer { AdaptiveReminderPreferenceStore.clearAll(for: med.id) }
+
+        let logs = (0..<6).compactMap { offset -> IntakeLog? in
+            guard let scheduled = cal.date(byAdding: .day, value: -offset, to: now).flatMap({ cal.date(bySettingHour: 8, minute: 0, second: 0, of: $0) }) else { return nil }
+            return IntakeLog(
+                medicationID: med.id,
+                date: scheduled,
+                status: .taken,
+                scheduleKey: "08:00",
+                scheduledDate: scheduled,
+                recordedAt: scheduled.addingTimeInterval(18 * 60)
+            )
+        }
+
+        let standard = AdaptiveReminderEngine.schedulingStrategy(for: med, intakeLogs: logs, now: now)
+        #expect(standard == AdaptiveReminderEngine.standardStrategy)
+
+        AdaptiveReminderPreferenceStore.setAdaptiveSchedulingEnabled(true, for: med.id)
+        let confirmed = AdaptiveReminderEngine.schedulingStrategy(for: med, intakeLogs: logs, now: now)
+        #expect(confirmed.leadMinutes == 10)
+    }
+
+    @Test func adaptiveReminderSuggestsHigherSupportForMissPattern() {
+        let cal = Calendar.current
+        let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 8, hour: 10, minute: 0))!
+        let comps = DateComponents(hour: 8, minute: 0)
+        let medStart = cal.date(byAdding: .day, value: -7, to: now)!
+        let med = Medication(name: "Amlodipine", dose: "5mg", startDate: medStart, timesOfDay: [comps], remindersEnabled: true)
+        defer { AdaptiveReminderPreferenceStore.clearAll(for: med.id) }
+
+        let suggestion = AdaptiveReminderEngine.suggestion(for: med, intakeLogs: [], now: now)
+
+        #expect(suggestion?.kind == .increaseSupport)
+        #expect(suggestion?.proposedStrategy.riskLevel == .high)
+    }
+
+    @Test func adaptiveReminderDismissalSuppressesSuggestion() {
+        let cal = Calendar.current
+        let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 8, hour: 10, minute: 0))!
+        let comps = DateComponents(hour: 8, minute: 0)
+        let medStart = cal.date(byAdding: .day, value: -7, to: now)!
+        let med = Medication(name: "Amlodipine", dose: "5mg", startDate: medStart, timesOfDay: [comps], remindersEnabled: true)
+        defer { AdaptiveReminderPreferenceStore.clearAll(for: med.id) }
+
+        AdaptiveReminderPreferenceStore.dismissSuggestion(
+            .increaseSupport,
+            for: med.id,
+            until: now.addingTimeInterval(24 * 60 * 60)
+        )
+
+        let suggestion = AdaptiveReminderEngine.suggestion(for: med, intakeLogs: [], now: now)
+        #expect(suggestion == nil)
+    }
+
     @MainActor
     @Test func prnLogsDoNotOverwriteSameMinuteEntries() {
         let store = DataStore()
@@ -724,6 +784,272 @@ struct ChronicCareTests {
             #expect(counts.total == 1)
             #expect(counts.taken == 0)
         }
+    }
+
+    @Test func hypertensionDraftParserAcceptsArraySummaryJSON() throws {
+        let response = """
+        ```JSON
+        {
+          "patientSummary": [
+            "Morning readings may be worth discussing with your doctor.",
+            "Medication decisions should be made with a licensed clinician."
+          ],
+          "doctorSummary": [
+            "Period reviewed: last 30 days.",
+            "Home BP pattern: morning values were higher than evening values."
+          ],
+          "questions": [
+            { "question": "Should we review my morning blood pressure pattern?" },
+            { "question": "Could my missed doses explain some high readings?" },
+            { "question": "What should I track before the next visit?" }
+          ]
+        }
+        ```
+        """
+
+        let draft = try HypertensionFollowUpDraftParser.parse(response)
+
+        #expect(draft.patientSummary?.contains("Morning readings") == true)
+        #expect(draft.doctorSummary?.contains("Home BP pattern") == true)
+        #expect(draft.questions.count == 3)
+    }
+
+    @Test func hypertensionDraftParserAcceptsWrappedSnakeCaseJSON() throws {
+        let response = """
+        Here is the structured draft:
+        {
+          "result": {
+            "patient_summary": "Your recent readings may be worth discussing with your doctor.",
+            "doctor_summary": "Reviewed patient-entered home BP and adherence context.",
+            "doctor_questions": [
+              "Should we review the morning readings?",
+              "Are the symptom notes relevant to medication timing?",
+              "What readings should I bring next time?"
+            ]
+          }
+        }
+        """
+
+        let draft = try HypertensionFollowUpDraftParser.parse(response)
+
+        #expect(draft.patientSummary?.hasPrefix("Your recent readings") == true)
+        #expect(draft.doctorSummary?.contains("home BP") == true)
+        #expect(draft.questions.first == "Should we review the morning readings?")
+    }
+
+    @Test func hypertensionDraftParserFallsBackToPlainTextSections() throws {
+        let response = """
+        Patient summary: Morning blood pressure was higher than evening readings.
+        This pattern may be worth discussing with your doctor.
+
+        Doctor summary: Period reviewed: last 30 days.
+        Patient-entered records show missed doses and symptom notes.
+
+        Questions: Should we review my morning blood pressure pattern?
+        2. Are the dizziness notes important for follow-up?
+        3. What should I record before the next visit?
+        """
+
+        let draft = try HypertensionFollowUpDraftParser.parse(response)
+
+        #expect(draft.patientSummary?.contains("Morning blood pressure") == true)
+        #expect(draft.doctorSummary?.contains("Period reviewed") == true)
+        #expect(draft.doctorSummary?.contains("Patient-entered records") == true)
+        #expect(draft.questions.count == 3)
+    }
+
+    @Test func diabetesRuleEngineFlagsSeverelyLowGlucose() {
+        let now = Date()
+        let reading = Measurement(
+            type: .bloodGlucose,
+            value: 54,
+            date: now,
+            note: nil
+        )
+
+        let flags = DiabetesRuleEngine.evaluate(glucoseReadings: [reading], symptoms: [], now: now)
+
+        #expect(flags.count == 1)
+        #expect(flags.first?.sourceRule == "glucose_very_low_54")
+        #expect(flags.first?.severity == .urgent)
+    }
+
+    @Test func diabetesRuleEngineFlagsHighGlucoseWithConcerningSymptoms() {
+        let now = Date()
+        let reading = Measurement(
+            type: .bloodGlucose,
+            value: 260,
+            date: now,
+            note: nil
+        )
+        let symptom = SymptomEntry(
+            date: now,
+            tags: ["vomiting"],
+            severity: .severe,
+            note: "abdominal pain"
+        )
+
+        let flags = DiabetesRuleEngine.evaluate(glucoseReadings: [reading], symptoms: [symptom], now: now)
+
+        #expect(flags.count == 1)
+        #expect(flags.first?.sourceRule == "glucose_high_240")
+        #expect(flags.first?.severity == .urgent)
+    }
+
+    @MainActor
+    @Test func agentInboxCreatesBloodPressureGapItemForHypertensionContext() {
+        let store = DataStore()
+        store.clearAll()
+        let medication = Medication(
+            name: "Amlodipine",
+            dose: "5mg",
+            timesOfDay: [DateComponents(hour: 8, minute: 0)],
+            remindersEnabled: true,
+            category: .antihypertensive
+        )
+        #expect(store.addMedication(medication) == nil)
+
+        store.refreshAgentInbox(now: Date())
+
+        #expect(store.openAgentInboxItems.contains { $0.stableKey == "measurement_gap.bp" })
+    }
+
+    @Test func agentInboxMergePreservesDismissedStateForStableKey() {
+        let now = Date()
+        let previous = AgentInboxItem(
+            stableKey: "measurement_gap.bp",
+            title: "Old",
+            detail: "Old detail",
+            category: .missingData,
+            severity: .information,
+            source: .localSummary,
+            action: .logBloodPressure,
+            relatedID: nil,
+            generatedAt: now,
+            updatedAt: now,
+            status: .dismissed
+        )
+        let generated = AgentInboxItem(
+            stableKey: "measurement_gap.bp",
+            title: "New",
+            detail: "New detail",
+            category: .missingData,
+            severity: .caution,
+            source: .localSummary,
+            action: .logBloodPressure,
+            relatedID: nil,
+            generatedAt: now.addingTimeInterval(60),
+            updatedAt: now.addingTimeInterval(60)
+        )
+
+        let merged = AgentInboxGenerator.merge(generated: [generated], existing: [previous], now: now.addingTimeInterval(120))
+
+        #expect(merged.count == 1)
+        #expect(merged.first?.id == previous.id)
+        #expect(merged.first?.status == .dismissed)
+        #expect(merged.first?.title == "New")
+    }
+
+    @MainActor
+    @Test func agentInboxDoesNotAskClarificationAfterSymptomClarified() {
+        let store = DataStore()
+        store.clearAll()
+        let now = Date()
+        let symptom = SymptomEntry(
+            date: now,
+            tags: ["dizziness"],
+            severity: .moderate,
+            note: nil
+        )
+        store.addSymptomEntry(symptom)
+
+        store.refreshAgentInbox(now: now)
+
+        let stableKey = "clarification.symptom.\(symptom.id.uuidString)"
+        #expect(store.openAgentInboxItems.contains {
+            $0.stableKey == stableKey && $0.action == .clarifySymptom
+        })
+
+        store.upsertSymptomClarification(SymptomClarification(
+            symptomEntryID: symptom.id,
+            onsetDescription: "Started after breakfast",
+            relationToMedication: .afterMedication,
+            happenedAfterStanding: false,
+            nearbyMeasurementNote: "BP 142/88",
+            redFlagSigns: [],
+            followUpRelevanceNote: nil
+        ))
+        store.refreshAgentInbox(now: now)
+
+        #expect(store.openAgentInboxItems.contains { $0.stableKey == stableKey } == false)
+    }
+
+    @MainActor
+    @Test func symptomClarificationUpsertReplacesSameSymptom() {
+        let store = DataStore()
+        store.clearAll()
+        let symptomID = UUID()
+        store.upsertSymptomClarification(SymptomClarification(
+            symptomEntryID: symptomID,
+            onsetDescription: "First",
+            relationToMedication: .unknown,
+            happenedAfterStanding: false,
+            nearbyMeasurementNote: nil,
+            redFlagSigns: [],
+            followUpRelevanceNote: nil
+        ))
+        store.upsertSymptomClarification(SymptomClarification(
+            symptomEntryID: symptomID,
+            onsetDescription: "Second",
+            relationToMedication: .beforeMedication,
+            happenedAfterStanding: true,
+            nearbyMeasurementNote: "BP 150/90",
+            redFlagSigns: [.palpitations],
+            followUpRelevanceNote: "Ask whether timing matters"
+        ))
+
+        #expect(store.symptomClarifications.count == 1)
+        #expect(store.clarification(for: symptomID)?.onsetDescription == "Second")
+        #expect(store.clarification(for: symptomID)?.relationToMedication == .beforeMedication)
+        #expect(store.clarification(for: symptomID)?.happenedAfterStanding == true)
+    }
+
+    @MainActor
+    @Test func hypertensionAIDraftStoreReplacesSameReportContext() {
+        let store = DataStore()
+        store.clearAll()
+        let first = HypertensionFollowUpLLMDraft(
+            patientSummary: "First patient summary",
+            doctorSummary: "First doctor summary",
+            questions: ["First question"]
+        )
+        let second = HypertensionFollowUpLLMDraft(
+            patientSummary: "Second patient summary",
+            doctorSummary: "Second doctor summary",
+            questions: ["Second question"]
+        )
+
+        store.saveHypertensionAIDraft(
+            first,
+            contextKey: "hypertension.current",
+            days: 30,
+            dataRevision: 1
+        )
+        store.saveHypertensionAIDraft(
+            second,
+            contextKey: "hypertension.current",
+            days: 30,
+            dataRevision: 1
+        )
+
+        let record = store.hypertensionAIDraft(
+            contextKey: "hypertension.current",
+            days: 30,
+            dataRevision: 1
+        )
+
+        #expect(store.hypertensionAIDrafts.count == 1)
+        #expect(record?.draft == second)
     }
 
 }

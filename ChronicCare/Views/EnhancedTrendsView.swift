@@ -9,9 +9,10 @@ struct EnhancedTrendsView: View {
     @State private var selectedDataPoint: Measurement?
     @State private var editingMeasurement: Measurement?
     @State private var deleteTarget: Measurement?
-    @State private var showAIInsights = false
     @State private var aiInsights: String?
+    @State private var aiInsightsGeneratedAt: Date?
     @State private var isLoadingInsights = false
+    @State private var showAIDataDisclosure = false
     @AppStorage("units.glucose") private var glucoseUnitRaw: String = GlucoseUnit.mgdL.rawValue
 
     private var filtered: [Measurement] {
@@ -20,6 +21,11 @@ struct EnhancedTrendsView: View {
         return store.measurements
             .filter { $0.type == selectedType && $0.date >= start && $0.date <= now }
             .sorted(by: { $0.date < $1.date })
+    }
+
+    private var aiInsightCacheKey: String {
+        let latestID = filtered.last?.id.uuidString ?? "none"
+        return "ai.trendInsights.\(selectedType.rawValue).\(rangeDays).\(glucoseUnitRaw).\(filtered.count).\(latestID)"
     }
 
     private var sevenDaySlice: [Measurement] {
@@ -36,6 +42,18 @@ struct EnhancedTrendsView: View {
             set: { if !$0 { deleteTarget = nil } }
         )
     }
+
+    private struct CachedAIInsight: Codable {
+        let text: String
+        let generatedAt: Date
+    }
+
+    private static let aiGeneratedFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter
+    }()
 
     private struct BPPoint: Identifiable {
         let id: UUID
@@ -118,6 +136,12 @@ struct EnhancedTrendsView: View {
                 }
             } message: {
                 Text(NSLocalizedString("This measurement will be removed from trends and future visit summaries.", comment: ""))
+            }
+            .onAppear {
+                loadCachedAIInsights()
+            }
+            .onChange(of: store.reportDataRevision) { _ in
+                loadCachedAIInsights()
             }
         }
     }
@@ -245,12 +269,12 @@ struct EnhancedTrendsView: View {
 
     // MARK: - AI Insights Section
     private var hasAIKey: Bool {
-        !AIService.shared.getConfiguration().apiKey.isEmpty
+        AIService.shared.isConfigured
     }
 
     @ViewBuilder
     private var aiInsightsSection: some View {
-        if hasAIKey || aiInsights != nil {
+        if !filtered.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     HStack(spacing: 6) {
@@ -264,7 +288,7 @@ struct EnhancedTrendsView: View {
                     Spacer()
                     if !isLoadingInsights {
                         Button {
-                            generateAIInsights()
+                            beginInsightFlow()
                         } label: {
                             Text(aiInsights == nil ? NSLocalizedString("Generate", comment: "") : NSLocalizedString("Refresh", comment: ""))
                                 .appFont(.caption)
@@ -275,11 +299,16 @@ struct EnhancedTrendsView: View {
                     }
                 }
 
+                Text(aiSectionSubtitle)
+                    .appFont(.caption)
+                    .foregroundStyle(AppColor.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
                 if isLoadingInsights {
                     HStack(spacing: 10) {
                         ProgressView()
                             .controlSize(.small)
-                        Text("Analyzing...")
+                        Text(NSLocalizedString("Analyzing...", comment: "AI insight loading"))
                             .appFont(.caption)
                             .foregroundStyle(AppColor.textSecondary)
                     }
@@ -289,6 +318,15 @@ struct EnhancedTrendsView: View {
                         .appFont(.caption)
                         .foregroundStyle(AppColor.textPrimary)
                         .lineSpacing(5)
+
+                    if let generatedAt = aiInsightsGeneratedAt {
+                        HStack(spacing: 6) {
+                            Image(systemName: "clock")
+                            Text(aiInsightGeneratedText(generatedAt))
+                        }
+                        .appFont(.caption)
+                        .foregroundStyle(AppColor.textSecondary)
+                    }
                 }
             }
             .padding(AppSpacing.medium)
@@ -300,7 +338,33 @@ struct EnhancedTrendsView: View {
                 RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                     .stroke(AppColor.divider, lineWidth: 1)
             )
+            .alert(NSLocalizedString("Send Data for AI Analysis?", comment: "AI consent alert title"), isPresented: $showAIDataDisclosure) {
+                Button(NSLocalizedString("Analyze with AI", comment: "AI consent action")) {
+                    AIService.shared.hasUserConsent = true
+                    generateAIInsights()
+                }
+                Button(NSLocalizedString("Use On-Device Summary", comment: "AI local fallback action")) {
+                    generateLocalOnlyInsights()
+                }
+                Button(NSLocalizedString("Cancel", comment: ""), role: .cancel) { }
+            } message: {
+                Text(aiDataDisclosureMessage)
+            }
         }
+    }
+
+    private var aiSectionSubtitle: String {
+        if !hasAIKey {
+            return NSLocalizedString("Generate an on-device summary now. Add an API key in Settings to use provider analysis.", comment: "AI section no key subtitle")
+        }
+        if !AIService.shared.hasUserConsent {
+            return NSLocalizedString("Provider analysis is off until you approve sending a limited trend summary.", comment: "AI section consent subtitle")
+        }
+        return NSLocalizedString("Uses a limited trend summary: recent readings, related medication names and doses, and aggregate stats.", comment: "AI section enabled subtitle")
+    }
+
+    private var aiDataDisclosureMessage: String {
+        NSLocalizedString("This sends up to 20 recent readings for the selected measurement type, related medication names and doses, and aggregate stats to your selected AI provider. Notes, contacts, emergency info, and raw backups are not sent.", comment: "AI consent disclosure")
     }
 
     // MARK: - Pickers
@@ -315,7 +379,7 @@ struct EnhancedTrendsView: View {
             .onChange(of: selectedType) { _ in
                 withAnimation {
                     selectedDataPoint = nil
-                    aiInsights = nil
+                    loadCachedAIInsights()
                 }
             }
 
@@ -329,6 +393,7 @@ struct EnhancedTrendsView: View {
             .onChange(of: rangeDays) { _ in
                 withAnimation {
                     selectedDataPoint = nil
+                    loadCachedAIInsights()
                 }
             }
         }
@@ -697,47 +762,82 @@ struct EnhancedTrendsView: View {
         return "\(Int(pct * 100))%"
     }
 
+    private func beginInsightFlow() {
+        guard !filtered.isEmpty else { return }
+        if !hasAIKey {
+            generateLocalOnlyInsights()
+            return
+        }
+        if !AIService.shared.hasUserConsent {
+            showAIDataDisclosure = true
+            return
+        }
+        generateAIInsights()
+    }
+
     private func generateAIInsights() {
         guard !filtered.isEmpty else { return }
 
         isLoadingInsights = true
         Task {
             do {
-                let config = AIService.shared.getConfiguration()
-                guard !config.apiKey.isEmpty else {
-                    await MainActor.run {
-                        aiInsights = "⚠️ Please configure your API key in AI Analysis settings to generate insights."
-                        isLoadingInsights = false
-                    }
-                    return
-                }
-
                 let insights = try await generateTrendInsights()
                 await MainActor.run {
                     self.aiInsights = insights
+                    self.cacheAIInsights(insights)
                     self.isLoadingInsights = false
                     Haptics.success()
                 }
             } catch {
                 await MainActor.run {
-                    self.aiInsights = "Failed to generate insights: \(error.localizedDescription)"
+                    let fallback = String(
+                        format: NSLocalizedString("AI analysis could not be completed. Showing an on-device summary instead.\n\n%@", comment: "AI failure local fallback"),
+                        generateLocalInsights()
+                    )
+                    self.aiInsights = fallback
+                    self.cacheAIInsights(fallback)
                     self.isLoadingInsights = false
-                    Haptics.error()
+                    Haptics.notification(.warning)
                 }
             }
         }
     }
 
-    private func generateTrendInsights() async throws -> String {
-        // Check if AI is configured
-        let config = AIService.shared.getConfiguration()
+    private func generateLocalOnlyInsights() {
+        let insights = generateLocalInsights()
+        aiInsights = insights
+        cacheAIInsights(insights)
+        Haptics.success()
+    }
 
-        // If no API key, return local insights
-        guard !config.apiKey.isEmpty else {
-            return generateLocalInsights()
+    private func loadCachedAIInsights() {
+        let defaults = UserDefaults.standard
+        if let data = defaults.data(forKey: aiInsightCacheKey),
+           let cached = try? JSONDecoder().decode(CachedAIInsight.self, from: data) {
+            aiInsights = cached.text
+            aiInsightsGeneratedAt = cached.generatedAt
+            return
         }
+        aiInsights = defaults.string(forKey: aiInsightCacheKey)
+        aiInsightsGeneratedAt = nil
+    }
 
-        // Prepare data for AI analysis
+    private func cacheAIInsights(_ insights: String) {
+        let generatedAt = Date()
+        aiInsightsGeneratedAt = generatedAt
+        let cached = CachedAIInsight(text: insights, generatedAt: generatedAt)
+        guard let data = try? JSONEncoder().encode(cached) else { return }
+        UserDefaults.standard.set(data, forKey: aiInsightCacheKey)
+    }
+
+    private func aiInsightGeneratedText(_ generatedAt: Date) -> String {
+        let time = Self.aiGeneratedFormatter.string(from: generatedAt)
+        let range = String(format: NSLocalizedString("%lldd", comment: "AI generated range label"), Int64(rangeDays))
+        let count = String(format: NSLocalizedString("%lld readings", comment: "AI generated reading count"), Int64(filtered.count))
+        return String(format: NSLocalizedString("Generated %@ · %@ · %@", comment: "AI generated metadata"), time, range, count)
+    }
+
+    private func generateTrendInsights() async throws -> String {
         let measurementData = filtered.suffix(20).map { m -> String in
             let dateStr = ISO8601DateFormatter().string(from: m.date)
             if selectedType == .bloodPressure, let dia = m.diastolic {
@@ -745,7 +845,7 @@ struct EnhancedTrendsView: View {
             } else {
                 return "\(dateStr): \(m.value) \(selectedType.unit)"
             }
-        }.joined(separator: "\n")
+        }
 
         // Get related medications
         let relatedCategory: MedicationCategory? = {
@@ -759,166 +859,65 @@ struct EnhancedTrendsView: View {
         let medications = relatedCategory != nil ?
             store.medications.filter { $0.category == relatedCategory } : []
 
-        let medInfo = medications.map { "\($0.name) (\($0.dose))" }.joined(separator: ", ")
+        let request = AITrendInsightRequest(
+            measurementType: selectedType.displayName,
+            recentMeasurements: measurementData,
+            relatedMedications: medications.map {
+                DrugInteractionRequest.MedicationInfo(
+                    name: $0.name,
+                    dose: $0.dose,
+                    category: $0.category?.displayName
+                )
+            },
+            latest: latestText(),
+            change: deltaText(),
+            sevenDayAverage: sevenDayAverageText(),
+            sevenDayInRange: sevenDayInRangeText()
+        )
 
-        // Create analysis prompt
-        let prompt = """
-        Analyze the following \(selectedType.rawValue) measurements and provide health insights:
-
-        Recent measurements:
-        \(measurementData)
-
-        \(medications.isEmpty ? "" : "Related medications: \(medInfo)")
-
-        Current stats:
-        - Latest: \(latestText())
-        - Change: \(deltaText())
-        - 7-day average: \(sevenDayAverageText())
-        - In target range: \(sevenDayInRangeText())
-
-        Please provide:
-        1. Trend analysis (improving/stable/concerning)
-        2. Key observations
-        3. Actionable recommendations
-        4. When to consult healthcare provider
-
-        Keep the response concise (3-4 paragraphs) and patient-friendly.
-        """
-
-        do {
-            let insights = try await callAIForInsights(prompt: prompt)
-            return insights
-        } catch {
-            // Fallback to local insights if AI call fails
-            return generateLocalInsights()
-        }
-    }
-
-    private func callAIForInsights(prompt: String) async throws -> String {
-        let config = AIService.shared.getConfiguration()
-
-        switch config.provider {
-        case .openai:
-            return try await callOpenAIForInsights(prompt: prompt, apiKey: config.apiKey)
-        case .anthropic:
-            return try await callAnthropicForInsights(prompt: prompt, apiKey: config.apiKey)
-        }
-    }
-
-    private func callOpenAIForInsights(prompt: String, apiKey: String) async throws -> String {
-        let url = URL(string: "https://api.openai.com/v1/chat/completions")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let body: [String: Any] = [
-            "model": "gpt-4o-mini",
-            "messages": [
-                ["role": "system", "content": "You are a helpful medical assistant providing health insights. Be concise, supportive, and always recommend consulting healthcare providers for medical decisions."],
-                ["role": "user", "content": prompt]
-            ],
-            "temperature": 0.7,
-            "max_tokens": 500
-        ]
-
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            throw AIServiceError.networkError("Failed to get insights")
-        }
-
-        struct OpenAIResponse: Codable {
-            struct Choice: Codable {
-                struct Message: Codable {
-                    let content: String
-                }
-                let message: Message
-            }
-            let choices: [Choice]
-        }
-
-        let result = try JSONDecoder().decode(OpenAIResponse.self, from: data)
-        return result.choices.first?.message.content ?? generateLocalInsights()
-    }
-
-    private func callAnthropicForInsights(prompt: String, apiKey: String) async throws -> String {
-        let url = URL(string: "https://api.anthropic.com/v1/messages")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-
-        let body: [String: Any] = [
-            "model": "claude-haiku-4-5-20251001",
-            "max_tokens": 500,
-            "system": "You are a helpful medical assistant providing health insights. Be concise, supportive, and always recommend consulting healthcare providers for medical decisions.",
-            "messages": [
-                [
-                    "role": "user",
-                    "content": prompt
-                ]
-            ]
-        ]
-
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            throw AIServiceError.networkError("Failed to get insights")
-        }
-
-        struct AnthropicResponse: Codable {
-            struct Content: Codable {
-                let text: String
-            }
-            let content: [Content]
-        }
-
-        let result = try JSONDecoder().decode(AnthropicResponse.self, from: data)
-        return result.content.first?.text ?? generateLocalInsights()
+        return try await AIService.shared.analyzeTrendInsights(request)
     }
 
     private func generateLocalInsights() -> String {
-        var insights = "📊 **\(selectedType.rawValue) Analysis**\n\n"
+        var insights = String(format: NSLocalizedString("%@ Summary", comment: "Local trend insight title"), selectedType.displayName)
+        insights += "\n\n"
 
         // Trend analysis
         if filtered.count >= 3 {
-            let recent3 = Array(filtered.prefix(3))
+            let recent3 = Array(filtered.suffix(3))
             let values = recent3.map { $0.value }
             let isIncreasing = zip(values, values.dropFirst()).allSatisfy { $0 < $1 }
             let isDecreasing = zip(values, values.dropFirst()).allSatisfy { $0 > $1 }
 
             if isIncreasing {
-                insights += "📈 Your \(selectedType.rawValue.lowercased()) shows an **increasing trend**. "
+                insights += String(format: NSLocalizedString("Recent %@ readings are trending upward.", comment: "Local trend upward"), selectedType.displayName.lowercased())
             } else if isDecreasing {
-                insights += "📉 Your \(selectedType.rawValue.lowercased()) shows a **decreasing trend**. "
+                insights += String(format: NSLocalizedString("Recent %@ readings are trending downward.", comment: "Local trend downward"), selectedType.displayName.lowercased())
             } else {
-                insights += "➡️ Your \(selectedType.rawValue.lowercased()) is **relatively stable**. "
+                insights += String(format: NSLocalizedString("Recent %@ readings look relatively stable.", comment: "Local trend stable"), selectedType.displayName.lowercased())
             }
+        } else {
+            insights += NSLocalizedString("More readings are needed before a reliable trend can be estimated.", comment: "Local sparse trend")
         }
 
         insights += "\n\n"
 
         // Current stats
-        insights += "**Recent Stats:**\n"
-        insights += "• Latest reading: \(latestText())\n"
-        insights += "• Change from previous: \(deltaText())\n"
-        insights += "• 7-day average: \(sevenDayAverageText())\n"
-        insights += "• Within target range: \(sevenDayInRangeText())\n\n"
+        insights += NSLocalizedString("Recent Stats:", comment: "Local trend stats header") + "\n"
+        insights += String(format: NSLocalizedString("- Latest reading: %@", comment: "Local latest stat"), latestText()) + "\n"
+        insights += String(format: NSLocalizedString("- Change from previous: %@", comment: "Local change stat"), deltaText()) + "\n"
+        insights += String(format: NSLocalizedString("- 7-day average: %@", comment: "Local average stat"), sevenDayAverageText()) + "\n"
+        insights += String(format: NSLocalizedString("- Within target range: %@", comment: "Local range stat"), sevenDayInRangeText()) + "\n\n"
 
         // Recommendations
-        insights += "**Recommendations:**\n"
-        insights += "• Continue regular monitoring for accurate trends\n"
-        insights += "• Record measurements at consistent times\n"
-        insights += "• Note any symptoms or activities in the notes field\n"
+        insights += NSLocalizedString("Suggested Review:", comment: "Local recommendations header") + "\n"
+        insights += NSLocalizedString("- Keep recording at consistent times so trends are easier to compare.", comment: "Local recommendation consistent") + "\n"
+        insights += NSLocalizedString("- Add context notes when symptoms, meals, activity, or missed medication may affect a reading.", comment: "Local recommendation notes") + "\n"
+        insights += NSLocalizedString("- Discuss medication or dose changes with your clinician.", comment: "Local recommendation clinician")
 
         if let trendWarning = DataValidator.analyzeTrend(measurements: filtered, type: selectedType) {
-            insights += "\n\n⚠️ **Note:** \(trendWarning)"
+            insights += "\n\n"
+            insights += String(format: NSLocalizedString("Note: %@", comment: "Local trend warning"), trendWarning)
         }
 
         return insights

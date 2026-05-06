@@ -367,6 +367,102 @@ struct SymptomEntry: Identifiable, Codable {
     var relatedMedicationIDs: [UUID]?
 }
 
+enum SymptomMedicationRelation: String, Codable, CaseIterable, Identifiable {
+    case unknown
+    case beforeMedication
+    case afterMedication
+    case unrelated
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .unknown: return NSLocalizedString("Not sure", comment: "Symptom medication relation")
+        case .beforeMedication: return NSLocalizedString("Before medication", comment: "Symptom medication relation")
+        case .afterMedication: return NSLocalizedString("After medication", comment: "Symptom medication relation")
+        case .unrelated: return NSLocalizedString("Not related to medication", comment: "Symptom medication relation")
+        }
+    }
+}
+
+enum SymptomRedFlagSign: String, Codable, CaseIterable, Identifiable {
+    case chestPain
+    case shortnessOfBreath
+    case palpitations
+    case oneSidedWeakness
+    case blurredVision
+    case fainting
+    case confusion
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .chestPain: return NSLocalizedString("Chest pain", comment: "Symptom red flag")
+        case .shortnessOfBreath: return NSLocalizedString("Shortness of breath", comment: "Symptom red flag")
+        case .palpitations: return NSLocalizedString("Palpitations", comment: "Symptom red flag")
+        case .oneSidedWeakness: return NSLocalizedString("One-sided weakness", comment: "Symptom red flag")
+        case .blurredVision: return NSLocalizedString("Blurred vision", comment: "Symptom red flag")
+        case .fainting: return NSLocalizedString("Fainting", comment: "Symptom red flag")
+        case .confusion: return NSLocalizedString("Confusion", comment: "Symptom red flag")
+        }
+    }
+}
+
+struct SymptomClarification: Identifiable, Codable, Equatable {
+    var id: UUID = UUID()
+    let symptomEntryID: UUID
+    var onsetDescription: String?
+    var relationToMedication: SymptomMedicationRelation = .unknown
+    var happenedAfterStanding: Bool = false
+    var nearbyMeasurementNote: String?
+    var redFlagSigns: [SymptomRedFlagSign] = []
+    var followUpRelevanceNote: String?
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+}
+
+extension SymptomClarification {
+    var hasUsefulContext: Bool {
+        onsetDescription?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ||
+            relationToMedication != .unknown ||
+            happenedAfterStanding ||
+            nearbyMeasurementNote?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ||
+            !redFlagSigns.isEmpty ||
+            followUpRelevanceNote?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
+    var reportContextLine: String? {
+        var fragments: [String] = []
+        if let onset = trimmed(onsetDescription) {
+            fragments.append(String(format: NSLocalizedString("onset/context: %@", comment: "Symptom clarification report fragment"), onset))
+        }
+        if relationToMedication != .unknown {
+            fragments.append(relationToMedication.displayName)
+        }
+        if happenedAfterStanding {
+            fragments.append(NSLocalizedString("after standing", comment: "Symptom clarification report fragment"))
+        }
+        if !redFlagSigns.isEmpty {
+            let signs = redFlagSigns.map(\.displayName).joined(separator: ", ")
+            fragments.append(String(format: NSLocalizedString("red flags: %@", comment: "Symptom clarification report fragment"), signs))
+        }
+        if let nearby = trimmed(nearbyMeasurementNote) {
+            fragments.append(String(format: NSLocalizedString("nearby measurement: %@", comment: "Symptom clarification report fragment"), nearby))
+        }
+        if let relevance = trimmed(followUpRelevanceNote) {
+            fragments.append(String(format: NSLocalizedString("follow-up note: %@", comment: "Symptom clarification report fragment"), relevance))
+        }
+        guard !fragments.isEmpty else { return nil }
+        return String(format: NSLocalizedString("clarified: %@", comment: "Symptom clarification report fragment"), fragments.joined(separator: "; "))
+    }
+
+    private func trimmed(_ value: String?) -> String? {
+        let text = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return text.isEmpty ? nil : text
+    }
+}
+
 // MARK: - Doctor Visit (the center of the "pre-visit prep" loop)
 
 /// A single doctor visit — either scheduled (upcoming) or completed (past).
@@ -389,11 +485,49 @@ struct DoctorVisit: Identifiable, Codable {
     // Post-visit reflection — filled after the visit.
     var notes: String?
     var medicationChangesSummary: String?
+    var followUpChecksSummary: String?
     var nextVisitDate: Date?
 }
 
 extension DoctorVisit {
     var isCompleted: Bool { completedDate != nil }
+
+    var hasDoctorNotes: Bool {
+        notes?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
+    var hasMedicationPlan: Bool {
+        medicationChangesSummary?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
+    var hasFollowUpChecksPlan: Bool {
+        followUpChecksSummary?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
+    var hasNextVisitPlan: Bool {
+        nextVisitDate != nil
+    }
+
+    var needsPostVisitCapture: Bool {
+        isCompleted && (!hasDoctorNotes || !hasMedicationPlan || !hasFollowUpChecksPlan || !hasNextVisitPlan)
+    }
+
+    var postVisitMissingItems: [String] {
+        var items: [String] = []
+        if !hasDoctorNotes {
+            items.append(NSLocalizedString("doctor instructions", comment: "Post visit missing item"))
+        }
+        if !hasMedicationPlan {
+            items.append(NSLocalizedString("medication plan", comment: "Post visit missing item"))
+        }
+        if !hasFollowUpChecksPlan {
+            items.append(NSLocalizedString("tests or checks", comment: "Post visit missing item"))
+        }
+        if !hasNextVisitPlan {
+            items.append(NSLocalizedString("next visit", comment: "Post visit missing item"))
+        }
+        return items
+    }
 
     /// Upcoming = not yet completed and scheduled in the future OR today.
     func isUpcoming(now: Date = Date(), calendar: Calendar = .current) -> Bool {

@@ -274,11 +274,11 @@ struct EditorialButton: View {
                         .font(.system(size: 14, weight: .regular))
                 }
                 Text(title)
-                    .appFont(.subheadline)
+                    .appFont(.body)
                     .fontWeight(.medium)
             }
             .frame(maxWidth: .infinity)
-            .frame(minHeight: 42)
+            .frame(minHeight: 50)
             .foregroundStyle(foreground)
             .background(background)
             .overlay(

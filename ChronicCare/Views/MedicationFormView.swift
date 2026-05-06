@@ -423,8 +423,10 @@ struct MedicationFormView: View {
 
             if showMoreDetails {
                 moreDetailsContent
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .animation(.easeInOut(duration: 0.18), value: showMoreDetails)
     }
 
     @ViewBuilder
