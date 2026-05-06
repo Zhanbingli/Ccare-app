@@ -22,6 +22,11 @@ struct DoctorVisitsView: View {
         store.completedDoctorVisits.first { $0.needsPostVisitCapture }
     }
 
+    private var hasDiabetesContext: Bool {
+        store.medications.contains { $0.category == .antidiabetic }
+        || store.measurements.contains { $0.type == .bloodGlucose }
+    }
+
     var body: some View {
         List {
             Section {
@@ -48,6 +53,19 @@ struct DoctorVisitsView: View {
                             systemImage: "heart.text.square",
                             tint: AppColor.primary
                         )
+                    }
+
+                    if hasDiabetesContext {
+                        NavigationLink {
+                            DiabetesFollowUpReportView(visit: visit)
+                        } label: {
+                            visitActionRow(
+                                title: NSLocalizedString("Diabetes Report", comment: "Diabetes report title"),
+                                subtitle: NSLocalizedString("Glucose, medication adherence, symptoms, and rule-based safety signals", comment: "Diabetes report row subtitle"),
+                                systemImage: "drop.triangle",
+                                tint: AppColor.primary
+                            )
+                        }
                     }
 
                     NavigationLink {

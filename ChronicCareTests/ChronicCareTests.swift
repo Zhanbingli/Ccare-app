@@ -858,4 +858,42 @@ struct ChronicCareTests {
         #expect(draft.questions.count == 3)
     }
 
+    @Test func diabetesRuleEngineFlagsSeverelyLowGlucose() {
+        let now = Date()
+        let reading = Measurement(
+            type: .bloodGlucose,
+            value: 54,
+            date: now,
+            note: nil
+        )
+
+        let flags = DiabetesRuleEngine.evaluate(glucoseReadings: [reading], symptoms: [], now: now)
+
+        #expect(flags.count == 1)
+        #expect(flags.first?.sourceRule == "glucose_very_low_54")
+        #expect(flags.first?.severity == .urgent)
+    }
+
+    @Test func diabetesRuleEngineFlagsHighGlucoseWithConcerningSymptoms() {
+        let now = Date()
+        let reading = Measurement(
+            type: .bloodGlucose,
+            value: 260,
+            date: now,
+            note: nil
+        )
+        let symptom = SymptomEntry(
+            date: now,
+            tags: ["vomiting"],
+            severity: .severe,
+            note: "abdominal pain"
+        )
+
+        let flags = DiabetesRuleEngine.evaluate(glucoseReadings: [reading], symptoms: [symptom], now: now)
+
+        #expect(flags.count == 1)
+        #expect(flags.first?.sourceRule == "glucose_high_240")
+        #expect(flags.first?.severity == .urgent)
+    }
+
 }
