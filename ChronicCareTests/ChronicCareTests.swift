@@ -989,6 +989,46 @@ struct ChronicCareTests {
         #expect(action?.target == .openHypertensionReport(visit.id))
     }
 
+    @MainActor
+    @Test func followUpAgentPlannerStrengthensSparseHypertensionReportBeforeVisit() {
+        let store = DataStore()
+        store.clearAll()
+        let now = Date()
+        let visitDate = Calendar.current.date(byAdding: .day, value: 2, to: now) ?? now
+        let visit = DoctorVisit(scheduledDate: visitDate)
+        let medication = Medication(
+            name: "Amlodipine",
+            dose: "5mg",
+            timesOfDay: [DateComponents(hour: 8, minute: 0)],
+            remindersEnabled: true,
+            category: .antihypertensive
+        )
+        #expect(store.addMedication(medication) == nil)
+        store.addDoctorVisit(visit)
+        store.addMeasurement(Measurement(
+            type: .bloodPressure,
+            value: 142,
+            diastolic: 88,
+            date: now,
+            note: nil
+        ))
+
+        let readiness = FollowUpAgentPlanner.reportReadiness(
+            store: store,
+            domain: .hypertension,
+            visitID: visit.id,
+            now: now
+        )
+        let action = FollowUpAgentPlanner.nextAction(
+            store: store,
+            stage: .activePrep(visitID: visit.id, daysUntil: 2),
+            now: now
+        )
+
+        #expect(readiness.missingItems.contains { $0.target == .logMeasurement(.bloodPressure) })
+        #expect(action?.target == .logMeasurement(.bloodPressure))
+    }
+
     @Test func agentInboxMergePreservesDismissedStateForStableKey() {
         let now = Date()
         let previous = AgentInboxItem(

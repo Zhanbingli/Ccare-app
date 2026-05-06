@@ -1898,3 +1898,14 @@
 "Use the appointment summary to keep medication lists, questions, and recent records in one place." = "用就诊摘要把用药清单、问题和近期记录放在一起。";
 "Open Visit Snapshot" = "打开就诊摘要";
 "Open Support" = "打开照护支持";
+"Add more blood pressure readings" = "补充更多血压记录";
+"Add more glucose readings" = "补充更多血糖记录";
+"%lld / %lld doctor-ready" = "%lld / %lld 项医生可用";
+"Ready: medication list, measurement trend, and adherence context." = "已具备用药清单、测量趋势和服药记录。";
+"Missing: %@." = "还缺：%@。";
+"Confirm medication list" = "确认用药清单";
+"Set medication schedule" = "设置服药时间";
+"Strengthen the follow-up report" = "补强复诊报告";
+"Report is %@. %@" = "报告就绪度：%@。%@";
+"Report is %@. Review the one-page summary and questions before the visit." = "报告就绪度：%@。就诊前查看一页摘要和问题。";
+"Log Measurement" = "记录测量";
