@@ -40,6 +40,17 @@ struct DoctorVisitsView: View {
                     }
 
                     NavigationLink {
+                        HypertensionFollowUpReportView(visit: visit)
+                    } label: {
+                        visitActionRow(
+                            title: NSLocalizedString("Hypertension Report", comment: "Hypertension report title"),
+                            subtitle: NSLocalizedString("BP, adherence, symptoms, and rule-based safety signals", comment: "Hypertension report row subtitle"),
+                            systemImage: "heart.text.square",
+                            tint: AppColor.primary
+                        )
+                    }
+
+                    NavigationLink {
                         DoctorVisitFormView(editing: visit, showsCancelButton: false)
                     } label: {
                         visitActionRow(
