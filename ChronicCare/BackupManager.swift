@@ -9,6 +9,7 @@ struct AppBackup: Codable {
     var emergencyInfo: EmergencyInfo?
     var caregivers: [CaregiverContact]?
     var symptomEntries: [SymptomEntry]?
+    var symptomClarifications: [SymptomClarification]?
     var doctorVisits: [DoctorVisit]?
     var agentInboxItems: [AgentInboxItem]?
     var hypertensionAIDrafts: [HypertensionFollowUpAIDraftRecord]?
@@ -51,6 +52,7 @@ enum BackupManager {
             emergencyInfo: store.emergencyInfo,
             caregivers: store.caregivers,
             symptomEntries: store.symptomEntries,
+            symptomClarifications: store.symptomClarifications,
             doctorVisits: store.doctorVisits,
             agentInboxItems: store.agentInboxItems,
             hypertensionAIDrafts: store.hypertensionAIDrafts,
@@ -62,7 +64,7 @@ enum BackupManager {
         return url
     }
 
-    static let currentVersion = 5
+    static let currentVersion = 6
 
     static func loadBackup(from url: URL) throws -> AppBackup {
         let data = try Data(contentsOf: url)
@@ -92,6 +94,11 @@ enum BackupManager {
             // v4 -> v5: bounded hypertension AI report drafts were added.
             if result.hypertensionAIDrafts == nil { result.hypertensionAIDrafts = [] }
             result.version = 5
+        }
+        if result.version < 6 {
+            // v5 -> v6: structured symptom clarifications were added.
+            if result.symptomClarifications == nil { result.symptomClarifications = [] }
+            result.version = 6
         }
         return result
     }

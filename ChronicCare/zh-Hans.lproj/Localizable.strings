@@ -906,6 +906,7 @@
 "Open Visit Prep" = "打开复诊准备";
 "Open Caregivers" = "打开照护者";
 "Open Medications" = "打开用药";
+"Clarify Symptom" = "澄清症状";
 "Mark Done" = "标记完成";
 "Safety" = "安全";
 "Missing Data" = "缺失数据";
@@ -928,6 +929,35 @@
 "%@ is overdue. Review the report before updating the visit plan." = "%@ 已逾期。更新复诊计划前请先查看报告。";
 "%@ is today. Review patient questions and doctor-facing summary." = "%@ 就在今天。请查看患者问题和给医生看的摘要。";
 "%@ is in %lld days. Review the report while there is still time to fill gaps." = "%@ 将在 %lld 天后进行。趁还有时间，请查看报告并补齐缺口。";
+
+/* Symptom Clarification */
+"Timing and context" = "发生时间与背景";
+"When did it start or what were you doing?" = "什么时候开始，或当时在做什么？";
+"Relation to medication" = "与用药的关系";
+"Happened after standing up" = "站起后发生";
+"Nearby measurement" = "附近测量值";
+"e.g., BP 158/96 20 minutes later" = "例如：20 分钟后血压 158/96";
+"Red-flag signs" = "危险信号";
+"If chest pain, shortness of breath, one-sided weakness, fainting, confusion, or severe symptoms are happening now, seek urgent medical help." = "如果胸痛、气短、一侧无力、晕厥、意识混乱或严重症状正在发生，请及时寻求急诊帮助。";
+"For the next visit" = "下次复诊";
+"What should the doctor know about this symptom?" = "医生需要了解这个症状的哪些情况？";
+"Not sure" = "不确定";
+"Before medication" = "服药前";
+"After medication" = "服药后";
+"Not related to medication" = "与用药无明显关系";
+"Chest pain" = "胸痛";
+"Shortness of breath" = "气短";
+"Palpitations" = "心悸";
+"One-sided weakness" = "一侧无力";
+"Blurred vision" = "视物模糊";
+"Fainting" = "晕厥";
+"Confusion" = "意识混乱";
+"onset/context: %@" = "发生背景：%@";
+"after standing" = "站起后";
+"red flags: %@" = "危险信号：%@";
+"nearby measurement: %@" = "附近测量：%@";
+"follow-up note: %@" = "复诊备注：%@";
+"clarified: %@" = "已澄清：%@";
 
 /* EmergencyInfoView */
 "Add Emergency Info" = "添加紧急信息";

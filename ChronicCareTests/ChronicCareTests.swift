@@ -951,6 +951,70 @@ struct ChronicCareTests {
     }
 
     @MainActor
+    @Test func agentInboxDoesNotAskClarificationAfterSymptomClarified() {
+        let store = DataStore()
+        store.clearAll()
+        let now = Date()
+        let symptom = SymptomEntry(
+            date: now,
+            tags: ["dizziness"],
+            severity: .moderate,
+            note: nil
+        )
+        store.addSymptomEntry(symptom)
+
+        store.refreshAgentInbox(now: now)
+
+        let stableKey = "clarification.symptom.\(symptom.id.uuidString)"
+        #expect(store.openAgentInboxItems.contains {
+            $0.stableKey == stableKey && $0.action == .clarifySymptom
+        })
+
+        store.upsertSymptomClarification(SymptomClarification(
+            symptomEntryID: symptom.id,
+            onsetDescription: "Started after breakfast",
+            relationToMedication: .afterMedication,
+            happenedAfterStanding: false,
+            nearbyMeasurementNote: "BP 142/88",
+            redFlagSigns: [],
+            followUpRelevanceNote: nil
+        ))
+        store.refreshAgentInbox(now: now)
+
+        #expect(store.openAgentInboxItems.contains { $0.stableKey == stableKey } == false)
+    }
+
+    @MainActor
+    @Test func symptomClarificationUpsertReplacesSameSymptom() {
+        let store = DataStore()
+        store.clearAll()
+        let symptomID = UUID()
+        store.upsertSymptomClarification(SymptomClarification(
+            symptomEntryID: symptomID,
+            onsetDescription: "First",
+            relationToMedication: .unknown,
+            happenedAfterStanding: false,
+            nearbyMeasurementNote: nil,
+            redFlagSigns: [],
+            followUpRelevanceNote: nil
+        ))
+        store.upsertSymptomClarification(SymptomClarification(
+            symptomEntryID: symptomID,
+            onsetDescription: "Second",
+            relationToMedication: .beforeMedication,
+            happenedAfterStanding: true,
+            nearbyMeasurementNote: "BP 150/90",
+            redFlagSigns: [.palpitations],
+            followUpRelevanceNote: "Ask whether timing matters"
+        ))
+
+        #expect(store.symptomClarifications.count == 1)
+        #expect(store.clarification(for: symptomID)?.onsetDescription == "Second")
+        #expect(store.clarification(for: symptomID)?.relationToMedication == .beforeMedication)
+        #expect(store.clarification(for: symptomID)?.happenedAfterStanding == true)
+    }
+
+    @MainActor
     @Test func hypertensionAIDraftStoreReplacesSameReportContext() {
         let store = DataStore()
         store.clearAll()

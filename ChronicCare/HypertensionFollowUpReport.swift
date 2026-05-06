@@ -211,6 +211,7 @@ enum HypertensionFollowUpReportBuilder {
         let symptoms = store.symptomEntries
             .filter { $0.date >= periodStart && $0.date <= now }
             .sorted { $0.date > $1.date }
+        let clarificationsBySymptomID = clarificationMap(store.symptomClarifications)
         let antihypertensives = store.medications.filter { $0.category == .antihypertensive }
         let thresholds = store.bpThresholds()
         let bpSummary = bloodPressureSummary(
@@ -229,7 +230,9 @@ enum HypertensionFollowUpReportBuilder {
         let symptomSummary = HypertensionFollowUpReport.SymptomSummary(
             count: symptoms.count,
             severeCount: symptoms.filter { $0.severity == .severe }.count,
-            summaries: symptoms.prefix(5).map { symptomLine($0) }
+            summaries: symptoms.prefix(5).map { symptom in
+                symptomLine(symptom, clarification: clarificationsBySymptomID[symptom.id])
+            }
         )
         let redFlags = HypertensionRuleEngine.evaluate(
             bloodPressureReadings: bpReadings,
@@ -494,12 +497,24 @@ enum HypertensionFollowUpReportBuilder {
         return Array(questions.prefix(3))
     }
 
-    private static func symptomLine(_ symptom: SymptomEntry) -> String {
+    private static func symptomLine(_ symptom: SymptomEntry, clarification: SymptomClarification?) -> String {
         let tags = symptom.tags.joined(separator: ", ")
+        var line: String
         if let note = symptom.note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
-            return "\(symptom.severity.displayName): \(tags) - \(note)"
+            line = "\(symptom.severity.displayName): \(tags) - \(note)"
+        } else {
+            line = "\(symptom.severity.displayName): \(tags)"
         }
-        return "\(symptom.severity.displayName): \(tags)"
+        if let context = clarification?.reportContextLine {
+            line += "; \(context)"
+        }
+        return line
+    }
+
+    private static func clarificationMap(_ clarifications: [SymptomClarification]) -> [UUID: SymptomClarification] {
+        Dictionary(grouping: clarifications, by: \.symptomEntryID).mapValues { records in
+            records.sorted { $0.updatedAt > $1.updatedAt }.first!
+        }
     }
 
     private static func average(_ values: [Double]) -> Double? {

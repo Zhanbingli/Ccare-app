@@ -18,6 +18,7 @@ enum AgentInboxAction: String, Codable {
     case openVisitPrep
     case openCaregivers
     case openMedications
+    case clarifySymptom
 }
 
 enum AgentInboxStatus: String, Codable {
@@ -91,7 +92,12 @@ enum AgentInboxGenerator {
         }
 
         items.append(contentsOf: adherenceItems(store: store, now: now))
-        items.append(contentsOf: symptomClarificationItems(symptoms: store.symptomEntries, now: now, calendar: calendar))
+        items.append(contentsOf: symptomClarificationItems(
+            symptoms: store.symptomEntries,
+            clarifications: store.symptomClarifications,
+            now: now,
+            calendar: calendar
+        ))
         items.append(contentsOf: reportPreparationItems(store: store, hasHypertensionContext: hasHypertensionContext, hasDiabetesContext: hasDiabetesContext, now: now, calendar: calendar))
 
         return deduplicated(items).sorted(by: sort)
@@ -209,10 +215,17 @@ enum AgentInboxGenerator {
         }
     }
 
-    private static func symptomClarificationItems(symptoms: [SymptomEntry], now: Date, calendar: Calendar) -> [AgentInboxItem] {
+    private static func symptomClarificationItems(
+        symptoms: [SymptomEntry],
+        clarifications: [SymptomClarification],
+        now: Date,
+        calendar: Calendar
+    ) -> [AgentInboxItem] {
         let start = calendar.date(byAdding: .day, value: -6, to: calendar.startOfDay(for: now)) ?? now
+        let clarifiedIDs = Set(clarifications.filter(\.hasUsefulContext).map(\.symptomEntryID))
         return symptoms
             .filter { $0.date >= start }
+            .filter { !clarifiedIDs.contains($0.id) }
             .filter { symptomNeedsClarification($0) }
             .prefix(3)
             .map { symptom in
@@ -224,7 +237,7 @@ enum AgentInboxGenerator {
                     category: .clarification,
                     severity: symptom.severity == .severe ? .caution : .information,
                     source: .localSummary,
-                    action: .none,
+                    action: .clarifySymptom,
                     relatedID: symptom.id,
                     generatedAt: now,
                     updatedAt: now

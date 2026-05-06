@@ -245,6 +245,23 @@ struct AgentInboxView: View {
                 Label(NSLocalizedString("Open Medications", comment: "Agent inbox action"), systemImage: "pills")
             }
             .foregroundStyle(AppColor.primary)
+        case .clarifySymptom:
+            if let symptom = symptom(for: item) {
+                NavigationLink {
+                    SymptomClarificationView(symptom: symptom)
+                } label: {
+                    Label(NSLocalizedString("Clarify Symptom", comment: "Agent inbox action"), systemImage: "questionmark.bubble")
+                }
+                .foregroundStyle(AppColor.primary)
+            } else {
+                Button {
+                    store.dismissAgentInboxItem(item)
+                } label: {
+                    Label(NSLocalizedString("Mark Done", comment: "Agent inbox action"), systemImage: "checkmark")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(AppColor.primary)
+            }
         case .none:
             Button {
                 store.dismissAgentInboxItem(item)
@@ -287,6 +304,11 @@ struct AgentInboxView: View {
             return store.doctorVisits.first { $0.id == id } ?? store.nextDoctorVisit
         }
         return store.nextDoctorVisit
+    }
+
+    private func symptom(for item: AgentInboxItem) -> SymptomEntry? {
+        guard let id = item.relatedID else { return nil }
+        return store.symptomEntries.first { $0.id == id }
     }
 }
 

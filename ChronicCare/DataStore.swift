@@ -13,6 +13,7 @@ final class DataStore: ObservableObject {
     @Published private(set) var emergencyInfo: EmergencyInfo?
     @Published private(set) var caregivers: [CaregiverContact] = []
     @Published private(set) var symptomEntries: [SymptomEntry] = []
+    @Published private(set) var symptomClarifications: [SymptomClarification] = []
     @Published private(set) var doctorVisits: [DoctorVisit] = []
     @Published private(set) var agentInboxItems: [AgentInboxItem] = []
     @Published private(set) var hypertensionAIDrafts: [HypertensionFollowUpAIDraftRecord] = []
@@ -26,6 +27,7 @@ final class DataStore: ObservableObject {
     private let emergencyInfoURL: URL
     private let caregiversURL: URL
     private let symptomEntriesURL: URL
+    private let symptomClarificationsURL: URL
     private let doctorVisitsURL: URL
     private let agentInboxItemsURL: URL
     private let hypertensionAIDraftsURL: URL
@@ -40,6 +42,7 @@ final class DataStore: ObservableObject {
         self.emergencyInfoURL = docs.appendingPathComponent("emergency_info.json")
         self.caregiversURL = docs.appendingPathComponent("caregivers.json")
         self.symptomEntriesURL = docs.appendingPathComponent("symptom_entries.json")
+        self.symptomClarificationsURL = docs.appendingPathComponent("symptom_clarifications.json")
         self.doctorVisitsURL = docs.appendingPathComponent("doctor_visits.json")
         self.agentInboxItemsURL = docs.appendingPathComponent("agent_inbox_items.json")
         self.hypertensionAIDraftsURL = docs.appendingPathComponent("hypertension_ai_drafts.json")
@@ -82,6 +85,12 @@ final class DataStore: ObservableObject {
             .dropFirst()
             .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.saveSymptomEntries() }
+            .store(in: &cancellables)
+
+        $symptomClarifications
+            .dropFirst()
+            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+            .sink { [weak self] _ in self?.saveSymptomClarifications() }
             .store(in: &cancellables)
 
         $doctorVisits
@@ -416,10 +425,12 @@ final class DataStore: ObservableObject {
         emergencyInfo = nil
         caregivers.removeAll()
         symptomEntries.removeAll()
+        symptomClarifications.removeAll()
         doctorVisits.removeAll()
         agentInboxItems.removeAll()
         hypertensionAIDrafts.removeAll()
         saveEmergencyInfo()
+        saveSymptomClarifications()
         saveDoctorVisits()
         saveAgentInboxItems()
         saveHypertensionAIDrafts()
@@ -453,11 +464,14 @@ final class DataStore: ObservableObject {
         markReportDataChanged()
     }
     func removeSymptomEntry(at offsets: IndexSet) {
+        let removedIDs = offsets.map { symptomEntries[$0].id }
         symptomEntries.remove(atOffsets: offsets)
+        symptomClarifications.removeAll { removedIDs.contains($0.symptomEntryID) }
         markReportDataChanged()
     }
     func removeSymptomEntry(_ entry: SymptomEntry) {
         symptomEntries.removeAll { $0.id == entry.id }
+        symptomClarifications.removeAll { $0.symptomEntryID == entry.id }
         markReportDataChanged()
     }
     func updateSymptomEntry(_ entry: SymptomEntry) {
@@ -465,6 +479,22 @@ final class DataStore: ObservableObject {
             symptomEntries[idx] = entry
             markReportDataChanged()
         }
+    }
+
+    // MARK: - Symptom Clarifications
+    func clarification(for symptomEntryID: UUID) -> SymptomClarification? {
+        symptomClarifications
+            .filter { $0.symptomEntryID == symptomEntryID }
+            .sorted { $0.updatedAt > $1.updatedAt }
+            .first
+    }
+
+    func upsertSymptomClarification(_ clarification: SymptomClarification) {
+        var updated = clarification
+        updated.updatedAt = Date()
+        symptomClarifications.removeAll { $0.symptomEntryID == updated.symptomEntryID }
+        symptomClarifications.insert(updated, at: 0)
+        markReportDataChanged()
     }
 
     // MARK: - Doctor Visits
@@ -617,6 +647,7 @@ final class DataStore: ObservableObject {
         saveEmergencyInfo()
         caregivers = backup.caregivers ?? []
         symptomEntries = (backup.symptomEntries ?? []).sorted(by: { $0.date > $1.date })
+        symptomClarifications = backup.symptomClarifications ?? []
         doctorVisits = (backup.doctorVisits ?? []).sorted(by: { $0.scheduledDate < $1.scheduledDate })
         agentInboxItems = backup.agentInboxItems ?? []
         hypertensionAIDrafts = backup.hypertensionAIDrafts ?? []
@@ -634,6 +665,7 @@ final class DataStore: ObservableObject {
         } catch { /* first launch or no data */ }
         self.caregivers = loadResilient(from: caregiversURL, label: "caregivers")
         self.symptomEntries = loadResilient(from: symptomEntriesURL, label: "symptom entries").sorted(by: { $0.date > $1.date })
+        self.symptomClarifications = loadResilient(from: symptomClarificationsURL, label: "symptom clarifications")
         self.doctorVisits = loadResilient(from: doctorVisitsURL, label: "doctor visits").sorted(by: { $0.scheduledDate < $1.scheduledDate })
         self.agentInboxItems = loadResilient(from: agentInboxItemsURL, label: "agent inbox items")
         self.hypertensionAIDrafts = loadResilient(from: hypertensionAIDraftsURL, label: "hypertension AI drafts")
@@ -691,6 +723,11 @@ final class DataStore: ObservableObject {
     private func saveSymptomEntries() {
         let snapshot = symptomEntries
         persist(snapshot, to: symptomEntriesURL, label: "symptom entries")
+    }
+
+    private func saveSymptomClarifications() {
+        let snapshot = symptomClarifications
+        persist(snapshot, to: symptomClarificationsURL, label: "symptom clarifications")
     }
 
     private func saveDoctorVisits() {
