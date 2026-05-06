@@ -6,6 +6,11 @@ struct HypertensionFollowUpReportView: View {
     var days: Int = 30
     @State private var showShareSheet = false
     @State private var shareText: String?
+    @State private var showPDFShareSheet = false
+    @State private var pdfShareURL: URL?
+    @State private var isGeneratingPDF = false
+    @State private var showPDFError = false
+    @State private var pdfErrorMessage = ""
     @State private var aiDraft: HypertensionFollowUpLLMDraft?
     @State private var aiDraftGeneratedAt: Date?
     @State private var isDraftingAI = false
@@ -60,6 +65,14 @@ struct HypertensionFollowUpReportView: View {
                 }
 
                 Button {
+                    exportPDF(report)
+                } label: {
+                    Image(systemName: isGeneratingPDF ? "hourglass" : "doc.richtext")
+                }
+                .disabled(isGeneratingPDF)
+                .accessibilityLabel(NSLocalizedString("Export PDF", comment: "Hypertension report PDF action"))
+
+                Button {
                     shareText = HypertensionFollowUpReportTextExporter.plainText(report, aiDraft: aiDraft)
                     showShareSheet = true
                 } label: {
@@ -71,6 +84,11 @@ struct HypertensionFollowUpReportView: View {
         .sheet(isPresented: $showShareSheet) {
             if let shareText {
                 ShareSheet(activityItems: [shareText])
+            }
+        }
+        .sheet(isPresented: $showPDFShareSheet) {
+            if let pdfShareURL {
+                ShareSheet(activityItems: [pdfShareURL])
             }
         }
         .alert(NSLocalizedString("Send Structured Report to AI?", comment: "Hypertension report AI disclosure title"), isPresented: $showAIDataDisclosure) {
@@ -86,6 +104,11 @@ struct HypertensionFollowUpReportView: View {
             Button(NSLocalizedString("OK", comment: ""), role: .cancel) {}
         } message: {
             Text(aiErrorMessage)
+        }
+        .alert(NSLocalizedString("Could not create report", comment: "Hypertension report PDF error title"), isPresented: $showPDFError) {
+            Button(NSLocalizedString("OK", comment: ""), role: .cancel) {}
+        } message: {
+            Text(pdfErrorMessage)
         }
         .onAppear {
             loadCachedAIDraft()
@@ -342,6 +365,22 @@ struct HypertensionFollowUpReportView: View {
         switch severity {
         case .information: return AppColor.primary
         case .caution, .urgent: return AppColor.warning
+        }
+    }
+
+    private func exportPDF(_ report: HypertensionFollowUpReport) {
+        guard !isGeneratingPDF else { return }
+        isGeneratingPDF = true
+        defer { isGeneratingPDF = false }
+
+        do {
+            pdfShareURL = try HypertensionFollowUpReportPDFExporter.generate(report: report, aiDraft: aiDraft)
+            showPDFShareSheet = true
+            Haptics.success()
+        } catch {
+            pdfErrorMessage = error.localizedDescription
+            showPDFError = true
+            Haptics.notification(.warning)
         }
     }
 

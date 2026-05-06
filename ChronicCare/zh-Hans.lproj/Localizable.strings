@@ -1368,6 +1368,7 @@
 "Questions to Ask" = "要问医生的问题";
 "Hypertension Report" = "高血压复诊报告";
 "Share Report" = "分享报告";
+"Export PDF" = "导出 PDF";
 "Refine with AI" = "用 AI 整理";
 "Send Structured Report to AI?" = "发送结构化报告给 AI？";
 "Draft with AI" = "用 AI 起草";
@@ -1381,6 +1382,7 @@
 "Doctor-Facing Summary" = "给医生看的摘要";
 "Questions for Doctor" = "要问医生的问题";
 "Blood Pressure Appendix" = "血压原始记录";
+"Safety Note" = "安全说明";
 "AI Draft" = "AI 草稿";
 "Drafting..." = "正在起草…";
 "AI drafted %@" = "AI 于 %@ 起草";
