@@ -28,6 +28,9 @@ struct DashboardView: View {
     @State private var showDoctorVisitForm = false
     @State private var editingDoctorVisit: DoctorVisit?
     @State private var showVisitSnapshot = false
+    @State private var snapshotVisitID: UUID?
+    @State private var followUpReportRoute: FollowUpReportRoute?
+    @State private var clarifyingSymptom: SymptomEntry?
     @State private var quickFeelingConfirmation: String?
     @State private var visitDayChecklistRevision = 0
     private let refreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
@@ -178,6 +181,20 @@ struct DashboardView: View {
         let prnMeds: [Medication]
     }
 
+    private struct FollowUpReportRoute: Identifiable {
+        enum Kind: String {
+            case hypertension
+            case diabetes
+        }
+
+        let kind: Kind
+        let visitID: UUID?
+
+        var id: String {
+            "\(kind.rawValue).\(visitID?.uuidString ?? "current")"
+        }
+    }
+
     private func buildTodayState() -> TodayState {
         let schedules = todaySchedules()
         let statusLookup = latestTodayLogMap()
@@ -229,6 +246,10 @@ struct DashboardView: View {
             let state = buildTodayState()
             let currentAction = state.currentAction
             let mode = homeMode
+            let agentNextAction = FollowUpAgentPlanner.nextAction(
+                store: store,
+                stage: followUpAgentStage(for: mode)
+            )
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -258,6 +279,10 @@ struct DashboardView: View {
                        !showsDoseBeforeVisitCard,
                        let currentAction {
                         currentDoseActionCard(item: currentAction, mode: mode)
+                    }
+
+                    if let agentNextAction {
+                        agentNextActionCard(agentNextAction)
                     }
 
                     let safety = safetySummary
@@ -298,9 +323,11 @@ struct DashboardView: View {
                         .environmentObject(store)
                 }
             }
-            .sheet(isPresented: $showVisitSnapshot) {
+            .sheet(isPresented: $showVisitSnapshot, onDismiss: {
+                snapshotVisitID = nil
+            }) {
                 NavigationStack {
-                    ConsultationSnapshotView(visit: store.nextDoctorVisit)
+                    ConsultationSnapshotView(visit: selectedSnapshotVisit)
                         .environmentObject(store)
                         .toolbar {
                             ToolbarItem(placement: .topBarTrailing) {
@@ -309,6 +336,25 @@ struct DashboardView: View {
                                 }
                             }
                         }
+                }
+            }
+            .sheet(item: $followUpReportRoute) { route in
+                NavigationStack {
+                    followUpReportDestination(route)
+                        .environmentObject(store)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button(NSLocalizedString("Done", comment: "")) {
+                                    followUpReportRoute = nil
+                                }
+                            }
+                        }
+                }
+            }
+            .sheet(item: $clarifyingSymptom) { symptom in
+                NavigationStack {
+                    SymptomClarificationView(symptom: symptom)
+                        .environmentObject(store)
                 }
             }
             .sheet(isPresented: $showAddMedication) {
@@ -492,6 +538,31 @@ private extension DashboardView {
         return .quietAccumulation
     }
 
+    private func followUpAgentStage(for mode: HomeMode) -> FollowUpAgentStage {
+        switch mode {
+        case .quietAccumulation:
+            return .quietAccumulation
+        case .lightPrep(let visit, let days):
+            return .lightPrep(visitID: visit.id, daysUntil: days)
+        case .activePrep(let visit, let days):
+            return .activePrep(visitID: visit.id, daysUntil: days)
+        case .visitDay(let visit):
+            return .visitDay(visitID: visit.id)
+        case .postVisitCapture(let visit):
+            return .postVisitCapture(visitID: visit.id)
+        }
+    }
+
+    private var selectedSnapshotVisit: DoctorVisit? {
+        guard let snapshotVisitID else { return store.nextDoctorVisit }
+        return store.doctorVisits.first { $0.id == snapshotVisitID } ?? store.nextDoctorVisit
+    }
+
+    private func visit(for id: UUID?) -> DoctorVisit? {
+        guard let id else { return store.nextDoctorVisit }
+        return store.doctorVisits.first { $0.id == id } ?? store.nextDoctorVisit
+    }
+
     private func isVisitDayMode(_ mode: HomeMode) -> Bool {
         if case .visitDay = mode { return true }
         return false
@@ -672,6 +743,105 @@ private extension DashboardView {
                     }
                 }
             }
+        }
+    }
+
+    private func agentNextActionCard(_ action: FollowUpAgentNextAction) -> some View {
+        let tint = agentActionTint(action)
+
+        return Card {
+            VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+                HStack(alignment: .top, spacing: EditorialSpacing.md) {
+                    Image(systemName: action.systemImage)
+                        .font(.system(size: 17, weight: .regular))
+                        .foregroundStyle(tint)
+                        .frame(width: 28, height: 28)
+
+                    VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                        Text(action.eyebrow)
+                            .appFont(.micro)
+                            .textCase(.uppercase)
+                            .tracking(0.7)
+                            .foregroundStyle(AppColor.textTertiary)
+
+                        Text(action.title)
+                            .appFont(.headline)
+                            .foregroundStyle(AppColor.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Text(action.detail)
+                            .appFont(.body)
+                            .foregroundStyle(AppColor.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: EditorialSpacing.sm)
+                }
+
+                Button {
+                    Haptics.impact(.light)
+                    handleAgentNextAction(action.target)
+                } label: {
+                    HStack {
+                        Text(action.buttonTitle)
+                            .fontWeight(.semibold)
+                        Spacer()
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 42)
+                }
+                .buttonStyle(.bordered)
+                .tint(tint)
+            }
+        }
+    }
+
+    private func agentActionTint(_ action: FollowUpAgentNextAction) -> Color {
+        switch action.severity {
+        case .urgent, .caution:
+            return AppColor.warning
+        case .information:
+            return AppColor.primary
+        }
+    }
+
+    private func handleAgentNextAction(_ target: FollowUpAgentActionTarget) {
+        switch target {
+        case .logMeasurement(let type):
+            onLogMeasurement?(type)
+        case .clarifySymptom(let symptomID):
+            clarifyingSymptom = store.symptomEntries.first { $0.id == symptomID }
+            if clarifyingSymptom == nil {
+                showSymptomLog = true
+            }
+        case .openHypertensionReport(let visitID):
+            followUpReportRoute = FollowUpReportRoute(kind: .hypertension, visitID: visitID)
+        case .openDiabetesReport(let visitID):
+            followUpReportRoute = FollowUpReportRoute(kind: .diabetes, visitID: visitID)
+        case .openVisitPrep(let visitID), .openDoctorSnapshot(let visitID):
+            snapshotVisitID = visitID
+            showVisitSnapshot = true
+        case .recordPostVisit(let visitID):
+            editingDoctorVisit = store.doctorVisits.first { $0.id == visitID }
+        case .openMedications:
+            if let onOpenMedications {
+                onOpenMedications()
+            } else {
+                showAddMedication = true
+            }
+        case .openProfile:
+            onOpenProfile?()
+        }
+    }
+
+    @ViewBuilder
+    private func followUpReportDestination(_ route: FollowUpReportRoute) -> some View {
+        switch route.kind {
+        case .hypertension:
+            HypertensionFollowUpReportView(visit: visit(for: route.visitID))
+        case .diabetes:
+            DiabetesFollowUpReportView(visit: visit(for: route.visitID))
         }
     }
 

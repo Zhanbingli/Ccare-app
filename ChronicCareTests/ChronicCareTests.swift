@@ -914,6 +914,81 @@ struct ChronicCareTests {
         #expect(store.openAgentInboxItems.contains { $0.stableKey == "measurement_gap.bp" })
     }
 
+    @MainActor
+    @Test func followUpAgentPlannerSurfacesBloodPressureGapDuringQuietStage() {
+        let store = DataStore()
+        store.clearAll()
+        let medication = Medication(
+            name: "Amlodipine",
+            dose: "5mg",
+            timesOfDay: [DateComponents(hour: 8, minute: 0)],
+            remindersEnabled: true,
+            category: .antihypertensive
+        )
+        #expect(store.addMedication(medication) == nil)
+
+        let action = FollowUpAgentPlanner.nextAction(
+            store: store,
+            stage: .quietAccumulation,
+            now: Date()
+        )
+
+        #expect(action?.target == .logMeasurement(.bloodPressure))
+    }
+
+    @MainActor
+    @Test func followUpAgentPlannerHonorsDismissedStableKeys() {
+        let store = DataStore()
+        store.clearAll()
+        let medication = Medication(
+            name: "Amlodipine",
+            dose: "5mg",
+            timesOfDay: [DateComponents(hour: 8, minute: 0)],
+            remindersEnabled: true,
+            category: .antihypertensive
+        )
+        #expect(store.addMedication(medication) == nil)
+        let now = Date()
+
+        store.refreshAgentInbox(now: now)
+        if let item = store.openAgentInboxItems.first(where: { $0.stableKey == "measurement_gap.bp" }) {
+            store.dismissAgentInboxItem(item)
+        }
+
+        let action = FollowUpAgentPlanner.nextAction(
+            store: store,
+            stage: .quietAccumulation,
+            now: now
+        )
+
+        #expect(action == nil)
+    }
+
+    @MainActor
+    @Test func followUpAgentPlannerPrioritizesReportOnVisitDay() {
+        let store = DataStore()
+        store.clearAll()
+        let medication = Medication(
+            name: "Amlodipine",
+            dose: "5mg",
+            timesOfDay: [DateComponents(hour: 8, minute: 0)],
+            remindersEnabled: true,
+            category: .antihypertensive
+        )
+        let now = Date()
+        let visit = DoctorVisit(scheduledDate: now)
+        #expect(store.addMedication(medication) == nil)
+        store.addDoctorVisit(visit)
+
+        let action = FollowUpAgentPlanner.nextAction(
+            store: store,
+            stage: .visitDay(visitID: visit.id),
+            now: now
+        )
+
+        #expect(action?.target == .openHypertensionReport(visit.id))
+    }
+
     @Test func agentInboxMergePreservesDismissedStateForStableKey() {
         let now = Date()
         let previous = AgentInboxItem(

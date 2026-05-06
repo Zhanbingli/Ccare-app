@@ -1888,3 +1888,13 @@
 "Export Data Files" = "导出数据文件";
 "Back up this device or export raw data files for your own records." = "备份此设备，或导出原始数据文件供自己留存。";
 "handle above" = "在上方处理";
+"Agent next step" = "Agent 下一步";
+"Save what changed today so the next follow-up report starts from the doctor’s plan." = "保存今天医生调整了什么，让下一次复诊报告从医生方案开始。";
+"Still missing: %@. Save the doctor’s plan before daily tracking continues." = "还缺：%@。先保存医生方案，再继续日常记录。";
+"Capture today’s visit plan" = "记录今天的复诊方案";
+"Use the doctor summary today" = "今天使用医生摘要";
+"Open the one-page follow-up report and questions before the appointment." = "就诊前打开一页复诊报告和要问医生的问题。";
+"Keep the visit snapshot ready" = "准备好就诊摘要";
+"Use the appointment summary to keep medication lists, questions, and recent records in one place." = "用就诊摘要把用药清单、问题和近期记录放在一起。";
+"Open Visit Snapshot" = "打开就诊摘要";
+"Open Support" = "打开照护支持";
