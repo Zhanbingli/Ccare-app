@@ -327,6 +327,66 @@ struct ChronicCareTests {
         #expect(strategy.riskLevel == .low)
     }
 
+    @Test func adaptiveSchedulingUsesStandardUntilUserConfirms() {
+        let cal = Calendar.current
+        let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 8, hour: 10, minute: 0))!
+        let comps = DateComponents(hour: 8, minute: 0)
+        let medStart = cal.date(byAdding: .day, value: -6, to: now)!
+        let med = Medication(name: "Amlodipine", dose: "5mg", startDate: medStart, timesOfDay: [comps], remindersEnabled: true)
+        defer { AdaptiveReminderPreferenceStore.clearAll(for: med.id) }
+
+        let logs = (0..<6).compactMap { offset -> IntakeLog? in
+            guard let scheduled = cal.date(byAdding: .day, value: -offset, to: now).flatMap({ cal.date(bySettingHour: 8, minute: 0, second: 0, of: $0) }) else { return nil }
+            return IntakeLog(
+                medicationID: med.id,
+                date: scheduled,
+                status: .taken,
+                scheduleKey: "08:00",
+                scheduledDate: scheduled,
+                recordedAt: scheduled.addingTimeInterval(18 * 60)
+            )
+        }
+
+        let standard = AdaptiveReminderEngine.schedulingStrategy(for: med, intakeLogs: logs, now: now)
+        #expect(standard == AdaptiveReminderEngine.standardStrategy)
+
+        AdaptiveReminderPreferenceStore.setAdaptiveSchedulingEnabled(true, for: med.id)
+        let confirmed = AdaptiveReminderEngine.schedulingStrategy(for: med, intakeLogs: logs, now: now)
+        #expect(confirmed.leadMinutes == 10)
+    }
+
+    @Test func adaptiveReminderSuggestsHigherSupportForMissPattern() {
+        let cal = Calendar.current
+        let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 8, hour: 10, minute: 0))!
+        let comps = DateComponents(hour: 8, minute: 0)
+        let medStart = cal.date(byAdding: .day, value: -7, to: now)!
+        let med = Medication(name: "Amlodipine", dose: "5mg", startDate: medStart, timesOfDay: [comps], remindersEnabled: true)
+        defer { AdaptiveReminderPreferenceStore.clearAll(for: med.id) }
+
+        let suggestion = AdaptiveReminderEngine.suggestion(for: med, intakeLogs: [], now: now)
+
+        #expect(suggestion?.kind == .increaseSupport)
+        #expect(suggestion?.proposedStrategy.riskLevel == .high)
+    }
+
+    @Test func adaptiveReminderDismissalSuppressesSuggestion() {
+        let cal = Calendar.current
+        let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 8, hour: 10, minute: 0))!
+        let comps = DateComponents(hour: 8, minute: 0)
+        let medStart = cal.date(byAdding: .day, value: -7, to: now)!
+        let med = Medication(name: "Amlodipine", dose: "5mg", startDate: medStart, timesOfDay: [comps], remindersEnabled: true)
+        defer { AdaptiveReminderPreferenceStore.clearAll(for: med.id) }
+
+        AdaptiveReminderPreferenceStore.dismissSuggestion(
+            .increaseSupport,
+            for: med.id,
+            until: now.addingTimeInterval(24 * 60 * 60)
+        )
+
+        let suggestion = AdaptiveReminderEngine.suggestion(for: med, intakeLogs: [], now: now)
+        #expect(suggestion == nil)
+    }
+
     @MainActor
     @Test func prnLogsDoNotOverwriteSameMinuteEntries() {
         let store = DataStore()

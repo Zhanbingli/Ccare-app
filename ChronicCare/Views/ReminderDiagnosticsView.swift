@@ -9,6 +9,7 @@ struct ReminderDiagnosticsView: View {
     let scheduledWithoutRemindersCount: Int
     let untimedScheduledCount: Int
     @State private var editTarget: Medication? = nil
+    @State private var adaptivePreferenceRevision = 0
 
     private var disabledReminderMeds: [Medication] {
         store.medications.filter { $0.isAsNeeded != true && !$0.timesOfDay.isEmpty && !$0.remindersEnabled }
@@ -24,6 +25,25 @@ struct ReminderDiagnosticsView: View {
 
     private var hasCoverageIssues: Bool {
         notificationStatus == .denied || !disabledReminderMeds.isEmpty || !untimedScheduledMeds.isEmpty
+    }
+
+    private var adaptiveSuggestions: [AdaptiveReminderSuggestion] {
+        _ = adaptivePreferenceRevision
+        return AdaptiveReminderEngine.suggestions(for: store.medications, intakeLogs: store.intakeLogs)
+    }
+
+    private var adaptiveEnabledMeds: [Medication] {
+        _ = adaptivePreferenceRevision
+        return store.medications.filter {
+            $0.remindersEnabled
+            && $0.isAsNeeded != true
+            && !$0.timesOfDay.isEmpty
+            && AdaptiveReminderPreferenceStore.isAdaptiveSchedulingEnabled(for: $0.id)
+        }
+    }
+
+    private var hasAdaptiveAgentContent: Bool {
+        !adaptiveSuggestions.isEmpty || !adaptiveEnabledMeds.isEmpty
     }
 
     private func enableReminders(for medication: Medication) async {
@@ -60,6 +80,29 @@ struct ReminderDiagnosticsView: View {
             store.syncNotifications()
             Haptics.success()
         }
+    }
+
+    private func applyAdaptiveSuggestion(_ suggestion: AdaptiveReminderSuggestion) {
+        AdaptiveReminderPreferenceStore.setAdaptiveSchedulingEnabled(true, for: suggestion.medicationID)
+        AdaptiveReminderPreferenceStore.clearDismissal(suggestion.kind, for: suggestion.medicationID)
+        adaptivePreferenceRevision &+= 1
+        store.syncNotifications()
+        Haptics.success()
+    }
+
+    private func keepStandardReminders(for suggestion: AdaptiveReminderSuggestion) {
+        AdaptiveReminderPreferenceStore.setAdaptiveSchedulingEnabled(false, for: suggestion.medicationID)
+        AdaptiveReminderPreferenceStore.dismissSuggestion(suggestion.kind, for: suggestion.medicationID)
+        adaptivePreferenceRevision &+= 1
+        store.syncNotifications()
+        Haptics.impact(.light)
+    }
+
+    private func disableAdaptiveReminders(for medication: Medication) {
+        AdaptiveReminderPreferenceStore.setAdaptiveSchedulingEnabled(false, for: medication.id)
+        adaptivePreferenceRevision &+= 1
+        store.syncNotifications()
+        Haptics.impact(.light)
     }
 
     var body: some View {
@@ -115,6 +158,10 @@ struct ReminderDiagnosticsView: View {
                             .appFont(.subheadline)
                             .foregroundStyle(AppColor.primary)
                     }
+                }
+
+                if hasAdaptiveAgentContent {
+                    adaptiveReminderAgentSection
                 }
 
                 if !disabledReminderMeds.isEmpty {
@@ -237,6 +284,95 @@ struct ReminderDiagnosticsView: View {
         }
     }
 
+    private var adaptiveReminderAgentSection: some View {
+        diagnosticSectionCard(
+            title: NSLocalizedString("Adaptive Reminder Agent", comment: "Reminder diagnostics adaptive agent title"),
+            subtitle: NSLocalizedString("The app can adjust reminder pressure from adherence patterns, but only after you confirm each medication.", comment: "Reminder diagnostics adaptive agent subtitle")
+        ) {
+            ForEach(adaptiveSuggestions) { suggestion in
+                adaptiveSuggestionRow(suggestion)
+            }
+            ForEach(adaptiveEnabledMeds) { medication in
+                adaptiveEnabledRow(medication)
+            }
+        }
+    }
+
+    private func adaptiveSuggestionRow(_ suggestion: AdaptiveReminderSuggestion) -> some View {
+        InsetPanel(tint: adaptiveTint(for: suggestion.kind)) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: adaptiveIcon(for: suggestion.kind))
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(adaptiveTint(for: suggestion.kind))
+                        .frame(width: 20)
+                        .padding(.top, 1)
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(suggestion.title)
+                            .appFont(.subheadline)
+                            .foregroundStyle(AppColor.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(suggestion.detail)
+                            .appFont(.caption)
+                            .foregroundStyle(AppColor.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(suggestion.effectSummary)
+                            .appFont(.caption)
+                            .foregroundStyle(AppColor.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                HStack(spacing: 10) {
+                    Button(NSLocalizedString("Apply", comment: "Adaptive reminder apply action")) {
+                        applyAdaptiveSuggestion(suggestion)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+
+                    Button(NSLocalizedString("Keep Standard", comment: "Adaptive reminder dismiss action")) {
+                        keepStandardReminders(for: suggestion)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+        }
+    }
+
+    private func adaptiveEnabledRow(_ medication: Medication) -> some View {
+        let strategy = AdaptiveReminderEngine.strategy(for: medication, intakeLogs: store.intakeLogs)
+        return InsetPanel(tint: AppColor.primary) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(AppColor.primary)
+                    .frame(width: 20)
+                    .padding(.top, 1)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(String(format: NSLocalizedString("Adaptive reminders on for %@", comment: "Adaptive reminder enabled title"), medication.name))
+                        .appFont(.subheadline)
+                        .foregroundStyle(AppColor.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(AdaptiveReminderEngine.confirmedStrategySummary(strategy))
+                        .appFont(.caption)
+                        .foregroundStyle(AppColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer()
+
+                Button(NSLocalizedString("Use Standard", comment: "Adaptive reminder disable action")) {
+                    disableAdaptiveReminders(for: medication)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+    }
+
     private func diagnosticSectionCard<Content: View>(
         title: String,
         subtitle: String,
@@ -294,6 +430,21 @@ struct ReminderDiagnosticsView: View {
                         .controlSize(.regular)
                 }
             }
+        }
+    }
+
+    private func adaptiveIcon(for kind: AdaptiveReminderSuggestion.Kind) -> String {
+        switch kind {
+        case .increaseSupport: return "bell.badge"
+        case .shiftEarlier: return "clock.arrow.circlepath"
+        case .reduceNoise: return "bell"
+        }
+    }
+
+    private func adaptiveTint(for kind: AdaptiveReminderSuggestion.Kind) -> Color {
+        switch kind {
+        case .increaseSupport: return AppColor.warning
+        case .shiftEarlier, .reduceNoise: return AppColor.primary
         }
     }
 }

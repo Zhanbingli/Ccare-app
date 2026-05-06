@@ -128,6 +128,7 @@ final class DataStore: ObservableObject {
         medications.remove(atOffsets: offsets)
         for id in removedIDs {
             MedicationRuleStore.shared.removeOverride(for: id)
+            AdaptiveReminderPreferenceStore.clearAll(for: id)
         }
         markReportDataChanged()
     }
@@ -389,6 +390,7 @@ final class DataStore: ObservableObject {
         medications.forEach {
             deleteMedicationImage(path: $0.imagePath)
             MedicationRuleStore.shared.removeOverride(for: $0.id)
+            AdaptiveReminderPreferenceStore.clearAll(for: $0.id)
         }
         measurements.removeAll()
         medications.removeAll()

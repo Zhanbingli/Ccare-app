@@ -21,8 +21,89 @@ struct AdherenceProfile: Equatable {
     let perfectDayStreak: Int
 }
 
+struct AdaptiveReminderSuggestion: Identifiable, Equatable {
+    enum Kind: String, Equatable {
+        case increaseSupport
+        case shiftEarlier
+        case reduceNoise
+    }
+
+    let medicationID: UUID
+    let medicationName: String
+    let kind: Kind
+    let title: String
+    let detail: String
+    let effectSummary: String
+    let profile: AdherenceProfile
+    let proposedStrategy: AdaptiveReminderStrategy
+
+    var id: String { "\(medicationID.uuidString).\(kind.rawValue)" }
+}
+
+enum AdaptiveReminderPreferenceStore {
+    private static let enabledPrefix = "adaptiveReminder.enabled."
+    private static let dismissedPrefix = "adaptiveReminder.dismissed."
+    private static let defaults = UserDefaults.standard
+
+    static func isAdaptiveSchedulingEnabled(for medicationID: UUID) -> Bool {
+        defaults.bool(forKey: enabledKey(for: medicationID))
+    }
+
+    static func setAdaptiveSchedulingEnabled(_ enabled: Bool, for medicationID: UUID) {
+        defaults.set(enabled, forKey: enabledKey(for: medicationID))
+    }
+
+    static func dismissSuggestion(
+        _ kind: AdaptiveReminderSuggestion.Kind,
+        for medicationID: UUID,
+        until date: Date = Calendar.current.date(byAdding: .day, value: 14, to: Date()) ?? Date().addingTimeInterval(14 * 24 * 60 * 60)
+    ) {
+        defaults.set(date, forKey: dismissedKey(for: medicationID, kind: kind))
+    }
+
+    static func clearDismissal(_ kind: AdaptiveReminderSuggestion.Kind, for medicationID: UUID) {
+        defaults.removeObject(forKey: dismissedKey(for: medicationID, kind: kind))
+    }
+
+    static func isSuggestionDismissed(
+        _ kind: AdaptiveReminderSuggestion.Kind,
+        for medicationID: UUID,
+        now: Date = Date()
+    ) -> Bool {
+        guard let until = defaults.object(forKey: dismissedKey(for: medicationID, kind: kind)) as? Date else {
+            return false
+        }
+        if until <= now {
+            defaults.removeObject(forKey: dismissedKey(for: medicationID, kind: kind))
+            return false
+        }
+        return true
+    }
+
+    static func clearAll(for medicationID: UUID) {
+        defaults.removeObject(forKey: enabledKey(for: medicationID))
+        for kind in [AdaptiveReminderSuggestion.Kind.increaseSupport, .shiftEarlier, .reduceNoise] {
+            defaults.removeObject(forKey: dismissedKey(for: medicationID, kind: kind))
+        }
+    }
+
+    private static func enabledKey(for medicationID: UUID) -> String {
+        "\(enabledPrefix)\(medicationID.uuidString)"
+    }
+
+    private static func dismissedKey(for medicationID: UUID, kind: AdaptiveReminderSuggestion.Kind) -> String {
+        "\(dismissedPrefix)\(medicationID.uuidString).\(kind.rawValue)"
+    }
+}
+
 enum AdaptiveReminderEngine {
     private static let minimumAdaptiveSampleCount = 6
+
+    static let standardStrategy = AdaptiveReminderStrategy(
+        leadMinutes: 0,
+        followUpIntervals: [10, 30],
+        riskLevel: .medium
+    )
 
     private enum DoseOutcome {
         case taken(delayMinutes: Int)
@@ -62,11 +143,7 @@ enum AdaptiveReminderEngine {
         }
 
         guard profile.sampleCount >= minimumAdaptiveSampleCount else {
-            return AdaptiveReminderStrategy(
-                leadMinutes: 0,
-                followUpIntervals: [10, 30],
-                riskLevel: .medium
-            )
+            return standardStrategy
         }
 
         var leadMinutes = 0
@@ -103,6 +180,106 @@ enum AdaptiveReminderEngine {
         }
 
         return AdaptiveReminderStrategy(leadMinutes: leadMinutes, followUpIntervals: [10, 30, 60], riskLevel: .medium)
+    }
+
+    static func schedulingStrategy(
+        for medication: Medication,
+        intakeLogs: [IntakeLog],
+        now: Date = Date(),
+        scheduleTime: DateComponents? = nil
+    ) -> AdaptiveReminderStrategy {
+        guard AdaptiveReminderPreferenceStore.isAdaptiveSchedulingEnabled(for: medication.id) else {
+            return standardStrategy
+        }
+        return strategy(for: medication, intakeLogs: intakeLogs, now: now, scheduleTime: scheduleTime)
+    }
+
+    static func suggestions(
+        for medications: [Medication],
+        intakeLogs: [IntakeLog],
+        now: Date = Date()
+    ) -> [AdaptiveReminderSuggestion] {
+        medications
+            .compactMap { suggestion(for: $0, intakeLogs: intakeLogs, now: now) }
+            .sorted { lhs, rhs in
+                if lhs.kind.sortPriority != rhs.kind.sortPriority {
+                    return lhs.kind.sortPriority < rhs.kind.sortPriority
+                }
+                return lhs.medicationName.localizedCaseInsensitiveCompare(rhs.medicationName) == .orderedAscending
+            }
+    }
+
+    static func suggestion(
+        for medication: Medication,
+        intakeLogs: [IntakeLog],
+        now: Date = Date()
+    ) -> AdaptiveReminderSuggestion? {
+        guard medication.remindersEnabled,
+              medication.isAsNeeded != true,
+              !medication.timesOfDay.isEmpty,
+              !AdaptiveReminderPreferenceStore.isAdaptiveSchedulingEnabled(for: medication.id) else {
+            return nil
+        }
+
+        let profile = profile(for: medication, intakeLogs: intakeLogs, now: now)
+        guard profile.sampleCount >= minimumAdaptiveSampleCount else { return nil }
+
+        let proposed = strategy(for: medication, intakeLogs: intakeLogs, now: now)
+        let kind: AdaptiveReminderSuggestion.Kind
+        if profile.missRate >= 0.35 {
+            kind = .increaseSupport
+        } else if profile.meanDelayMinutes >= 10 || profile.snoozeRate >= 0.3 {
+            kind = .shiftEarlier
+        } else if profile.missRate <= 0.1 && profile.perfectDayStreak >= 7 && proposed.followUpIntervals.count < standardStrategy.followUpIntervals.count {
+            kind = .reduceNoise
+        } else {
+            return nil
+        }
+
+        guard !AdaptiveReminderPreferenceStore.isSuggestionDismissed(kind, for: medication.id, now: now) else {
+            return nil
+        }
+
+        return AdaptiveReminderSuggestion(
+            medicationID: medication.id,
+            medicationName: medication.name,
+            kind: kind,
+            title: suggestionTitle(kind: kind, medicationName: medication.name),
+            detail: suggestionDetail(kind: kind, profile: profile),
+            effectSummary: strategySummary(proposed),
+            profile: profile,
+            proposedStrategy: proposed
+        )
+    }
+
+    static func strategySummary(_ strategy: AdaptiveReminderStrategy) -> String {
+        let followUps = formattedMinutesList(strategy.followUpIntervals)
+        if strategy.leadMinutes > 0 {
+            return String(
+                format: NSLocalizedString("If you confirm, the first reminder can move %lld minutes earlier and follow-ups can use %@. This only changes reminder pressure, not medication dose.", comment: "Adaptive reminder effect summary with lead"),
+                Int64(strategy.leadMinutes),
+                followUps
+            )
+        }
+        return String(
+            format: NSLocalizedString("If you confirm, follow-ups can use %@. This only changes reminder pressure, not medication dose.", comment: "Adaptive reminder effect summary"),
+            followUps
+        )
+    }
+
+    static func confirmedStrategySummary(_ strategy: AdaptiveReminderStrategy) -> String {
+        let followUps = formattedMinutesList(strategy.followUpIntervals)
+        if strategy.leadMinutes > 0 {
+            return String(
+                format: NSLocalizedString("Current adaptive pattern: the first reminder may move %lld minutes earlier and follow-ups use %@. This does not change medication dose.", comment: "Adaptive reminder enabled summary with lead"),
+                Int64(strategy.leadMinutes),
+                followUps
+            )
+        }
+        return String(
+            format: NSLocalizedString("Current adaptive pattern: follow-ups use %@. This does not change medication dose.", comment: "Adaptive reminder enabled summary"),
+            followUps
+        )
     }
 
     // MARK: - Overall Profile
@@ -286,5 +463,56 @@ enum AdaptiveReminderEngine {
     private static func mean(of values: [Int]) -> Int {
         guard !values.isEmpty else { return 0 }
         return Int((Double(values.reduce(0, +)) / Double(values.count)).rounded())
+    }
+
+    private static func suggestionTitle(kind: AdaptiveReminderSuggestion.Kind, medicationName: String) -> String {
+        switch kind {
+        case .increaseSupport:
+            return String(format: NSLocalizedString("Strengthen reminders for %@", comment: "Adaptive reminder suggestion title"), medicationName)
+        case .shiftEarlier:
+            return String(format: NSLocalizedString("Shift reminders earlier for %@", comment: "Adaptive reminder suggestion title"), medicationName)
+        case .reduceNoise:
+            return String(format: NSLocalizedString("Reduce reminder noise for %@", comment: "Adaptive reminder suggestion title"), medicationName)
+        }
+    }
+
+    private static func suggestionDetail(kind: AdaptiveReminderSuggestion.Kind, profile: AdherenceProfile) -> String {
+        switch kind {
+        case .increaseSupport:
+            return String(
+                format: NSLocalizedString("Recent scheduled logs show a %lld%% missed-dose pattern. The app can make reminder follow-up more persistent after you confirm.", comment: "Adaptive reminder suggestion detail"),
+                Int64((profile.missRate * 100).rounded())
+            )
+        case .shiftEarlier:
+            return String(
+                format: NSLocalizedString("Recent scheduled logs show an average delay of %lld minutes or repeated snoozes. The app can gently move reminder pressure earlier after you confirm.", comment: "Adaptive reminder suggestion detail"),
+                Int64(profile.meanDelayMinutes)
+            )
+        case .reduceNoise:
+            return String(
+                format: NSLocalizedString("Recent history shows a %lld-day handled-dose streak. The app can reduce follow-up reminders after you confirm.", comment: "Adaptive reminder suggestion detail"),
+                Int64(profile.perfectDayStreak)
+            )
+        }
+    }
+
+    private static func formattedMinutesList(_ minutes: [Int]) -> String {
+        guard !minutes.isEmpty else {
+            return NSLocalizedString("no follow-ups", comment: "Adaptive reminder no follow-ups")
+        }
+        let values = minutes.map {
+            String(format: NSLocalizedString("%lld min", comment: "Adaptive reminder minute list item"), Int64($0))
+        }
+        return values.joined(separator: ", ")
+    }
+}
+
+private extension AdaptiveReminderSuggestion.Kind {
+    var sortPriority: Int {
+        switch self {
+        case .increaseSupport: return 0
+        case .shiftEarlier: return 1
+        case .reduceNoise: return 2
+        }
     }
 }
