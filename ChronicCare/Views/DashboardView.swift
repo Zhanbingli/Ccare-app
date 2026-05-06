@@ -227,13 +227,7 @@ struct DashboardView: View {
         let _ = tick // force re-render on timer
         NavigationStack {
             let state = buildTodayState()
-            let schedules = state.schedules
-            let statusCache = state.statusCache
-            let takenCount = state.takenCount
-            let totalCount = state.totalCount
             let currentAction = state.currentAction
-            let nextUpcoming = state.nextUpcoming
-            let prnMeds = state.prnMeds
             let mode = homeMode
 
             ScrollView {
@@ -266,69 +260,23 @@ struct DashboardView: View {
                         currentDoseActionCard(item: currentAction, mode: mode)
                     }
 
-                    if notificationStatus == .denied {
-                        reminderRepairCard()
-                    }
-
                     let safety = safetySummary
                     if safety.hasIssues {
                         safetyNoticeCard(summary: safety)
                     }
 
-                    if let gap = daysSinceLastLog, gap >= 2, !store.medications.isEmpty {
+                    if shouldShowReminderRepairCard(for: mode) {
+                        reminderRepairCard()
+                    }
+
+                    if shouldShowInactivityWarning(for: mode),
+                       let gap = daysSinceLastLog,
+                       gap >= 2,
+                       !store.medications.isEmpty {
                         inactivityWarningCard(daysSince: gap)
                     }
 
-                    if store.medications.isEmpty {
-                        Card {
-                            EmptyStateView(
-                                systemImage: "pills",
-                                title: NSLocalizedString("No medications yet", comment: ""),
-                                subtitle: NSLocalizedString("Add your first medication to start daily reminders and logging.", comment: ""),
-                                actionTitle: NSLocalizedString("Add Medication", comment: ""),
-                                action: { showAddMedication = true }
-                            )
-                        }
-                    } else {
-                        let allComplete = currentAction == nil && nextUpcoming == nil && totalCount > 0
-
-                        if allComplete {
-                            todayCompleteHero(
-                                takenCount: takenCount,
-                                skippedCount: state.skippedCount,
-                                totalCount: totalCount,
-                                mode: mode
-                            )
-
-                            if !schedules.isEmpty {
-                                todayUnifiedList(
-                                    title: todayScheduleTitle(state: state, mode: mode),
-                                    schedules: schedules,
-                                    statusCache: statusCache,
-                                    currentActionID: nil,
-                                    nextUpcomingID: nextUpcoming?.id,
-                                    collapsedLimit: scheduleCollapsedLimit(for: mode)
-                                )
-                            }
-                        } else if !schedules.isEmpty {
-                            todayUnifiedList(
-                                title: todayScheduleTitle(state: state, mode: mode),
-                                schedules: schedules,
-                                statusCache: statusCache,
-                                currentActionID: currentAction?.id,
-                                nextUpcomingID: nextUpcoming?.id,
-                                collapsedLimit: scheduleCollapsedLimit(for: mode)
-                            )
-                        }
-
-                        if !prnMeds.isEmpty {
-                            asNeededInlineSection(medications: prnMeds)
-                        }
-                    }
-
-                    if notificationStatus != .denied && hasReminderSetupIssues {
-                        reminderRepairCard()
-                    }
+                    routineMedicationContent(state: state, mode: mode)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 10)
@@ -555,6 +503,37 @@ private extension DashboardView {
             return false
         case .lightPrep, .activePrep, .visitDay, .postVisitCapture:
             return true
+        }
+    }
+
+    private func shouldShowReminderRepairCard(for mode: HomeMode) -> Bool {
+        if notificationStatus == .denied { return true }
+        guard hasReminderSetupIssues else { return false }
+
+        switch mode {
+        case .quietAccumulation, .postVisitCapture:
+            return true
+        case .lightPrep, .activePrep, .visitDay:
+            return false
+        }
+    }
+
+    private func shouldShowInactivityWarning(for mode: HomeMode) -> Bool {
+        if case .quietAccumulation = mode { return true }
+        return false
+    }
+
+    private func shouldShowRoutineMedicationContent(for mode: HomeMode) -> Bool {
+        if case .quietAccumulation = mode { return true }
+        return false
+    }
+
+    private func shouldShowEmptyMedicationPrompt(for mode: HomeMode) -> Bool {
+        switch mode {
+        case .quietAccumulation, .postVisitCapture:
+            return true
+        case .lightPrep, .activePrep, .visitDay:
+            return false
         }
     }
 
@@ -1642,6 +1621,59 @@ private extension DashboardView {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 4)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func routineMedicationContent(state: TodayState, mode: HomeMode) -> some View {
+        if store.medications.isEmpty {
+            if shouldShowEmptyMedicationPrompt(for: mode) {
+                Card {
+                    EmptyStateView(
+                        systemImage: "pills",
+                        title: NSLocalizedString("No medications yet", comment: ""),
+                        subtitle: NSLocalizedString("Add your first medication to start daily reminders and logging.", comment: ""),
+                        actionTitle: NSLocalizedString("Add Medication", comment: ""),
+                        action: { showAddMedication = true }
+                    )
+                }
+            }
+        } else if shouldShowRoutineMedicationContent(for: mode) {
+            let schedules = state.schedules
+            let allComplete = state.currentAction == nil && state.nextUpcoming == nil && state.totalCount > 0
+
+            if allComplete {
+                todayCompleteHero(
+                    takenCount: state.takenCount,
+                    skippedCount: state.skippedCount,
+                    totalCount: state.totalCount,
+                    mode: mode
+                )
+
+                if !schedules.isEmpty {
+                    todayUnifiedList(
+                        title: todayScheduleTitle(state: state, mode: mode),
+                        schedules: schedules,
+                        statusCache: state.statusCache,
+                        currentActionID: nil,
+                        nextUpcomingID: state.nextUpcoming?.id,
+                        collapsedLimit: scheduleCollapsedLimit(for: mode)
+                    )
+                }
+            } else if !schedules.isEmpty {
+                todayUnifiedList(
+                    title: todayScheduleTitle(state: state, mode: mode),
+                    schedules: schedules,
+                    statusCache: state.statusCache,
+                    currentActionID: state.currentAction?.id,
+                    nextUpcomingID: state.nextUpcoming?.id,
+                    collapsedLimit: scheduleCollapsedLimit(for: mode)
+                )
+            }
+
+            if !state.prnMeds.isEmpty {
+                asNeededInlineSection(medications: state.prnMeds)
             }
         }
     }
