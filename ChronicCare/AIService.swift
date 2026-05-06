@@ -37,6 +37,360 @@ private enum KeychainHelper {
     }
 }
 
+enum HypertensionFollowUpDraftParser {
+    static func parse(_ text: String) throws -> HypertensionFollowUpLLMDraft {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let json = extractJSONObject(from: value),
+           let draft = decodeFlexibleJSONDraft(json) {
+            return try normalize(draft)
+        }
+        if let draft = parsePlainTextDraft(value) {
+            return try normalize(draft)
+        }
+        throw AIServiceError.invalidResponse
+    }
+
+    private static func decodeFlexibleJSONDraft(_ json: String) -> HypertensionFollowUpLLMDraft? {
+        guard let data = json.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data),
+              let dictionary = draftDictionary(from: object) else {
+            return nil
+        }
+
+        let patientSummary = summaryString(
+            for: [
+                "patientSummary",
+                "patient_summary",
+                "patientFacingSummary",
+                "patient_facing_summary",
+                "patient"
+            ],
+            in: dictionary
+        )
+        let doctorSummary = summaryString(
+            for: [
+                "doctorSummary",
+                "doctor_summary",
+                "clinicianSummary",
+                "clinician_summary",
+                "doctor"
+            ],
+            in: dictionary
+        )
+        let questions = questionStrings(
+            for: [
+                "questions",
+                "doctorQuestions",
+                "doctor_questions",
+                "patientQuestions",
+                "patient_questions"
+            ],
+            in: dictionary
+        )
+
+        return HypertensionFollowUpLLMDraft(
+            patientSummary: patientSummary,
+            doctorSummary: doctorSummary,
+            questions: questions
+        )
+    }
+
+    private static func draftDictionary(from object: Any) -> [String: Any]? {
+        guard let dictionary = object as? [String: Any] else { return nil }
+        if containsDraftKeys(dictionary) {
+            return dictionary
+        }
+
+        for key in ["draft", "report", "output", "result", "data"] {
+            if let nested = dictionary[key] as? [String: Any], containsDraftKeys(nested) {
+                return nested
+            }
+        }
+        return nil
+    }
+
+    private static func containsDraftKeys(_ dictionary: [String: Any]) -> Bool {
+        let keys = Set(dictionary.keys)
+        return !keys.intersection([
+            "patientSummary",
+            "patient_summary",
+            "patientFacingSummary",
+            "patient_facing_summary",
+            "doctorSummary",
+            "doctor_summary",
+            "clinicianSummary",
+            "clinician_summary",
+            "questions",
+            "doctorQuestions",
+            "doctor_questions",
+            "patientQuestions",
+            "patient_questions"
+        ]).isEmpty
+    }
+
+    private static func summaryString(for keys: [String], in dictionary: [String: Any]) -> String? {
+        for key in keys {
+            guard let value = dictionary[key] else { continue }
+            let parts = strings(from: value)
+            let joined = parts
+                .map(cleanLine)
+                .filter { !$0.isEmpty }
+                .joined(separator: "\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !joined.isEmpty {
+                return joined
+            }
+        }
+        return nil
+    }
+
+    private static func questionStrings(for keys: [String], in dictionary: [String: Any]) -> [String] {
+        for key in keys {
+            guard let value = dictionary[key] else { continue }
+            let questions = strings(from: value)
+                .flatMap(splitQuestionLines)
+                .map(cleanLine)
+                .filter { !$0.isEmpty }
+            if !questions.isEmpty {
+                return questions
+            }
+        }
+        return []
+    }
+
+    private static func strings(from value: Any) -> [String] {
+        if let string = value as? String {
+            return [string]
+        }
+        if let array = value as? [Any] {
+            return array.flatMap(strings)
+        }
+        if let dictionary = value as? [String: Any] {
+            for key in ["question", "prompt", "text", "summary", "content", "title", "detail"] {
+                if let value = dictionary[key] {
+                    let result = strings(from: value)
+                    if !result.isEmpty {
+                        return result
+                    }
+                }
+            }
+
+            let title = dictionary["title"] as? String
+            let detail = dictionary["detail"] as? String
+            if let title, let detail {
+                return ["\(title): \(detail)"]
+            }
+        }
+        return []
+    }
+
+    private static func parsePlainTextDraft(_ text: String) -> HypertensionFollowUpLLMDraft? {
+        enum Section {
+            case patient
+            case doctor
+            case questions
+        }
+
+        var section = Section.patient
+        var sawDraftHeading = false
+        var patientLines: [String] = []
+        var doctorLines: [String] = []
+        var questionLines: [String] = []
+
+        for rawLine in text.split(whereSeparator: \.isNewline) {
+            let line = cleanLine(String(rawLine))
+            guard !line.isEmpty else { continue }
+            let lower = line.lowercased()
+
+            if isPatientHeading(lower) {
+                section = .patient
+                sawDraftHeading = true
+                if let content = inlineHeadingContent(from: line) {
+                    patientLines.append(content)
+                }
+                continue
+            }
+            if isDoctorHeading(lower) {
+                section = .doctor
+                sawDraftHeading = true
+                if let content = inlineHeadingContent(from: line) {
+                    doctorLines.append(content)
+                }
+                continue
+            }
+            if isQuestionHeading(lower) {
+                section = .questions
+                sawDraftHeading = true
+                if let content = inlineHeadingContent(from: line) {
+                    questionLines.append(content)
+                }
+                continue
+            }
+
+            if line.contains("?") || line.contains("？") {
+                questionLines.append(line)
+                continue
+            }
+
+            switch section {
+            case .patient:
+                patientLines.append(line)
+            case .doctor:
+                doctorLines.append(line)
+            case .questions:
+                questionLines.append(line)
+            }
+        }
+
+        let patientSummary = patientLines.prefix(4).joined(separator: "\n")
+        let doctorSummary = doctorLines.prefix(6).joined(separator: "\n")
+        let questions = questionLines.flatMap(splitQuestionLines)
+
+        guard sawDraftHeading,
+              !patientSummary.isEmpty || !doctorSummary.isEmpty || !questions.isEmpty else {
+            return nil
+        }
+        return HypertensionFollowUpLLMDraft(
+            patientSummary: patientSummary,
+            doctorSummary: doctorSummary,
+            questions: questions
+        )
+    }
+
+    private static func normalize(_ draft: HypertensionFollowUpLLMDraft) throws -> HypertensionFollowUpLLMDraft {
+        let patientSummary = trimmedOrNil(draft.patientSummary)
+        let doctorSummary = trimmedOrNil(draft.doctorSummary)
+        let questions = draft.questions
+            .flatMap(splitQuestionLines)
+            .map(cleanLine)
+            .filter { !$0.isEmpty }
+            .prefix(3)
+
+        guard patientSummary != nil || doctorSummary != nil || !questions.isEmpty else {
+            throw AIServiceError.invalidResponse
+        }
+
+        return HypertensionFollowUpLLMDraft(
+            patientSummary: patientSummary,
+            doctorSummary: doctorSummary,
+            questions: Array(questions)
+        )
+    }
+
+    private static func extractJSONObject(from text: String) -> String? {
+        let value = text
+            .replacingOccurrences(of: #"```(?:json|JSON)?"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: "```", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        var start: String.Index?
+        var depth = 0
+        var inString = false
+        var isEscaped = false
+
+        for index in value.indices {
+            let character = value[index]
+
+            if inString {
+                if isEscaped {
+                    isEscaped = false
+                } else if character == "\\" {
+                    isEscaped = true
+                } else if character == "\"" {
+                    inString = false
+                }
+                continue
+            }
+
+            if character == "\"" {
+                inString = true
+            } else if character == "{" {
+                if depth == 0 {
+                    start = index
+                }
+                depth += 1
+            } else if character == "}" {
+                depth -= 1
+                if depth == 0, let start {
+                    return String(value[start...index])
+                }
+            }
+        }
+        return nil
+    }
+
+    private static func splitQuestionLines(_ value: String) -> [String] {
+        let lines = value
+            .split(whereSeparator: \.isNewline)
+            .map { cleanLine(String($0)) }
+            .filter { !$0.isEmpty }
+
+        if lines.count > 1 {
+            return lines
+        }
+        return [cleanLine(value)].filter { !$0.isEmpty }
+    }
+
+    private static func cleanLine(_ value: String) -> String {
+        value
+            .replacingOccurrences(
+                of: #"^\s*(?:[-*•]|\d+[\.)、])\s*"#,
+                with: "",
+                options: .regularExpression
+            )
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func trimmedOrNil(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
+    }
+
+    private static func inlineHeadingContent(from value: String) -> String? {
+        guard let separator = value.firstIndex(where: { $0 == ":" || $0 == "：" }) else {
+            return nil
+        }
+        let content = value[value.index(after: separator)...]
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return content.isEmpty ? nil : content
+    }
+
+    private static func isPatientHeading(_ value: String) -> Bool {
+        value == "patient summary"
+        || value == "patient-facing summary"
+        || value == "patient prep"
+        || value.hasPrefix("patient summary:")
+        || value.hasPrefix("patient-facing summary:")
+        || value == "患者摘要"
+        || value == "患者准备"
+    }
+
+    private static func isDoctorHeading(_ value: String) -> Bool {
+        value == "doctor summary"
+        || value == "doctor-facing summary"
+        || value == "clinician summary"
+        || value == "doctor-facing output"
+        || value.hasPrefix("doctor summary:")
+        || value.hasPrefix("doctor-facing summary:")
+        || value.hasPrefix("clinician summary:")
+        || value == "医生摘要"
+        || value == "给医生看的摘要"
+    }
+
+    private static func isQuestionHeading(_ value: String) -> Bool {
+        value == "questions"
+        || value == "questions for doctor"
+        || value == "doctor questions"
+        || value.hasPrefix("questions:")
+        || value.hasPrefix("questions for doctor:")
+        || value.hasPrefix("doctor questions:")
+        || value == "问题"
+        || value == "要问医生的问题"
+    }
+}
+
 enum AIProvider: String, CaseIterable, Codable {
     case openai = "OpenAI"
     case anthropic = "Anthropic"
@@ -569,11 +923,11 @@ class AIService {
         Use only the structured report JSON below.
 
         Output rules:
-        - Return valid JSON only.
+        - Return valid JSON only, with no markdown fence and no extra commentary.
         - JSON keys: patientSummary, doctorSummary, questions.
-        - patientSummary: 2-4 short patient-facing sentences.
-        - doctorSummary: 4-6 concise clinician-facing bullet-like sentences.
-        - questions: exactly 3 short questions the patient can ask the clinician.
+        - patientSummary: one string with 2-4 short patient-facing sentences.
+        - doctorSummary: one string with 4-6 concise clinician-facing bullet-like sentences.
+        - questions: an array of exactly 3 short string questions the patient can ask the clinician.
 
         Safety rules:
         - Do not diagnose.
@@ -612,48 +966,7 @@ class AIService {
     }
 
     private func parseHypertensionDraft(_ text: String) throws -> HypertensionFollowUpLLMDraft {
-        let json = extractJSONObject(from: text)
-        guard let data = json.data(using: .utf8) else {
-            throw AIServiceError.invalidResponse
-        }
-        let draft = try JSONDecoder().decode(HypertensionFollowUpLLMDraft.self, from: data)
-        let patientSummary = trimmedOrNil(draft.patientSummary)
-        let doctorSummary = trimmedOrNil(draft.doctorSummary)
-        let questions = draft.questions
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .prefix(3)
-
-        guard patientSummary != nil || doctorSummary != nil || !questions.isEmpty else {
-            throw AIServiceError.invalidResponse
-        }
-
-        return HypertensionFollowUpLLMDraft(
-            patientSummary: patientSummary,
-            doctorSummary: doctorSummary,
-            questions: Array(questions)
-        )
-    }
-
-    private func extractJSONObject(from text: String) -> String {
-        var value = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if value.hasPrefix("```") {
-            value = value
-                .replacingOccurrences(of: #"^```(?:json)?\s*"#, with: "", options: .regularExpression)
-                .replacingOccurrences(of: #"\s*```$"#, with: "", options: .regularExpression)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        guard let start = value.firstIndex(of: "{"),
-              let end = value.lastIndex(of: "}"),
-              start <= end else {
-            return value
-        }
-        return String(value[start...end])
-    }
-
-    private func trimmedOrNil(_ value: String?) -> String? {
-        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
-        return trimmed
+        try HypertensionFollowUpDraftParser.parse(text)
     }
 
     private func generateOpenAIText(prompt: String, apiKey: String? = nil, maxTokens: Int = 500) async throws -> String {

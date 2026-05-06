@@ -726,4 +726,76 @@ struct ChronicCareTests {
         }
     }
 
+    @Test func hypertensionDraftParserAcceptsArraySummaryJSON() throws {
+        let response = """
+        ```JSON
+        {
+          "patientSummary": [
+            "Morning readings may be worth discussing with your doctor.",
+            "Medication decisions should be made with a licensed clinician."
+          ],
+          "doctorSummary": [
+            "Period reviewed: last 30 days.",
+            "Home BP pattern: morning values were higher than evening values."
+          ],
+          "questions": [
+            { "question": "Should we review my morning blood pressure pattern?" },
+            { "question": "Could my missed doses explain some high readings?" },
+            { "question": "What should I track before the next visit?" }
+          ]
+        }
+        ```
+        """
+
+        let draft = try HypertensionFollowUpDraftParser.parse(response)
+
+        #expect(draft.patientSummary?.contains("Morning readings") == true)
+        #expect(draft.doctorSummary?.contains("Home BP pattern") == true)
+        #expect(draft.questions.count == 3)
+    }
+
+    @Test func hypertensionDraftParserAcceptsWrappedSnakeCaseJSON() throws {
+        let response = """
+        Here is the structured draft:
+        {
+          "result": {
+            "patient_summary": "Your recent readings may be worth discussing with your doctor.",
+            "doctor_summary": "Reviewed patient-entered home BP and adherence context.",
+            "doctor_questions": [
+              "Should we review the morning readings?",
+              "Are the symptom notes relevant to medication timing?",
+              "What readings should I bring next time?"
+            ]
+          }
+        }
+        """
+
+        let draft = try HypertensionFollowUpDraftParser.parse(response)
+
+        #expect(draft.patientSummary?.hasPrefix("Your recent readings") == true)
+        #expect(draft.doctorSummary?.contains("home BP") == true)
+        #expect(draft.questions.first == "Should we review the morning readings?")
+    }
+
+    @Test func hypertensionDraftParserFallsBackToPlainTextSections() throws {
+        let response = """
+        Patient summary: Morning blood pressure was higher than evening readings.
+        This pattern may be worth discussing with your doctor.
+
+        Doctor summary: Period reviewed: last 30 days.
+        Patient-entered records show missed doses and symptom notes.
+
+        Questions: Should we review my morning blood pressure pattern?
+        2. Are the dizziness notes important for follow-up?
+        3. What should I record before the next visit?
+        """
+
+        let draft = try HypertensionFollowUpDraftParser.parse(response)
+
+        #expect(draft.patientSummary?.contains("Morning blood pressure") == true)
+        #expect(draft.doctorSummary?.contains("Period reviewed") == true)
+        #expect(draft.doctorSummary?.contains("Patient-entered records") == true)
+        #expect(draft.questions.count == 3)
+    }
+
 }
