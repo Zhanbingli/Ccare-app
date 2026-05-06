@@ -705,6 +705,7 @@
 "Review your medication consistency across recent days." = "回顾你最近几天的用药一致性。";
 "Scheduled" = "固定用药";
 "Scheduled medication with reminder times, but reminders are off." = "这是一种已经设置时间、但提醒已关闭的固定药物。";
+"%@. %@" = "%@。%@";
 "See blood pressure, glucose, weight, and heart rate trends." = "查看血压、血糖、体重和心率趋势。";
 "Set Up" = "去设置";
 "Snapshot" = "当前概况";
@@ -1073,6 +1074,7 @@
 "Open Doctor Snapshot" = "打开就诊摘要";
 "Next appointment planned" = "已安排下次复诊";
 "%@ · %@. Keep logging quietly until the visit gets close." = "%@ · %@。复诊临近前，继续安静记录即可。";
+"%@. Scheduled for %@. Keep logging quietly until the visit gets close." = "%@。计划于 %@。复诊临近前继续安静记录即可。";
 "See adherence, measurements, and reminder health in one place." = "把依从率、测量和提醒状态集中放在这里查看。";
 "%lld reminder issues still need attention." = "还有 %lld 个提醒问题需要处理。";
 "Your scheduled medications currently look covered." = "当前固定用药的提醒覆盖看起来正常。";
@@ -1658,6 +1660,8 @@
 "Reason: %@" = "复诊原因：%@";
 "%@ · prepare the doctor snapshot now." = "%@ · 现在可以准备就诊摘要。";
 "%@ · keep logging doses, symptoms, and measurements." = "%@ · 继续记录服药、症状和测量。";
+"%@. Prepare the doctor snapshot now." = "%@。现在可以准备就诊摘要。";
+"%@. Keep logging doses, symptoms, and measurements." = "%@。继续记录服药、症状和测量。";
 "Patient-reported · not from hospital records" = "患者自报 · 非病历数据";
 "No medications recorded." = "暂无用药记录。";
 "PRN" = "按需";
@@ -1713,6 +1717,9 @@
 "of %lld items" = "共 %lld 项";
 "Next item %@" = "下一项 %@";
 "Today's medication · %lld/%lld" = "今日用药 · %lld/%lld";
+"Today's medication (%lld/%lld)" = "今日用药（%lld/%lld）";
+"%@ at %@" = "%@，%@";
+"At %@" = "%@";
 "Blood pressure" = "血压";
 "Blood glucose" = "血糖";
 "Not measured" = "未测量";
@@ -1864,6 +1871,7 @@
 "Export doctor PDF" = "导出医生 PDF";
 "Next visit in %lld days. Today’s logs will become your doctor summary." = "距离下次复诊 %lld 天。今天的记录会成为给医生看的摘要。";
 "Next visit in %lld days · %lld days of data ready for your doctor." = "距离下次复诊 %lld 天 · 已为医生准备 %lld 天数据。";
+"Next visit in %lld days. %lld days of data are ready for your doctor." = "距离下次复诊 %lld 天。已为医生准备 %lld 天数据。";
 "Export Data Files" = "导出数据文件";
 "Back up this device or export raw data files for your own records." = "备份此设备，或导出原始数据文件供自己留存。";
 "handle above" = "在上方处理";

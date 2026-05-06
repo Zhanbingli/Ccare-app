@@ -239,7 +239,7 @@ struct HypertensionFollowUpReportView: View {
             reportSection(NSLocalizedString("Visit Day Checklist", comment: "Hypertension report visit day section")) {
                 let medicationStatus = todayMedicationStatus()
                 visitDayActionRow(
-                    icon: medicationStatus.isReady ? "checkmark.circle.fill" : "pills",
+                    icon: medicationStatus.isReady ? "checkmark" : "pills",
                     title: NSLocalizedString("Today's medication record", comment: "Hypertension report visit day item"),
                     detail: medicationStatus.detail,
                     isReady: medicationStatus.isReady
@@ -257,7 +257,7 @@ struct HypertensionFollowUpReportView: View {
 
                 let bpStatus = todayBloodPressureStatus()
                 visitDayActionRow(
-                    icon: bpStatus.isReady ? "checkmark.circle.fill" : "waveform.path.ecg",
+                    icon: bpStatus.isReady ? "checkmark" : "waveform.path.ecg",
                     title: NSLocalizedString("Today's blood pressure", comment: "Hypertension report visit day item"),
                     detail: bpStatus.detail,
                     isReady: bpStatus.isReady
@@ -276,7 +276,7 @@ struct HypertensionFollowUpReportView: View {
 
                 let symptomStatus = todaySymptomStatus()
                 visitDayActionRow(
-                    icon: symptomStatus.isReady ? "checkmark.circle.fill" : "text.badge.plus",
+                    icon: symptomStatus.isReady ? "checkmark" : "text.badge.plus",
                     title: NSLocalizedString("New symptoms today", comment: "Hypertension report visit day item"),
                     detail: symptomStatus.detail,
                     isReady: symptomStatus.isReady
@@ -516,12 +516,14 @@ struct HypertensionFollowUpReportView: View {
         )
     }
 
-    private func compactBullet(_ text: String, icon: String = "circle.fill") -> some View {
+    private func compactBullet(_ text: String, icon: String? = nil) -> some View {
         HStack(alignment: .top, spacing: EditorialSpacing.sm) {
-            Image(systemName: icon)
-                .font(.system(size: icon == "circle.fill" ? 6 : 13, weight: .regular))
-                .foregroundStyle(AppColor.primary)
-                .frame(width: 18, height: 20)
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(AppColor.primary)
+                    .frame(width: 18, height: 20)
+            }
             Text(text)
                 .appFont(.body)
                 .foregroundStyle(AppColor.textPrimary)

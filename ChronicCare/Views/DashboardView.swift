@@ -79,11 +79,11 @@ struct DashboardView: View {
 
         var iconName: String {
             switch self {
-            case .taken:   return "checkmark.circle.fill"
-            case .skipped: return "xmark.circle.fill"
+            case .taken:   return "checkmark"
+            case .skipped: return "xmark"
             case .snoozed: return "zzz"
-            case .overdue: return "exclamationmark.circle.fill"
-            case .dueSoon: return "clock.fill"
+            case .overdue: return "exclamationmark.triangle"
+            case .dueSoon: return "clock"
             case .none:    return "clock"
             }
         }
@@ -282,7 +282,7 @@ struct DashboardView: View {
                     if store.medications.isEmpty {
                         Card {
                             EmptyStateView(
-                                systemImage: "pills.circle.fill",
+                                systemImage: "pills",
                                 title: NSLocalizedString("No medications yet", comment: ""),
                                 subtitle: NSLocalizedString("Add your first medication to start daily reminders and logging.", comment: ""),
                                 actionTitle: NSLocalizedString("Add Medication", comment: ""),
@@ -451,7 +451,7 @@ private struct TakenConfirmationOverlay: View {
     let medicationName: String
     var body: some View {
         VStack(spacing: 16) {
-            Image(systemName: "checkmark.circle.fill")
+            Image(systemName: "checkmark")
                 .font(.system(size: 72, weight: .bold))
                 .foregroundStyle(AppColor.success)
                 .symbolRenderingMode(.hierarchical)
@@ -678,7 +678,7 @@ private extension DashboardView {
                     Text(item.med.name)
                         .appFont(.headline)
                         .foregroundStyle(EditorialPalette.textPrimary)
-                    Text("\(item.med.dose) · \(item.time.formatted(date: .omitted, time: .shortened))")
+                    Text(doseTimeText(dose: item.med.dose, time: item.time))
                         .appFont(.caption)
                         .foregroundStyle(EditorialPalette.textSecondary)
                 }
@@ -798,8 +798,9 @@ private extension DashboardView {
             handleQuickFeeling(feeling)
         } label: {
             HStack(spacing: EditorialSpacing.sm) {
-                Image(systemName: "circle")
+                Image(systemName: feeling.iconName)
                     .font(.system(size: 16, weight: .regular))
+                    .foregroundStyle(feeling.tint)
                 Text(feeling.title)
                     .appFont(.body)
                     .fontWeight(.medium)
@@ -919,7 +920,7 @@ private extension DashboardView {
         if documentedDays == 0 {
             return String(format: NSLocalizedString("Next visit in %lld days. Today’s logs will become your doctor summary.", comment: "Quiet home visit progress empty"), days)
         }
-        return String(format: NSLocalizedString("Next visit in %lld days · %lld days of data ready for your doctor.", comment: "Quiet home visit progress"), days, documentedDays)
+        return String(format: NSLocalizedString("Next visit in %lld days. %lld days of data are ready for your doctor.", comment: "Quiet home visit progress"), days, documentedDays)
     }
 
     private func documentedDaysInReportWindow(days: Int) -> Int {
@@ -1067,7 +1068,7 @@ private extension DashboardView {
         let place = [visit.hospital, visit.department, visit.doctorName]
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-            .joined(separator: " · ")
+            .joined(separator: ", ")
 
         if place.isEmpty {
             Button {
@@ -1125,7 +1126,7 @@ private extension DashboardView {
             setVisitDayChecklistDone(!isDone, visitID: visit.id, itemID: item.id)
         } label: {
             HStack(alignment: .top, spacing: EditorialSpacing.sm) {
-                Image(systemName: isDone ? "checkmark.circle.fill" : item.systemImage)
+                Image(systemName: isDone ? "checkmark" : item.systemImage)
                     .font(.system(size: 15, weight: .regular))
                     .foregroundStyle(isDone ? AppColor.success : AppColor.primary)
                     .frame(width: 22, alignment: .center)
@@ -1491,9 +1492,9 @@ private extension DashboardView {
         let place = [Optional(visit.displayTitle), visit.hospital]
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-            .joined(separator: " · ")
+            .joined(separator: ", ")
         if place.isEmpty { return time }
-        return "\(time) · \(place)"
+        return "\(time), \(place)"
     }
 
     private func recentMeasurementCount(days: Int) -> Int {
@@ -1609,15 +1610,15 @@ private extension DashboardView {
     private func visitPrepSubtitle(_ visit: DoctorVisit, priority: VisitPrepPriority) -> String {
         let title = visit.displayTitle
         if priority == .secondary, let days = visit.daysUntil(), days > 3 {
-            return String(format: NSLocalizedString("%@ · %@. Keep logging quietly until the visit gets close.", comment: ""), title, visit.scheduledDate.formatted(date: .abbreviated, time: .omitted))
+            return String(format: NSLocalizedString("%@. Scheduled for %@. Keep logging quietly until the visit gets close.", comment: ""), title, visit.scheduledDate.formatted(date: .abbreviated, time: .omitted))
         }
         if let reason = visit.reason, !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "\(title) · \(reason)"
+            return "\(title). \(reason)"
         }
         if let days = visit.daysUntil(), days <= 3 {
-            return String(format: NSLocalizedString("%@ · prepare the doctor snapshot now.", comment: ""), title)
+            return String(format: NSLocalizedString("%@. Prepare the doctor snapshot now.", comment: ""), title)
         }
-        return String(format: NSLocalizedString("%@ · keep logging doses, symptoms, and measurements.", comment: ""), title)
+        return String(format: NSLocalizedString("%@. Keep logging doses, symptoms, and measurements.", comment: ""), title)
     }
 
     private func visitPrepTint(_ visit: DoctorVisit) -> Color {
@@ -1792,7 +1793,7 @@ private extension DashboardView {
         switch mode {
         case .lightPrep, .activePrep, .visitDay:
             return String(
-                format: NSLocalizedString("Today's medication · %lld/%lld", comment: "Visit prep downgraded medication schedule title"),
+                format: NSLocalizedString("Today's medication (%lld/%lld)", comment: "Visit prep downgraded medication schedule title"),
                 state.takenCount + state.skippedCount,
                 state.totalCount
             )
@@ -1816,7 +1817,7 @@ private extension DashboardView {
                     .appFont(.body)
                     .strikethrough(status.isFinal, color: .secondary)
                     .foregroundStyle(status.isFinal ? .secondary : .primary)
-                Text("\(item.med.dose) · \(item.time.formatted(date: .omitted, time: .shortened))")
+                Text(doseTimeText(dose: item.med.dose, time: item.time))
                     .appFont(.caption)
                     .foregroundStyle(.secondary)
                 if let guidance = missedDoseRecovery(for: item, status: status) {
@@ -1878,7 +1879,7 @@ private extension DashboardView {
                 title: NSLocalizedString("Recovery window open", comment: "Missed dose recovery title"),
                 message: NSLocalizedString("If you are sure this dose was missed, you can log it now. Do not take extra doses beyond the schedule unless your clinician told you to.", comment: "Missed dose recovery guidance"),
                 compactText: NSLocalizedString("Can log late dose", comment: "Compact missed dose recovery guidance"),
-                icon: "arrow.uturn.backward.circle.fill",
+                icon: "arrow.uturn.backward",
                 tint: AppColor.warning
             )
         case .tooCloseToNext(let next):
@@ -1895,7 +1896,7 @@ private extension DashboardView {
                 title: NSLocalizedString("Check before logging", comment: "Missed dose recovery title"),
                 message: NSLocalizedString("No next scheduled dose was found. Log this only if you actually took it.", comment: "Missed dose recovery guidance"),
                 compactText: NSLocalizedString("Confirm before logging", comment: "Compact missed dose recovery guidance"),
-                icon: "questionmark.circle.fill",
+                icon: "questionmark",
                 tint: AppColor.textSecondary
             )
         }
@@ -1985,7 +1986,16 @@ private extension DashboardView {
             .first
 
         guard let upcoming else { return nil }
-        return "\(upcoming.0.name) • \(upcoming.1.formatted(date: .omitted, time: .shortened))"
+        return String(format: NSLocalizedString("%@ at %@", comment: "Next scheduled medication summary"), upcoming.0.name, upcoming.1.formatted(date: .omitted, time: .shortened))
+    }
+
+    private func doseTimeText(dose: String, time: Date) -> String {
+        let trimmedDose = dose.trimmingCharacters(in: .whitespacesAndNewlines)
+        let timeText = time.formatted(date: .omitted, time: .shortened)
+        if trimmedDose.isEmpty {
+            return String(format: NSLocalizedString("At %@", comment: "Medication time-only summary"), timeText)
+        }
+        return String(format: NSLocalizedString("%@ at %@", comment: "Medication dose and time summary"), trimmedDose, timeText)
     }
 
     private func skipDose(for item: MedSchedule) {
@@ -2123,17 +2133,17 @@ private extension DashboardView {
     private func statusBadgeIcon(for status: TodayMedStatus) -> String {
         switch status {
         case .overdue:
-            return "exclamationmark.circle.fill"
+            return "exclamationmark.triangle"
         case .dueSoon:
-            return "clock.fill"
+            return "clock"
         case .snoozed:
             return "zzz"
         case .none:
             return "clock"
         case .taken:
-            return "checkmark.circle.fill"
+            return "checkmark"
         case .skipped:
-            return "xmark.circle.fill"
+            return "xmark"
         }
     }
 
@@ -2304,11 +2314,11 @@ private extension DashboardView {
     private func statusDot(for status: TodayMedStatus) -> some View {
         switch status {
         case .taken:
-            Image(systemName: "checkmark.circle.fill")
+            Image(systemName: "checkmark")
                 .font(.system(size: 24, weight: .semibold))
                 .foregroundStyle(AppColor.success)
         case .skipped:
-            Image(systemName: "xmark.circle")
+            Image(systemName: "xmark")
                 .font(.system(size: 24, weight: .semibold))
                 .foregroundStyle(AppColor.textSecondary)
         case .snoozed:
@@ -2317,18 +2327,20 @@ private extension DashboardView {
                 .foregroundStyle(AppColor.primary)
                 .frame(width: 24)
         case .overdue:
-            Image(systemName: "exclamationmark.circle")
-                .font(.system(size: 24, weight: .semibold))
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(AppColor.warning)
+                .frame(width: 24)
         case .dueSoon:
             Image(systemName: "clock")
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(AppColor.warning)
                 .frame(width: 24)
         case .none:
-            Image(systemName: "circle")
-                .font(.system(size: 24, weight: .regular))
-                .foregroundStyle(.secondary.opacity(0.5))
+            Image(systemName: "clock")
+                .font(.system(size: 20, weight: .regular))
+                .foregroundStyle(AppColor.textTertiary)
+                .frame(width: 24)
         }
     }
 

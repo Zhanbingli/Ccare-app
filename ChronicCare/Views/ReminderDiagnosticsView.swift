@@ -418,7 +418,7 @@ struct ReminderDiagnosticsView: View {
                     Text(medication.name)
                         .appFont(.subheadline)
                         .foregroundStyle(AppColor.textPrimary)
-                    Text("\(medication.dose) · \(reason)")
+                    Text(diagnosticDoseReasonText(dose: medication.dose, reason: reason))
                         .appFont(.caption)
                         .foregroundStyle(AppColor.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -446,5 +446,11 @@ struct ReminderDiagnosticsView: View {
         case .increaseSupport: return AppColor.warning
         case .shiftEarlier, .reduceNoise: return AppColor.primary
         }
+    }
+
+    private func diagnosticDoseReasonText(dose: String, reason: String) -> String {
+        let trimmedDose = dose.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedDose.isEmpty else { return reason }
+        return String(format: NSLocalizedString("%@. %@", comment: "Reminder diagnostic dose and reason"), trimmedDose, reason)
     }
 }
