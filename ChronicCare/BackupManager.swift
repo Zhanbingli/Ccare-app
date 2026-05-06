@@ -11,6 +11,7 @@ struct AppBackup: Codable {
     var symptomEntries: [SymptomEntry]?
     var doctorVisits: [DoctorVisit]?
     var agentInboxItems: [AgentInboxItem]?
+    var hypertensionAIDrafts: [HypertensionFollowUpAIDraftRecord]?
     var medicationImagesByPath: [String: Data]?
 }
 
@@ -52,6 +53,7 @@ enum BackupManager {
             symptomEntries: store.symptomEntries,
             doctorVisits: store.doctorVisits,
             agentInboxItems: store.agentInboxItems,
+            hypertensionAIDrafts: store.hypertensionAIDrafts,
             medicationImagesByPath: medicationImagesByPath.isEmpty ? nil : medicationImagesByPath
         )
         let data = try JSONEncoder().encode(backup)
@@ -60,7 +62,7 @@ enum BackupManager {
         return url
     }
 
-    static let currentVersion = 4
+    static let currentVersion = 5
 
     static func loadBackup(from url: URL) throws -> AppBackup {
         let data = try Data(contentsOf: url)
@@ -85,6 +87,11 @@ enum BackupManager {
             // v3 -> v4: local agent inbox state was added.
             if result.agentInboxItems == nil { result.agentInboxItems = [] }
             result.version = 4
+        }
+        if result.version < 5 {
+            // v4 -> v5: bounded hypertension AI report drafts were added.
+            if result.hypertensionAIDrafts == nil { result.hypertensionAIDrafts = [] }
+            result.version = 5
         }
         return result
     }

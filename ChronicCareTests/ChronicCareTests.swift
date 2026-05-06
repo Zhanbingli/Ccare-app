@@ -950,4 +950,42 @@ struct ChronicCareTests {
         #expect(merged.first?.title == "New")
     }
 
+    @MainActor
+    @Test func hypertensionAIDraftStoreReplacesSameReportContext() {
+        let store = DataStore()
+        store.clearAll()
+        let first = HypertensionFollowUpLLMDraft(
+            patientSummary: "First patient summary",
+            doctorSummary: "First doctor summary",
+            questions: ["First question"]
+        )
+        let second = HypertensionFollowUpLLMDraft(
+            patientSummary: "Second patient summary",
+            doctorSummary: "Second doctor summary",
+            questions: ["Second question"]
+        )
+
+        store.saveHypertensionAIDraft(
+            first,
+            contextKey: "hypertension.current",
+            days: 30,
+            dataRevision: 1
+        )
+        store.saveHypertensionAIDraft(
+            second,
+            contextKey: "hypertension.current",
+            days: 30,
+            dataRevision: 1
+        )
+
+        let record = store.hypertensionAIDraft(
+            contextKey: "hypertension.current",
+            days: 30,
+            dataRevision: 1
+        )
+
+        #expect(store.hypertensionAIDrafts.count == 1)
+        #expect(record?.draft == second)
+    }
+
 }

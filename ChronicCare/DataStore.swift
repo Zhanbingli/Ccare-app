@@ -15,6 +15,7 @@ final class DataStore: ObservableObject {
     @Published private(set) var symptomEntries: [SymptomEntry] = []
     @Published private(set) var doctorVisits: [DoctorVisit] = []
     @Published private(set) var agentInboxItems: [AgentInboxItem] = []
+    @Published private(set) var hypertensionAIDrafts: [HypertensionFollowUpAIDraftRecord] = []
     @Published private(set) var reportDataRevision: Int = 0
 
     private var cancellables: Set<AnyCancellable> = []
@@ -27,6 +28,7 @@ final class DataStore: ObservableObject {
     private let symptomEntriesURL: URL
     private let doctorVisitsURL: URL
     private let agentInboxItemsURL: URL
+    private let hypertensionAIDraftsURL: URL
     private let goalsDefaults = UserDefaults.standard
 
     init() {
@@ -40,6 +42,7 @@ final class DataStore: ObservableObject {
         self.symptomEntriesURL = docs.appendingPathComponent("symptom_entries.json")
         self.doctorVisitsURL = docs.appendingPathComponent("doctor_visits.json")
         self.agentInboxItemsURL = docs.appendingPathComponent("agent_inbox_items.json")
+        self.hypertensionAIDraftsURL = docs.appendingPathComponent("hypertension_ai_drafts.json")
 
         load()
 
@@ -91,6 +94,12 @@ final class DataStore: ObservableObject {
             .dropFirst()
             .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.saveAgentInboxItems() }
+            .store(in: &cancellables)
+
+        $hypertensionAIDrafts
+            .dropFirst()
+            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+            .sink { [weak self] _ in self?.saveHypertensionAIDrafts() }
             .store(in: &cancellables)
     }
 
@@ -409,9 +418,11 @@ final class DataStore: ObservableObject {
         symptomEntries.removeAll()
         doctorVisits.removeAll()
         agentInboxItems.removeAll()
+        hypertensionAIDrafts.removeAll()
         saveEmergencyInfo()
         saveDoctorVisits()
         saveAgentInboxItems()
+        saveHypertensionAIDrafts()
         markReportDataChanged()
     }
 
@@ -550,6 +561,37 @@ final class DataStore: ObservableObject {
         agentInboxItems[idx].status = .open
     }
 
+    // MARK: - AI Drafts
+    func hypertensionAIDraft(contextKey: String, days: Int, dataRevision: Int) -> HypertensionFollowUpAIDraftRecord? {
+        let key = HypertensionFollowUpAIDraftRecord.stableKey(
+            contextKey: contextKey,
+            days: days,
+            dataRevision: dataRevision
+        )
+        return hypertensionAIDrafts.first { $0.stableKey == key }
+    }
+
+    func saveHypertensionAIDraft(
+        _ draft: HypertensionFollowUpLLMDraft,
+        contextKey: String,
+        days: Int,
+        dataRevision: Int,
+        generatedAt: Date = Date()
+    ) {
+        let record = HypertensionFollowUpAIDraftRecord(
+            contextKey: contextKey,
+            days: days,
+            dataRevision: dataRevision,
+            draft: draft,
+            generatedAt: generatedAt
+        )
+        hypertensionAIDrafts.removeAll { $0.stableKey == record.stableKey }
+        hypertensionAIDrafts.insert(record, at: 0)
+        if hypertensionAIDrafts.count > 20 {
+            hypertensionAIDrafts = Array(hypertensionAIDrafts.prefix(20))
+        }
+    }
+
     // MARK: - Import Backup
     func importBackup(_ backup: AppBackup) {
         medications.forEach { deleteMedicationImage(path: $0.imagePath) }
@@ -577,6 +619,7 @@ final class DataStore: ObservableObject {
         symptomEntries = (backup.symptomEntries ?? []).sorted(by: { $0.date > $1.date })
         doctorVisits = (backup.doctorVisits ?? []).sorted(by: { $0.scheduledDate < $1.scheduledDate })
         agentInboxItems = backup.agentInboxItems ?? []
+        hypertensionAIDrafts = backup.hypertensionAIDrafts ?? []
         markReportDataChanged()
     }
 
@@ -593,6 +636,7 @@ final class DataStore: ObservableObject {
         self.symptomEntries = loadResilient(from: symptomEntriesURL, label: "symptom entries").sorted(by: { $0.date > $1.date })
         self.doctorVisits = loadResilient(from: doctorVisitsURL, label: "doctor visits").sorted(by: { $0.scheduledDate < $1.scheduledDate })
         self.agentInboxItems = loadResilient(from: agentInboxItemsURL, label: "agent inbox items")
+        self.hypertensionAIDrafts = loadResilient(from: hypertensionAIDraftsURL, label: "hypertension AI drafts")
         updateWidgetData()
     }
 
@@ -657,6 +701,11 @@ final class DataStore: ObservableObject {
     private func saveAgentInboxItems() {
         let snapshot = agentInboxItems
         persist(snapshot, to: agentInboxItemsURL, label: "agent inbox items")
+    }
+
+    private func saveHypertensionAIDrafts() {
+        let snapshot = hypertensionAIDrafts
+        persist(snapshot, to: hypertensionAIDraftsURL, label: "hypertension AI drafts")
     }
 
     private func saveIntakeLogs() {

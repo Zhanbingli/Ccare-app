@@ -92,10 +92,27 @@ struct HypertensionFollowUpLLMContext: Codable {
     let report: HypertensionFollowUpReport
 }
 
-struct HypertensionFollowUpLLMDraft: Codable {
+struct HypertensionFollowUpLLMDraft: Codable, Equatable {
     let patientSummary: String?
     let doctorSummary: String?
     let questions: [String]
+}
+
+struct HypertensionFollowUpAIDraftRecord: Identifiable, Codable, Equatable {
+    var id: UUID = UUID()
+    let contextKey: String
+    let days: Int
+    let dataRevision: Int
+    let draft: HypertensionFollowUpLLMDraft
+    let generatedAt: Date
+
+    var stableKey: String {
+        Self.stableKey(contextKey: contextKey, days: days, dataRevision: dataRevision)
+    }
+
+    static func stableKey(contextKey: String, days: Int, dataRevision: Int) -> String {
+        "\(contextKey).\(days).\(dataRevision)"
+    }
 }
 
 protocol HypertensionFollowUpReasoningClient {

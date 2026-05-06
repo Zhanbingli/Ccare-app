@@ -22,9 +22,17 @@ struct HypertensionFollowUpReportView: View {
         HypertensionFollowUpReportBuilder.build(store: store, visit: visit, days: days)
     }
 
-    private var aiDraftCacheKey: String {
+    private var aiDraftContextKey: String {
+        "hypertension.\(aiDraftVisitKey)"
+    }
+
+    private var aiDraftVisitKey: String {
         let visitID = visit?.id.uuidString ?? store.nextDoctorVisit?.id.uuidString ?? "current"
-        return "ai.hypertensionFollowUpDraft.\(visitID).\(days).\(store.reportDataRevision)"
+        return visitID
+    }
+
+    private var legacyAIDraftCacheKey: String {
+        "ai.hypertensionFollowUpDraft.\(aiDraftVisitKey).\(days).\(store.reportDataRevision)"
     }
 
     private struct CachedAIDraft: Codable {
@@ -418,22 +426,43 @@ struct HypertensionFollowUpReportView: View {
     }
 
     private func loadCachedAIDraft() {
-        guard let data = UserDefaults.standard.data(forKey: aiDraftCacheKey),
-              let cached = try? JSONDecoder().decode(CachedAIDraft.self, from: data) else {
-            aiDraft = nil
-            aiDraftGeneratedAt = nil
+        if let record = store.hypertensionAIDraft(
+            contextKey: aiDraftContextKey,
+            days: days,
+            dataRevision: store.reportDataRevision
+        ) {
+            aiDraft = record.draft
+            aiDraftGeneratedAt = record.generatedAt
             return
         }
-        aiDraft = cached.draft
-        aiDraftGeneratedAt = cached.generatedAt
+
+        if let data = UserDefaults.standard.data(forKey: legacyAIDraftCacheKey),
+           let cached = try? JSONDecoder().decode(CachedAIDraft.self, from: data) {
+            store.saveHypertensionAIDraft(
+                cached.draft,
+                contextKey: aiDraftContextKey,
+                days: days,
+                dataRevision: store.reportDataRevision,
+                generatedAt: cached.generatedAt
+            )
+            aiDraft = cached.draft
+            aiDraftGeneratedAt = cached.generatedAt
+            return
+        }
+
+        aiDraft = nil
+        aiDraftGeneratedAt = nil
     }
 
     private func cacheAIDraft(_ draft: HypertensionFollowUpLLMDraft) {
         let generatedAt = Date()
-        let cached = CachedAIDraft(draft: draft, generatedAt: generatedAt)
-        if let data = try? JSONEncoder().encode(cached) {
-            UserDefaults.standard.set(data, forKey: aiDraftCacheKey)
-        }
+        store.saveHypertensionAIDraft(
+            draft,
+            contextKey: aiDraftContextKey,
+            days: days,
+            dataRevision: store.reportDataRevision,
+            generatedAt: generatedAt
+        )
         aiDraft = draft
         aiDraftGeneratedAt = generatedAt
     }
