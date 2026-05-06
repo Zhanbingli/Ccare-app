@@ -507,7 +507,7 @@ enum HypertensionFollowUpReportBuilder {
 }
 
 enum HypertensionFollowUpReportTextExporter {
-    static func plainText(_ report: HypertensionFollowUpReport) -> String {
+    static func plainText(_ report: HypertensionFollowUpReport, aiDraft: HypertensionFollowUpLLMDraft? = nil) -> String {
         var lines: [String] = []
 
         lines.append(NSLocalizedString("Hypertension follow-up report", comment: "Hypertension report heading"))
@@ -527,6 +527,23 @@ enum HypertensionFollowUpReportTextExporter {
             }
         }
         lines.append("")
+
+        if let aiDraft {
+            appendSection(NSLocalizedString("AI Draft", comment: "Hypertension report AI section"), to: &lines)
+            if let patientSummary = aiDraft.patientSummary {
+                lines.append("\(NSLocalizedString("Patient summary", comment: "Hypertension report AI draft label")): \(patientSummary)")
+            }
+            if let doctorSummary = aiDraft.doctorSummary {
+                lines.append("\(NSLocalizedString("Doctor summary", comment: "Hypertension report AI draft label")): \(doctorSummary)")
+            }
+            if !aiDraft.questions.isEmpty {
+                lines.append(NSLocalizedString("Questions", comment: "Hypertension report AI draft label"))
+                for question in aiDraft.questions {
+                    lines.append("- \(question)")
+                }
+            }
+            lines.append("")
+        }
 
         appendSection(NSLocalizedString("Doctor-Facing Summary", comment: "Hypertension report section"), to: &lines)
         for line in report.doctorSummaryLines {

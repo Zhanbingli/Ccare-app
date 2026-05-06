@@ -1368,6 +1368,11 @@
 "Questions to Ask" = "要问医生的问题";
 "Hypertension Report" = "高血压复诊报告";
 "Share Report" = "分享报告";
+"Refine with AI" = "用 AI 整理";
+"Send Structured Report to AI?" = "发送结构化报告给 AI？";
+"Draft with AI" = "用 AI 起草";
+"Could not draft AI summary" = "无法生成 AI 摘要";
+"This sends only the structured hypertension report: BP summaries, adherence counts, symptom summaries, rule-based safety signals, doctor questions, and recent BP rows. It does not send contacts, emergency contact details, raw backups, or unrelated app data." = "这只会发送结构化高血压报告：血压摘要、依从性计数、症状摘要、规则安全信号、医生问题和近期血压记录。不会发送联系人、紧急联系人、原始备份或无关应用数据。";
 "BP, adherence, symptoms, and rule-based safety signals" = "血压、依从性、症状和规则风险信号";
 "AI follow-up preparation" = "AI 复诊准备";
 "Hypertension follow-up report" = "高血压复诊报告";
@@ -1376,6 +1381,11 @@
 "Doctor-Facing Summary" = "给医生看的摘要";
 "Questions for Doctor" = "要问医生的问题";
 "Blood Pressure Appendix" = "血压原始记录";
+"AI Draft" = "AI 草稿";
+"Drafting..." = "正在起草…";
+"AI drafted %@" = "AI 于 %@ 起草";
+"Patient summary" = "患者摘要";
+"Questions" = "问题";
 "No blood pressure readings in this report period." = "本报告周期内暂无血压记录。";
 "Generated: %@" = "生成时间：%@";
 "Period: %@ to %@" = "周期：%@ 至 %@";

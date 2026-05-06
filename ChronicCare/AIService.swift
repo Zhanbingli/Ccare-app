@@ -301,6 +301,28 @@ class AIService {
         return Array(questions.prefix(3))
     }
 
+    func draftHypertensionFollowUpReport(_ context: HypertensionFollowUpLLMContext) async throws -> HypertensionFollowUpLLMDraft {
+        guard hasUserConsent else {
+            throw AIServiceError.consentRequired
+        }
+        guard !configuration.apiKey.isEmpty else {
+            throw AIServiceError.invalidAPIKey
+        }
+
+        let prompt = try createHypertensionFollowUpPrompt(context)
+        let text: String
+        switch configuration.provider {
+        case .openai:
+            text = try await generateOpenAIText(prompt: prompt, maxTokens: 900)
+        case .anthropic:
+            text = try await generateAnthropicText(prompt: prompt, maxTokens: 900)
+        case .deepseek:
+            text = try await generateDeepSeekText(prompt: prompt, maxTokens: 900)
+        }
+
+        return try parseHypertensionDraft(text)
+    }
+
     private func analyzeWithOpenAI(request: DrugInteractionRequest) async throws -> DrugInteractionResponse {
         let url = URL(string: "https://api.openai.com/v1/chat/completions")!
         var urlRequest = URLRequest(url: url)
@@ -534,6 +556,46 @@ class AIService {
         """
     }
 
+    private func createHypertensionFollowUpPrompt(_ context: HypertensionFollowUpLLMContext) throws -> String {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.sortedKeys]
+        let data = try encoder.encode(context)
+        let json = String(data: data, encoding: .utf8) ?? "{}"
+
+        return """
+        You are drafting bounded follow-up preparation text for a hypertension patient.
+
+        Use only the structured report JSON below.
+
+        Output rules:
+        - Return valid JSON only.
+        - JSON keys: patientSummary, doctorSummary, questions.
+        - patientSummary: 2-4 short patient-facing sentences.
+        - doctorSummary: 4-6 concise clinician-facing bullet-like sentences.
+        - questions: exactly 3 short questions the patient can ask the clinician.
+
+        Safety rules:
+        - Do not diagnose.
+        - Do not recommend starting, stopping, or changing medication or dose.
+        - Do not tell the user a medication timing change is needed.
+        - Use cautious wording such as "may be worth discussing with your doctor".
+        - Rule-based red flags are already determined by the app; do not create new red flags.
+        - If redFlags are present, preserve their seriousness and do not reassure against them.
+        - State that medication decisions should be made with a licensed clinician.
+
+        JSON schema:
+        {
+          "patientSummary": "string",
+          "doctorSummary": "string",
+          "questions": ["string", "string", "string"]
+        }
+
+        Structured report JSON:
+        \(json)
+        """
+    }
+
     private func parseQuestionLines(_ text: String) -> [String] {
         text
             .split(whereSeparator: \.isNewline)
@@ -547,6 +609,51 @@ class AIService {
                 return value.trimmingCharacters(in: .whitespacesAndNewlines)
             }
             .filter { !$0.isEmpty }
+    }
+
+    private func parseHypertensionDraft(_ text: String) throws -> HypertensionFollowUpLLMDraft {
+        let json = extractJSONObject(from: text)
+        guard let data = json.data(using: .utf8) else {
+            throw AIServiceError.invalidResponse
+        }
+        let draft = try JSONDecoder().decode(HypertensionFollowUpLLMDraft.self, from: data)
+        let patientSummary = trimmedOrNil(draft.patientSummary)
+        let doctorSummary = trimmedOrNil(draft.doctorSummary)
+        let questions = draft.questions
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .prefix(3)
+
+        guard patientSummary != nil || doctorSummary != nil || !questions.isEmpty else {
+            throw AIServiceError.invalidResponse
+        }
+
+        return HypertensionFollowUpLLMDraft(
+            patientSummary: patientSummary,
+            doctorSummary: doctorSummary,
+            questions: Array(questions)
+        )
+    }
+
+    private func extractJSONObject(from text: String) -> String {
+        var value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.hasPrefix("```") {
+            value = value
+                .replacingOccurrences(of: #"^```(?:json)?\s*"#, with: "", options: .regularExpression)
+                .replacingOccurrences(of: #"\s*```$"#, with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        guard let start = value.firstIndex(of: "{"),
+              let end = value.lastIndex(of: "}"),
+              start <= end else {
+            return value
+        }
+        return String(value[start...end])
+    }
+
+    private func trimmedOrNil(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        return trimmed
     }
 
     private func generateOpenAIText(prompt: String, apiKey: String? = nil, maxTokens: Int = 500) async throws -> String {

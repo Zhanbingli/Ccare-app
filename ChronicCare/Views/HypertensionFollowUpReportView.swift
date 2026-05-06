@@ -6,9 +6,25 @@ struct HypertensionFollowUpReportView: View {
     var days: Int = 30
     @State private var showShareSheet = false
     @State private var shareText: String?
+    @State private var aiDraft: HypertensionFollowUpLLMDraft?
+    @State private var aiDraftGeneratedAt: Date?
+    @State private var isDraftingAI = false
+    @State private var showAIDataDisclosure = false
+    @State private var showAIError = false
+    @State private var aiErrorMessage = ""
 
     private var report: HypertensionFollowUpReport {
         HypertensionFollowUpReportBuilder.build(store: store, visit: visit, days: days)
+    }
+
+    private var aiDraftCacheKey: String {
+        let visitID = visit?.id.uuidString ?? store.nextDoctorVisit?.id.uuidString ?? "current"
+        return "ai.hypertensionFollowUpDraft.\(visitID).\(days).\(store.reportDataRevision)"
+    }
+
+    private struct CachedAIDraft: Codable {
+        let draft: HypertensionFollowUpLLMDraft
+        let generatedAt: Date
     }
 
     var body: some View {
@@ -17,6 +33,7 @@ struct HypertensionFollowUpReportView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: EditorialSpacing.xl) {
                 header(report)
+                aiDraftSection
                 safetySection(report)
                 patientPrepSection(report)
                 doctorSummarySection(report)
@@ -32,8 +49,18 @@ struct HypertensionFollowUpReportView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
+                if AIService.shared.isConfigured {
+                    Button {
+                        beginAIDraftFlow(report)
+                    } label: {
+                        Image(systemName: isDraftingAI ? "hourglass" : "sparkles")
+                    }
+                    .disabled(isDraftingAI)
+                    .accessibilityLabel(NSLocalizedString("Refine with AI", comment: "Hypertension report AI action"))
+                }
+
                 Button {
-                    shareText = HypertensionFollowUpReportTextExporter.plainText(report)
+                    shareText = HypertensionFollowUpReportTextExporter.plainText(report, aiDraft: aiDraft)
                     showShareSheet = true
                 } label: {
                     Image(systemName: "square.and.arrow.up")
@@ -45,6 +72,26 @@ struct HypertensionFollowUpReportView: View {
             if let shareText {
                 ShareSheet(activityItems: [shareText])
             }
+        }
+        .alert(NSLocalizedString("Send Structured Report to AI?", comment: "Hypertension report AI disclosure title"), isPresented: $showAIDataDisclosure) {
+            Button(NSLocalizedString("Draft with AI", comment: "Hypertension report AI disclosure action")) {
+                AIService.shared.hasUserConsent = true
+                draftWithAI(report)
+            }
+            Button(NSLocalizedString("Cancel", comment: ""), role: .cancel) {}
+        } message: {
+            Text(NSLocalizedString("This sends only the structured hypertension report: BP summaries, adherence counts, symptom summaries, rule-based safety signals, doctor questions, and recent BP rows. It does not send contacts, emergency contact details, raw backups, or unrelated app data.", comment: "Hypertension report AI disclosure detail"))
+        }
+        .alert(NSLocalizedString("Could not draft AI summary", comment: "Hypertension report AI error title"), isPresented: $showAIError) {
+            Button(NSLocalizedString("OK", comment: ""), role: .cancel) {}
+        } message: {
+            Text(aiErrorMessage)
+        }
+        .onAppear {
+            loadCachedAIDraft()
+        }
+        .onChange(of: store.reportDataRevision) { _ in
+            loadCachedAIDraft()
         }
     }
 
@@ -61,6 +108,68 @@ struct HypertensionFollowUpReportView: View {
             Text(reportPeriod(report))
                 .appFont(.caption)
                 .foregroundStyle(AppColor.textSecondary)
+        }
+    }
+
+    @ViewBuilder
+    private var aiDraftSection: some View {
+        if isDraftingAI || aiDraft != nil {
+            reportSection(NSLocalizedString("AI Draft", comment: "Hypertension report AI section")) {
+                if isDraftingAI {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text(NSLocalizedString("Drafting...", comment: "Hypertension report AI loading"))
+                            .appFont(.caption)
+                            .foregroundStyle(AppColor.textSecondary)
+                    }
+                    .padding(.vertical, 6)
+                } else if let aiDraft {
+                    if let generatedAt = aiDraftGeneratedAt {
+                        Text(String(format: NSLocalizedString("AI drafted %@", comment: "Hypertension report AI generated metadata"), generatedAt.formatted(date: .omitted, time: .shortened)))
+                            .appFont(.caption)
+                            .foregroundStyle(AppColor.textSecondary)
+                    }
+                    if let patientSummary = aiDraft.patientSummary {
+                        reportLine(
+                            icon: "person.text.rectangle",
+                            title: NSLocalizedString("Patient summary", comment: "Hypertension report AI draft label"),
+                            detail: patientSummary,
+                            tint: AppColor.primary
+                        )
+                    }
+                    if let doctorSummary = aiDraft.doctorSummary {
+                        AppDivider()
+                        reportLine(
+                            icon: "stethoscope",
+                            title: NSLocalizedString("Doctor summary", comment: "Hypertension report AI draft label"),
+                            detail: doctorSummary,
+                            tint: AppColor.primary
+                        )
+                    }
+                    if !aiDraft.questions.isEmpty {
+                        AppDivider()
+                        VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
+                            Text(NSLocalizedString("Questions", comment: "Hypertension report AI draft label"))
+                                .appFont(.body)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(AppColor.textPrimary)
+                            ForEach(Array(aiDraft.questions.enumerated()), id: \.offset) { _, question in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Image(systemName: "questionmark.circle")
+                                        .font(.system(size: 14, weight: .regular))
+                                        .foregroundStyle(AppColor.primary)
+                                        .frame(width: 18)
+                                    Text(question)
+                                        .appFont(.caption)
+                                        .foregroundStyle(AppColor.textPrimary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -234,6 +343,60 @@ struct HypertensionFollowUpReportView: View {
         case .information: return AppColor.primary
         case .caution, .urgent: return AppColor.warning
         }
+    }
+
+    private func beginAIDraftFlow(_ report: HypertensionFollowUpReport) {
+        guard AIService.shared.isConfigured else { return }
+        if !AIService.shared.hasUserConsent {
+            showAIDataDisclosure = true
+            return
+        }
+        draftWithAI(report)
+    }
+
+    private func draftWithAI(_ report: HypertensionFollowUpReport) {
+        guard !isDraftingAI else { return }
+        isDraftingAI = true
+        let context = HypertensionFollowUpLLMContext(report: report)
+
+        Task {
+            do {
+                let draft = try await AIService.shared.draftHypertensionFollowUpReport(context)
+                await MainActor.run {
+                    cacheAIDraft(draft)
+                    isDraftingAI = false
+                    Haptics.success()
+                }
+            } catch {
+                await MainActor.run {
+                    isDraftingAI = false
+                    aiErrorMessage = error.localizedDescription
+                    showAIError = true
+                    Haptics.notification(.warning)
+                }
+            }
+        }
+    }
+
+    private func loadCachedAIDraft() {
+        guard let data = UserDefaults.standard.data(forKey: aiDraftCacheKey),
+              let cached = try? JSONDecoder().decode(CachedAIDraft.self, from: data) else {
+            aiDraft = nil
+            aiDraftGeneratedAt = nil
+            return
+        }
+        aiDraft = cached.draft
+        aiDraftGeneratedAt = cached.generatedAt
+    }
+
+    private func cacheAIDraft(_ draft: HypertensionFollowUpLLMDraft) {
+        let generatedAt = Date()
+        let cached = CachedAIDraft(draft: draft, generatedAt: generatedAt)
+        if let data = try? JSONEncoder().encode(cached) {
+            UserDefaults.standard.set(data, forKey: aiDraftCacheKey)
+        }
+        aiDraft = draft
+        aiDraftGeneratedAt = generatedAt
     }
 }
 
