@@ -532,7 +532,19 @@ private extension DashboardView {
         if isVisitPrepMode(mode) {
             return nil
         }
+        if duplicatesPrimaryHomeAction(action, mode: mode) {
+            return nil
+        }
         return action
+    }
+
+    private func duplicatesPrimaryHomeAction(_ action: FollowUpAgentNextAction, mode: HomeMode) -> Bool {
+        switch (mode, action.target) {
+        case (.postVisitCapture(let visit), .recordPostVisit(let actionVisitID)):
+            return visit.id == actionVisitID
+        default:
+            return false
+        }
     }
 
     private func isVisitPrepMode(_ mode: HomeMode) -> Bool {

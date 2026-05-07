@@ -1787,6 +1787,12 @@
 "Today is your appointment" = "今天去复诊";
 "Show Doctor Snapshot" = "展示就诊摘要";
 "Show Visit Report" = "展示复诊报告";
+"Before you leave" = "离开前";
+"ID and insurance card" = "身份证和医保卡";
+"Medication list" = "用药清单";
+"Home readings" = "家庭测量记录";
+"Mark visit done and record notes" = "完成复诊并填写记录";
+"Record today's visit" = "记录今天复诊";
 "Bring ID, insurance card, and your medication list." = "记得带身份证、医保卡和用药清单。";
 "Record doctor notes after the visit" = "就诊后记录医生交代";
 "Capture what the doctor said" = "趁现在记下医生说了什么";
