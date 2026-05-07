@@ -244,10 +244,11 @@ struct DashboardView: View {
             let state = buildTodayState()
             let currentAction = state.currentAction
             let mode = homeMode
-            let agentNextAction = FollowUpAgentPlanner.nextAction(
+            let rawAgentNextAction = FollowUpAgentPlanner.nextAction(
                 store: store,
                 stage: followUpAgentStage(for: mode)
             )
+            let agentNextAction = visibleAgentNextAction(rawAgentNextAction, mode: mode)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -533,6 +534,32 @@ private extension DashboardView {
             return .visitDay(visitID: visit.id)
         case .postVisitCapture(let visit):
             return .postVisitCapture(visitID: visit.id)
+        }
+    }
+
+    private func visibleAgentNextAction(_ action: FollowUpAgentNextAction?, mode: HomeMode) -> FollowUpAgentNextAction? {
+        guard let action else { return nil }
+        guard isVisitPrepMode(mode), isReportOpeningAction(action.target) else {
+            return action
+        }
+        return nil
+    }
+
+    private func isVisitPrepMode(_ mode: HomeMode) -> Bool {
+        switch mode {
+        case .lightPrep, .activePrep, .visitDay:
+            return true
+        case .quietAccumulation, .postVisitCapture:
+            return false
+        }
+    }
+
+    private func isReportOpeningAction(_ target: FollowUpAgentActionTarget) -> Bool {
+        switch target {
+        case .openHypertensionReport, .openDiabetesReport, .openVisitPrep, .openDoctorSnapshot:
+            return true
+        case .logMeasurement, .clarifySymptom, .recordPostVisit, .openMedications, .openProfile:
+            return false
         }
     }
 
