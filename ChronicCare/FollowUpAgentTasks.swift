@@ -1,6 +1,6 @@
 import Foundation
 
-enum AgentInboxCategory: String, Codable {
+enum FollowUpAgentTaskCategory: String, Codable {
     case safety
     case missingData
     case adherence
@@ -9,7 +9,7 @@ enum AgentInboxCategory: String, Codable {
     case caregiver
 }
 
-enum AgentInboxAction: String, Codable {
+enum FollowUpAgentTaskAction: String, Codable {
     case none
     case logBloodPressure
     case logBloodGlucose
@@ -21,31 +21,31 @@ enum AgentInboxAction: String, Codable {
     case clarifySymptom
 }
 
-enum AgentInboxStatus: String, Codable {
+enum FollowUpAgentTaskStatus: String, Codable {
     case open
     case dismissed
 }
 
-struct AgentInboxItem: Identifiable, Codable, Equatable {
+struct FollowUpAgentTask: Identifiable, Codable, Equatable {
     var id: UUID = UUID()
     let stableKey: String
     let title: String
     let detail: String
-    let category: AgentInboxCategory
+    let category: FollowUpAgentTaskCategory
     let severity: AgentInsightSeverity
     let source: AgentInsightSource
-    let action: AgentInboxAction
+    let action: FollowUpAgentTaskAction
     let relatedID: UUID?
     let generatedAt: Date
     let updatedAt: Date
-    var status: AgentInboxStatus = .open
+    var status: FollowUpAgentTaskStatus = .open
 
     var isOpen: Bool { status == .open }
 }
 
-enum AgentInboxGenerator {
+enum FollowUpAgentTaskGenerator {
     @MainActor
-    static func generate(store: DataStore, now: Date = Date()) -> [AgentInboxItem] {
+    static func generate(store: DataStore, now: Date = Date()) -> [FollowUpAgentTask] {
         let calendar = Calendar.current
         let periodStart = calendar.date(byAdding: .day, value: -29, to: calendar.startOfDay(for: now)) ?? now
         let recentMeasurements = store.measurements.filter { $0.date >= periodStart && $0.date <= now }
@@ -55,7 +55,7 @@ enum AgentInboxGenerator {
         let hasHypertensionContext = store.medications.contains { $0.category == .antihypertensive } || store.measurements.contains { $0.type == .bloodPressure }
         let hasDiabetesContext = store.medications.contains { $0.category == .antidiabetic } || store.measurements.contains { $0.type == .bloodGlucose }
 
-        var items: [AgentInboxItem] = []
+        var items: [FollowUpAgentTask] = []
         items.append(contentsOf: hypertensionSafetyItems(bpReadings: bpReadings, symptoms: recentSymptoms, now: now))
         items.append(contentsOf: diabetesSafetyItems(glucoseReadings: glucoseReadings, symptoms: recentSymptoms, now: now))
 
@@ -66,9 +66,9 @@ enum AgentInboxGenerator {
                 latest: store.measurements.filter { $0.type == .bloodPressure }.map(\.date).max(),
                 thresholdDays: 7,
                 now: now,
-                title: NSLocalizedString("Blood pressure record is stale", comment: "Agent inbox item title"),
-                noDataDetail: NSLocalizedString("No home blood pressure has been recorded yet. Add a reading so the follow-up report has useful context.", comment: "Agent inbox item detail"),
-                gapDetail: NSLocalizedString("No home blood pressure has been recorded for %lld days. Add a reading before the next follow-up report.", comment: "Agent inbox item detail"),
+                title: NSLocalizedString("Blood pressure record is stale", comment: "Follow-up agent item title"),
+                noDataDetail: NSLocalizedString("No home blood pressure has been recorded yet. Add a reading so the follow-up report has useful context.", comment: "Follow-up agent item detail"),
+                gapDetail: NSLocalizedString("No home blood pressure has been recorded for %lld days. Add a reading before the next follow-up report.", comment: "Follow-up agent item detail"),
                 action: .logBloodPressure
             ) {
                 items.append(item)
@@ -82,9 +82,9 @@ enum AgentInboxGenerator {
                 latest: store.measurements.filter { $0.type == .bloodGlucose }.map(\.date).max(),
                 thresholdDays: 7,
                 now: now,
-                title: NSLocalizedString("Glucose record is stale", comment: "Agent inbox item title"),
-                noDataDetail: NSLocalizedString("No home glucose has been recorded yet. Add a reading so the follow-up report has useful context.", comment: "Agent inbox item detail"),
-                gapDetail: NSLocalizedString("No home glucose has been recorded for %lld days. Add a reading before the next follow-up report.", comment: "Agent inbox item detail"),
+                title: NSLocalizedString("Glucose record is stale", comment: "Follow-up agent item title"),
+                noDataDetail: NSLocalizedString("No home glucose has been recorded yet. Add a reading so the follow-up report has useful context.", comment: "Follow-up agent item detail"),
+                gapDetail: NSLocalizedString("No home glucose has been recorded for %lld days. Add a reading before the next follow-up report.", comment: "Follow-up agent item detail"),
                 action: .logBloodGlucose
             ) {
                 items.append(item)
@@ -103,11 +103,11 @@ enum AgentInboxGenerator {
         return deduplicated(items).sorted(by: sort)
     }
 
-    static func merge(generated: [AgentInboxItem], existing: [AgentInboxItem], now: Date = Date()) -> [AgentInboxItem] {
+    static func merge(generated: [FollowUpAgentTask], existing: [FollowUpAgentTask], now: Date = Date()) -> [FollowUpAgentTask] {
         let existingByKey = Dictionary(uniqueKeysWithValues: existing.map { ($0.stableKey, $0) })
         return generated.map { item in
             guard let previous = existingByKey[item.stableKey] else { return item }
-            return AgentInboxItem(
+            return FollowUpAgentTask(
                 id: previous.id,
                 stableKey: item.stableKey,
                 title: item.title,
@@ -124,9 +124,9 @@ enum AgentInboxGenerator {
         }
     }
 
-    private static func hypertensionSafetyItems(bpReadings: [Measurement], symptoms: [SymptomEntry], now: Date) -> [AgentInboxItem] {
+    private static func hypertensionSafetyItems(bpReadings: [Measurement], symptoms: [SymptomEntry], now: Date) -> [FollowUpAgentTask] {
         HypertensionRuleEngine.evaluate(bloodPressureReadings: bpReadings, symptoms: symptoms, now: now).map { flag in
-            AgentInboxItem(
+            FollowUpAgentTask(
                 stableKey: "safety.hypertension.\(flag.sourceRule).\(dayKey(flag.triggeredAt ?? now))",
                 title: flag.title,
                 detail: flag.detail,
@@ -141,9 +141,9 @@ enum AgentInboxGenerator {
         }
     }
 
-    private static func diabetesSafetyItems(glucoseReadings: [Measurement], symptoms: [SymptomEntry], now: Date) -> [AgentInboxItem] {
+    private static func diabetesSafetyItems(glucoseReadings: [Measurement], symptoms: [SymptomEntry], now: Date) -> [FollowUpAgentTask] {
         DiabetesRuleEngine.evaluate(glucoseReadings: glucoseReadings, symptoms: symptoms, now: now).map { flag in
-            AgentInboxItem(
+            FollowUpAgentTask(
                 stableKey: "safety.diabetes.\(flag.sourceRule).\(dayKey(flag.triggeredAt ?? now))",
                 title: flag.title,
                 detail: flag.detail,
@@ -167,8 +167,8 @@ enum AgentInboxGenerator {
         title: String,
         noDataDetail: String,
         gapDetail: String,
-        action: AgentInboxAction
-    ) -> AgentInboxItem? {
+        action: FollowUpAgentTaskAction
+    ) -> FollowUpAgentTask? {
         let calendar = Calendar.current
         let gapDays: Int
         let detail: String
@@ -180,7 +180,7 @@ enum AgentInboxGenerator {
             gapDays = thresholdDays
             detail = noDataDetail
         }
-        return AgentInboxItem(
+        return FollowUpAgentTask(
             stableKey: key,
             title: title,
             detail: detail,
@@ -195,15 +195,15 @@ enum AgentInboxGenerator {
     }
 
     @MainActor
-    private static func adherenceItems(store: DataStore, now: Date) -> [AgentInboxItem] {
+    private static func adherenceItems(store: DataStore, now: Date) -> [FollowUpAgentTask] {
         store.medications.compactMap { medication in
             let missedDays = store.consecutiveMissedDays(for: medication.id)
             guard missedDays >= 2 else { return nil }
             let hasCaregiverSupport = store.caregivers.contains(where: \.notifyOnMiss)
-            return AgentInboxItem(
+            return FollowUpAgentTask(
                 stableKey: "adherence.missed.\(medication.id.uuidString)",
-                title: NSLocalizedString("Repeated missed doses", comment: "Agent inbox item title"),
-                detail: String(format: NSLocalizedString("%@ has been missed for %lld days. Prepare a status update or review the medication routine.", comment: "Agent inbox item detail"), medication.name, Int64(missedDays)),
+                title: NSLocalizedString("Repeated missed doses", comment: "Follow-up agent item title"),
+                detail: String(format: NSLocalizedString("%@ has been missed for %lld days. Prepare a status update or review the medication routine.", comment: "Follow-up agent item detail"), medication.name, Int64(missedDays)),
                 category: hasCaregiverSupport ? .caregiver : .adherence,
                 severity: missedDays >= 3 ? .caution : .information,
                 source: .localSummary,
@@ -220,7 +220,7 @@ enum AgentInboxGenerator {
         clarifications: [SymptomClarification],
         now: Date,
         calendar: Calendar
-    ) -> [AgentInboxItem] {
+    ) -> [FollowUpAgentTask] {
         let start = calendar.date(byAdding: .day, value: -6, to: calendar.startOfDay(for: now)) ?? now
         let clarifiedIDs = Set(clarifications.filter(\.hasUsefulContext).map(\.symptomEntryID))
         return symptoms
@@ -229,11 +229,11 @@ enum AgentInboxGenerator {
             .filter { symptomNeedsClarification($0) }
             .prefix(3)
             .map { symptom in
-                let label = symptom.tags.first ?? NSLocalizedString("Symptom", comment: "Agent inbox symptom fallback")
-                return AgentInboxItem(
+                let label = symptom.tags.first ?? NSLocalizedString("Symptom", comment: "Follow-up agent symptom fallback")
+                return FollowUpAgentTask(
                     stableKey: "clarification.symptom.\(symptom.id.uuidString)",
-                    title: NSLocalizedString("Clarify symptom context", comment: "Agent inbox item title"),
-                    detail: String(format: NSLocalizedString("Add timing, relation to medication, nearby measurement, or red-flag symptoms for %@.", comment: "Agent inbox item detail"), label),
+                    title: NSLocalizedString("Clarify symptom context", comment: "Follow-up agent item title"),
+                    detail: String(format: NSLocalizedString("Add timing, relation to medication, nearby measurement, or red-flag symptoms for %@.", comment: "Follow-up agent item detail"), label),
                     category: .clarification,
                     severity: symptom.severity == .severe ? .caution : .information,
                     source: .localSummary,
@@ -252,17 +252,17 @@ enum AgentInboxGenerator {
         hasDiabetesContext: Bool,
         now: Date,
         calendar: Calendar
-    ) -> [AgentInboxItem] {
+    ) -> [FollowUpAgentTask] {
         guard let visit = store.nextDoctorVisit,
               let daysUntil = visit.daysUntil(now: now, calendar: calendar),
               daysUntil <= 14 else {
             return []
         }
-        var items: [AgentInboxItem] = []
+        var items: [FollowUpAgentTask] = []
         if hasHypertensionContext {
-            items.append(AgentInboxItem(
+            items.append(FollowUpAgentTask(
                 stableKey: "report.hypertension.\(visit.id.uuidString)",
-                title: NSLocalizedString("Hypertension follow-up report is ready", comment: "Agent inbox item title"),
+                title: NSLocalizedString("Hypertension follow-up report is ready", comment: "Follow-up agent item title"),
                 detail: reportDetail(visit: visit, daysUntil: daysUntil),
                 category: .report,
                 severity: daysUntil <= 3 ? .caution : .information,
@@ -274,9 +274,9 @@ enum AgentInboxGenerator {
             ))
         }
         if hasDiabetesContext {
-            items.append(AgentInboxItem(
+            items.append(FollowUpAgentTask(
                 stableKey: "report.diabetes.\(visit.id.uuidString)",
-                title: NSLocalizedString("Diabetes follow-up report is ready", comment: "Agent inbox item title"),
+                title: NSLocalizedString("Diabetes follow-up report is ready", comment: "Follow-up agent item title"),
                 detail: reportDetail(visit: visit, daysUntil: daysUntil),
                 category: .report,
                 severity: daysUntil <= 3 ? .caution : .information,
@@ -292,12 +292,12 @@ enum AgentInboxGenerator {
 
     private static func reportDetail(visit: DoctorVisit, daysUntil: Int) -> String {
         if daysUntil < 0 {
-            return String(format: NSLocalizedString("%@ is overdue. Review the report before updating the visit plan.", comment: "Agent inbox item detail"), visit.displayTitle)
+            return String(format: NSLocalizedString("%@ is overdue. Review the report before updating the visit plan.", comment: "Follow-up agent item detail"), visit.displayTitle)
         }
         if daysUntil == 0 {
-            return String(format: NSLocalizedString("%@ is today. Review patient questions and doctor-facing summary.", comment: "Agent inbox item detail"), visit.displayTitle)
+            return String(format: NSLocalizedString("%@ is today. Review patient questions and doctor-facing summary.", comment: "Follow-up agent item detail"), visit.displayTitle)
         }
-        return String(format: NSLocalizedString("%@ is in %lld days. Review the report while there is still time to fill gaps.", comment: "Agent inbox item detail"), visit.displayTitle, Int64(daysUntil))
+        return String(format: NSLocalizedString("%@ is in %lld days. Review the report while there is still time to fill gaps.", comment: "Follow-up agent item detail"), visit.displayTitle, Int64(daysUntil))
     }
 
     private static func symptomNeedsClarification(_ symptom: SymptomEntry) -> Bool {
@@ -328,7 +328,7 @@ enum AgentInboxGenerator {
             .allSatisfy { benignTags.contains($0) }
     }
 
-    private static func deduplicated(_ items: [AgentInboxItem]) -> [AgentInboxItem] {
+    private static func deduplicated(_ items: [FollowUpAgentTask]) -> [FollowUpAgentTask] {
         var seen = Set<String>()
         return items.filter { item in
             if seen.contains(item.stableKey) { return false }
@@ -337,7 +337,7 @@ enum AgentInboxGenerator {
         }
     }
 
-    private static func sort(_ lhs: AgentInboxItem, _ rhs: AgentInboxItem) -> Bool {
+    private static func sort(_ lhs: FollowUpAgentTask, _ rhs: FollowUpAgentTask) -> Bool {
         if severityRank(lhs.severity) != severityRank(rhs.severity) {
             return severityRank(lhs.severity) > severityRank(rhs.severity)
         }
@@ -355,7 +355,7 @@ enum AgentInboxGenerator {
         }
     }
 
-    private static func categoryRank(_ category: AgentInboxCategory) -> Int {
+    private static func categoryRank(_ category: FollowUpAgentTaskCategory) -> Int {
         switch category {
         case .safety: return 6
         case .report: return 5

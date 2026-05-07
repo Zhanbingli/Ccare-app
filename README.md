@@ -24,7 +24,7 @@ A privacy-first iOS app for chronic medication management. Helps users build rel
 - Visit-day medication actions and post-visit follow-up checks
 - Hypertension and diabetes follow-up report foundations
 - Symptom logging and AI-assisted symptom clarification flow
-- Persistent agent inbox surfacing reminders, drafts, and follow-up suggestions
+- Persistent follow-up agent surfacing reminders, drafts, and follow-up suggestions
 
 ### Insights
 - 7-day and 30-day adherence rates at a glance
@@ -74,7 +74,7 @@ A privacy-first iOS app for chronic medication management. Helps users build rel
 | Shell | Single-surface Home (`RootViewV2` + `DashboardView`) with profile drawer and modal sheets |
 | Data | `DataStore` (ObservableObject) with debounced JSON persistence via Combine |
 | Notifications | `UNUserNotificationCenter` with adaptive scheduling, snooze chains, and lifecycle alerts |
-| Agents | Persistent `AgentInbox` for AI drafts, follow-up suggestions, and adaptive reminder confirmations |
+| Agents | Persistent `FollowUpAgentTask` state for follow-up preparation, safety flags, and adaptive reminder confirmations |
 | Health | HealthKit import/export |
 | AI | Pluggable provider layer (OpenAI-compatible, DeepSeek), Keychain-stored credentials |
 | Export | PDF generation (health + hypertension follow-up), JSON backup/restore |

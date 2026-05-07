@@ -897,7 +897,7 @@ struct ChronicCareTests {
     }
 
     @MainActor
-    @Test func agentInboxCreatesBloodPressureGapItemForHypertensionContext() {
+    @Test func followUpAgentCreatesBloodPressureGapTaskForHypertensionContext() {
         let store = DataStore()
         store.clearAll()
         let medication = Medication(
@@ -909,9 +909,9 @@ struct ChronicCareTests {
         )
         #expect(store.addMedication(medication) == nil)
 
-        store.refreshAgentInbox(now: Date())
+        store.refreshFollowUpAgentTasks(now: Date())
 
-        #expect(store.openAgentInboxItems.contains { $0.stableKey == "measurement_gap.bp" })
+        #expect(store.openFollowUpAgentTasks.contains { $0.stableKey == "measurement_gap.bp" })
     }
 
     @MainActor
@@ -950,9 +950,9 @@ struct ChronicCareTests {
         #expect(store.addMedication(medication) == nil)
         let now = Date()
 
-        store.refreshAgentInbox(now: now)
-        if let item = store.openAgentInboxItems.first(where: { $0.stableKey == "measurement_gap.bp" }) {
-            store.dismissAgentInboxItem(item)
+        store.refreshFollowUpAgentTasks(now: now)
+        if let item = store.openFollowUpAgentTasks.first(where: { $0.stableKey == "measurement_gap.bp" }) {
+            store.dismissFollowUpAgentTask(item)
         }
 
         let action = FollowUpAgentPlanner.nextAction(
@@ -1029,9 +1029,9 @@ struct ChronicCareTests {
         #expect(action?.target == .logMeasurement(.bloodPressure))
     }
 
-    @Test func agentInboxMergePreservesDismissedStateForStableKey() {
+    @Test func followUpAgentTaskMergePreservesDismissedStateForStableKey() {
         let now = Date()
-        let previous = AgentInboxItem(
+        let previous = FollowUpAgentTask(
             stableKey: "measurement_gap.bp",
             title: "Old",
             detail: "Old detail",
@@ -1044,7 +1044,7 @@ struct ChronicCareTests {
             updatedAt: now,
             status: .dismissed
         )
-        let generated = AgentInboxItem(
+        let generated = FollowUpAgentTask(
             stableKey: "measurement_gap.bp",
             title: "New",
             detail: "New detail",
@@ -1057,7 +1057,7 @@ struct ChronicCareTests {
             updatedAt: now.addingTimeInterval(60)
         )
 
-        let merged = AgentInboxGenerator.merge(generated: [generated], existing: [previous], now: now.addingTimeInterval(120))
+        let merged = FollowUpAgentTaskGenerator.merge(generated: [generated], existing: [previous], now: now.addingTimeInterval(120))
 
         #expect(merged.count == 1)
         #expect(merged.first?.id == previous.id)
@@ -1065,8 +1065,46 @@ struct ChronicCareTests {
         #expect(merged.first?.title == "New")
     }
 
+    @Test func backupDecodesLegacyFollowUpAgentTaskKey() throws {
+        struct LegacyBackup: Codable {
+            let version: Int
+            let date: Date
+            let measurements: [ChronicCare.Measurement]
+            let medications: [Medication]
+            let intakeLogs: [IntakeLog]
+            let agentInboxItems: [FollowUpAgentTask]
+        }
+
+        let now = Date()
+        let task = FollowUpAgentTask(
+            stableKey: "measurement_gap.bp",
+            title: "Blood pressure record is stale",
+            detail: "No recent BP readings",
+            category: .missingData,
+            severity: .information,
+            source: .localSummary,
+            action: .logBloodPressure,
+            relatedID: nil,
+            generatedAt: now,
+            updatedAt: now
+        )
+        let legacy = LegacyBackup(
+            version: 6,
+            date: now,
+            measurements: [],
+            medications: [],
+            intakeLogs: [],
+            agentInboxItems: [task]
+        )
+
+        let data = try JSONEncoder().encode(legacy)
+        let decoded = try JSONDecoder().decode(AppBackup.self, from: data)
+
+        #expect(decoded.followUpAgentTasks?.first?.stableKey == "measurement_gap.bp")
+    }
+
     @MainActor
-    @Test func agentInboxDoesNotAskClarificationAfterSymptomClarified() {
+    @Test func followUpAgentDoesNotAskClarificationAfterSymptomClarified() {
         let store = DataStore()
         store.clearAll()
         let now = Date()
@@ -1078,10 +1116,10 @@ struct ChronicCareTests {
         )
         store.addSymptomEntry(symptom)
 
-        store.refreshAgentInbox(now: now)
+        store.refreshFollowUpAgentTasks(now: now)
 
         let stableKey = "clarification.symptom.\(symptom.id.uuidString)"
-        #expect(store.openAgentInboxItems.contains {
+        #expect(store.openFollowUpAgentTasks.contains {
             $0.stableKey == stableKey && $0.action == .clarifySymptom
         })
 
@@ -1094,13 +1132,13 @@ struct ChronicCareTests {
             redFlagSigns: [],
             followUpRelevanceNote: nil
         ))
-        store.refreshAgentInbox(now: now)
+        store.refreshFollowUpAgentTasks(now: now)
 
-        #expect(store.openAgentInboxItems.contains { $0.stableKey == stableKey } == false)
+        #expect(store.openFollowUpAgentTasks.contains { $0.stableKey == stableKey } == false)
     }
 
     @MainActor
-    @Test func agentInboxDoesNotClarifyBenignQuickFeeling() {
+    @Test func followUpAgentDoesNotClarifyBenignQuickFeeling() {
         let store = DataStore()
         store.clearAll()
         let now = Date()
@@ -1112,9 +1150,9 @@ struct ChronicCareTests {
         )
         store.addSymptomEntry(symptom)
 
-        store.refreshAgentInbox(now: now)
+        store.refreshFollowUpAgentTasks(now: now)
 
-        #expect(store.openAgentInboxItems.contains {
+        #expect(store.openFollowUpAgentTasks.contains {
             $0.stableKey == "clarification.symptom.\(symptom.id.uuidString)"
         } == false)
     }

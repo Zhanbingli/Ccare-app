@@ -37,7 +37,7 @@ struct ProfileDrawerV2: View {
                         title: NSLocalizedString("AI Follow-up Agent", comment: "Follow-up agent drawer title"),
                         subtitle: followUpAgentSubtitle
                     ) {
-                        AgentInboxView()
+                        FollowUpAgentWorkspaceView()
                             .environmentObject(store)
                     }
 
@@ -98,7 +98,7 @@ struct ProfileDrawerV2: View {
             .navigationTitle(NSLocalizedString("Profile", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
-                store.refreshAgentInbox()
+                store.refreshFollowUpAgentTasks()
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -142,7 +142,7 @@ struct ProfileDrawerV2: View {
     }
 
     private var followUpAgentTint: Color {
-        store.openAgentInboxItems.contains { $0.severity == .urgent || $0.severity == .caution }
+        store.openFollowUpAgentTasks.contains { $0.severity == .urgent || $0.severity == .caution }
             ? AppColor.warning
             : AppColor.primary
     }

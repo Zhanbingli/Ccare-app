@@ -108,9 +108,9 @@ enum FollowUpAgentPlanner {
         stage: FollowUpAgentStage,
         now: Date = Date()
     ) -> FollowUpAgentNextAction? {
-        let generatedItems = AgentInboxGenerator.generate(store: store, now: now)
-        let openItems = AgentInboxGenerator
-            .merge(generated: generatedItems, existing: store.agentInboxItems, now: now)
+        let generatedItems = FollowUpAgentTaskGenerator.generate(store: store, now: now)
+        let openItems = FollowUpAgentTaskGenerator
+            .merge(generated: generatedItems, existing: store.followUpAgentTasks, now: now)
             .filter(\.isOpen)
             .filter { $0.category != .safety }
 
@@ -198,7 +198,7 @@ enum FollowUpAgentPlanner {
     }
 
     @MainActor
-    private static func visitDayAction(store: DataStore, from items: [AgentInboxItem], visitID: UUID, now: Date) -> FollowUpAgentNextAction? {
+    private static func visitDayAction(store: DataStore, from items: [FollowUpAgentTask], visitID: UUID, now: Date) -> FollowUpAgentNextAction? {
         if let report = reportItem(from: items, visitID: visitID),
            let target = target(for: report),
            let domain = domain(for: report) {
@@ -249,8 +249,8 @@ enum FollowUpAgentPlanner {
     }
 
     private static func firstAction(
-        from items: [AgentInboxItem],
-        categories: [AgentInboxCategory]
+        from items: [FollowUpAgentTask],
+        categories: [FollowUpAgentTaskCategory]
     ) -> FollowUpAgentNextAction? {
         for category in categories {
             if let item = items.first(where: { $0.category == category }),
@@ -262,7 +262,7 @@ enum FollowUpAgentPlanner {
     }
 
     @MainActor
-    private static func reportAction(store: DataStore, from items: [AgentInboxItem], visitID: UUID, now: Date) -> FollowUpAgentNextAction? {
+    private static func reportAction(store: DataStore, from items: [FollowUpAgentTask], visitID: UUID, now: Date) -> FollowUpAgentNextAction? {
         guard let item = reportItem(from: items, visitID: visitID),
               let target = target(for: item),
               let domain = domain(for: item) else {
@@ -282,14 +282,14 @@ enum FollowUpAgentPlanner {
         )
     }
 
-    private static func reportItem(from items: [AgentInboxItem], visitID: UUID) -> AgentInboxItem? {
+    private static func reportItem(from items: [FollowUpAgentTask], visitID: UUID) -> FollowUpAgentTask? {
         items.first {
             $0.relatedID == visitID &&
                 ($0.action == .openHypertensionReport || $0.action == .openDiabetesReport)
         }
     }
 
-    private static func action(from item: AgentInboxItem) -> FollowUpAgentNextAction? {
+    private static func action(from item: FollowUpAgentTask) -> FollowUpAgentNextAction? {
         let target = target(for: item)
         let buttonTitle = buttonTitle(for: item.action)
         guard let target, let buttonTitle else { return nil }
@@ -306,7 +306,7 @@ enum FollowUpAgentPlanner {
         )
     }
 
-    private static func target(for item: AgentInboxItem) -> FollowUpAgentActionTarget? {
+    private static func target(for item: FollowUpAgentTask) -> FollowUpAgentActionTarget? {
         switch item.action {
         case .none:
             return nil
@@ -330,7 +330,7 @@ enum FollowUpAgentPlanner {
         }
     }
 
-    private static func domain(for item: AgentInboxItem) -> FollowUpReportDomain? {
+    private static func domain(for item: FollowUpAgentTask) -> FollowUpReportDomain? {
         switch item.action {
         case .openHypertensionReport:
             return .hypertension
@@ -354,7 +354,7 @@ enum FollowUpAgentPlanner {
         return nil
     }
 
-    private static func buttonTitle(for action: AgentInboxAction) -> String? {
+    private static func buttonTitle(for action: FollowUpAgentTaskAction) -> String? {
         switch action {
         case .none:
             return nil
@@ -400,7 +400,7 @@ enum FollowUpAgentPlanner {
         }
     }
 
-    private static func systemImage(for action: AgentInboxAction) -> String {
+    private static func systemImage(for action: FollowUpAgentTaskAction) -> String {
         switch action {
         case .none:
             return "sparkles"

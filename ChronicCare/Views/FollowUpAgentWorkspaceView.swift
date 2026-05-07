@@ -1,16 +1,16 @@
 import SwiftUI
 
-struct AgentInboxView: View {
+struct FollowUpAgentWorkspaceView: View {
     @EnvironmentObject var store: DataStore
     @State private var showMeasurementSheet = false
     @State private var pendingMeasurementType: MeasurementType = .bloodPressure
-    @State private var route: AgentWorkspaceRoute?
+    @State private var route: FollowUpAgentWorkspaceRoute?
 
-    private var openItems: [AgentInboxItem] {
-        store.agentInboxItems.filter(\.isOpen)
+    private var openItems: [FollowUpAgentTask] {
+        store.followUpAgentTasks.filter(\.isOpen)
     }
 
-    private var safetyItems: [AgentInboxItem] {
+    private var safetyItems: [FollowUpAgentTask] {
         openItems.filter { $0.category == .safety }
     }
 
@@ -40,7 +40,7 @@ struct AgentInboxView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    store.refreshAgentInbox()
+                    store.refreshFollowUpAgentTasks()
                     Haptics.impact(.light)
                 } label: {
                     Image(systemName: "arrow.clockwise")
@@ -51,7 +51,7 @@ struct AgentInboxView: View {
         .sheet(isPresented: $showMeasurementSheet) {
             AddMeasurementView(initialType: pendingMeasurementType) { measurement in
                 store.addMeasurement(measurement)
-                store.refreshAgentInbox()
+                store.refreshFollowUpAgentTasks()
                 Haptics.success()
             }
             .presentationDetents([.medium, .large])
@@ -71,7 +71,7 @@ struct AgentInboxView: View {
             }
         }
         .onAppear {
-            store.refreshAgentInbox()
+            store.refreshFollowUpAgentTasks()
         }
     }
 
@@ -186,7 +186,7 @@ struct AgentInboxView: View {
         }
     }
 
-    private func safetyCard(_ item: AgentInboxItem) -> some View {
+    private func safetyCard(_ item: FollowUpAgentTask) -> some View {
         TintedCard(tint: AppColor.warning) {
             VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
                 Label(item.title, systemImage: "exclamationmark.triangle")
@@ -343,24 +343,24 @@ struct AgentInboxView: View {
             pendingMeasurementType = type
             showMeasurementSheet = true
         case .clarifySymptom(let symptomID):
-            route = AgentWorkspaceRoute(kind: .symptomClarification, relatedID: symptomID)
+            route = FollowUpAgentWorkspaceRoute(kind: .symptomClarification, relatedID: symptomID)
         case .openHypertensionReport(let visitID):
-            route = AgentWorkspaceRoute(kind: .hypertensionReport, relatedID: visitID)
+            route = FollowUpAgentWorkspaceRoute(kind: .hypertensionReport, relatedID: visitID)
         case .openDiabetesReport(let visitID):
-            route = AgentWorkspaceRoute(kind: .diabetesReport, relatedID: visitID)
+            route = FollowUpAgentWorkspaceRoute(kind: .diabetesReport, relatedID: visitID)
         case .openVisitPrep(let visitID), .openDoctorSnapshot(let visitID):
-            route = AgentWorkspaceRoute(kind: .visitPrep, relatedID: visitID)
+            route = FollowUpAgentWorkspaceRoute(kind: .visitPrep, relatedID: visitID)
         case .recordPostVisit(let visitID):
-            route = AgentWorkspaceRoute(kind: .visitPrep, relatedID: visitID)
+            route = FollowUpAgentWorkspaceRoute(kind: .visitPrep, relatedID: visitID)
         case .openMedications:
-            route = AgentWorkspaceRoute(kind: .medications, relatedID: nil)
+            route = FollowUpAgentWorkspaceRoute(kind: .medications, relatedID: nil)
         case .openProfile:
-            route = AgentWorkspaceRoute(kind: .caregivers, relatedID: nil)
+            route = FollowUpAgentWorkspaceRoute(kind: .caregivers, relatedID: nil)
         }
     }
 
     @ViewBuilder
-    private func destination(for route: AgentWorkspaceRoute) -> some View {
+    private func destination(for route: FollowUpAgentWorkspaceRoute) -> some View {
         switch route.kind {
         case .hypertensionReport:
             HypertensionFollowUpReportView(visit: visit(for: route.relatedID))
@@ -391,7 +391,7 @@ struct AgentInboxView: View {
     }
 }
 
-private struct AgentWorkspaceRoute: Identifiable, Hashable {
+private struct FollowUpAgentWorkspaceRoute: Identifiable, Hashable {
     enum Kind: Hashable {
         case hypertensionReport
         case diabetesReport
@@ -411,7 +411,7 @@ private struct AgentWorkspaceRoute: Identifiable, Hashable {
 
 #Preview {
     NavigationStack {
-        AgentInboxView()
+        FollowUpAgentWorkspaceView()
             .environmentObject(DataStore())
     }
 }
