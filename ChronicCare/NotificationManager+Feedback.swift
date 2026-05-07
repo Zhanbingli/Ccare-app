@@ -3,7 +3,7 @@ import UserNotifications
 
 // MARK: - Behavioral Feedback Notifications
 // Proactive notifications sent in response to user adherence patterns:
-// streak milestones, missed-dose warnings, and caregiver sharing prompts.
+// streak milestones, missed-dose warnings, and caregiver text prompts.
 // These fire immediately (1–2 second trigger) and do not use the dose reminder category.
 
 extension NotificationManager {
@@ -42,12 +42,12 @@ extension NotificationManager {
         UNUserNotificationCenter.current().add(req, withCompletionHandler: nil)
     }
 
-    /// Prompts the user to share their missed-dose status with a named caregiver.
+    /// Prompts the user to text a named caregiver about missed-dose support.
     func sendCaregiverReminder(caregiverID: UUID, caregiverName: String, medicationName: String, missedDays: Int) {
         let content = UNMutableNotificationContent()
-        content.title = NSLocalizedString("Share with Caregiver?", comment: "")
+        content.title = NSLocalizedString("Notify caregiver", comment: "Caregiver notification title")
         content.body = String(
-            format: NSLocalizedString("You haven't taken %@ for %lld days. Would you like to share your status with %@?", comment: ""),
+            format: NSLocalizedString("You haven't taken %@ for %lld days. Open caregiver support to text %@.", comment: "Caregiver notification body"),
             medicationName,
             missedDays,
             caregiverName

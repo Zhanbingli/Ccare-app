@@ -1,6 +1,7 @@
 import SwiftUI
 import Contacts
 import ContactsUI
+import MessageUI
 
 struct CaregiversView: View {
     @EnvironmentObject var store: DataStore
@@ -10,6 +11,7 @@ struct CaregiversView: View {
     @State private var showContactPermissionAlert = false
     @State private var shareText: String = ""
     @State private var showShare = false
+    @State private var messageDraft: CaregiverMessageDraft?
     @State private var draftName: String = ""
     @State private var draftPhone: String = ""
     @State private var caregiverPendingRemoval: CaregiverContact?
@@ -20,6 +22,10 @@ struct CaregiversView: View {
 
     private var enabledCaregivers: [CaregiverContact] {
         store.caregivers.filter(\.notifyOnMiss)
+    }
+
+    private var textableCaregivers: [CaregiverContact] {
+        enabledCaregivers.filter { sanitizedPhone($0.phone) != nil }
     }
 
     private var missedSupportItems: [(medication: Medication, missedDays: Int)] {
@@ -86,6 +92,12 @@ struct CaregiversView: View {
         }
         .sheet(isPresented: $showShare) {
             ShareSheet(activityItems: [shareText])
+        }
+        .sheet(item: $messageDraft) { draft in
+            MessageComposeSheet(
+                recipients: draft.recipients,
+                body: draft.body
+            )
         }
         .confirmationDialog(NSLocalizedString("Add Caregiver", comment: ""), isPresented: $showAddOptions, titleVisibility: .visible) {
             Button(NSLocalizedString("From Contacts", comment: "")) {
@@ -177,16 +189,19 @@ struct CaregiversView: View {
 
                     if enabledCaregivers.isEmpty {
                         quietWarning(
-                            NSLocalizedString("Turn on missed-dose support for at least one caregiver before sharing this update.", comment: "Caregiver support warning")
+                            NSLocalizedString("Turn on missed-dose support for at least one caregiver before sending a reminder.", comment: "Caregiver support warning")
+                        )
+                    } else if textableCaregivers.isEmpty {
+                        quietWarning(
+                            NSLocalizedString("Add a phone number to text a caregiver directly.", comment: "Caregiver support warning")
                         )
                     } else {
                         EditorialButton(
-                            NSLocalizedString("Share Status Update", comment: ""),
-                            systemImage: "square.and.arrow.up",
+                            NSLocalizedString("Notify Caregiver", comment: "Caregiver notify action"),
+                            systemImage: "message",
                             kind: .primary
                         ) {
-                            shareText = buildSupportUpdate()
-                            showShare = true
+                            notifyEnabledCaregivers()
                         }
                     }
                 }
@@ -254,7 +269,7 @@ struct CaregiversView: View {
     }
 
     private var privacyNote: some View {
-        Text(NSLocalizedString("Caregivers are not messaged automatically. The app only helps you prepare and share a clear update.", comment: "Caregiver privacy note"))
+        Text(NSLocalizedString("The app prepares the caregiver reminder and opens Messages. You review and send it.", comment: "Caregiver privacy note"))
             .appFont(.caption)
             .foregroundStyle(AppColor.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
@@ -321,7 +336,7 @@ struct CaregiversView: View {
             return NSLocalizedString("Choose who can help when medication routines slip.", comment: "Caregiver page summary")
         }
         if hasActiveSupport {
-            return NSLocalizedString("Prepare one clear update instead of explaining missed doses from memory.", comment: "Caregiver page summary")
+            return NSLocalizedString("Send a clear missed-dose reminder to the people who should help.", comment: "Caregiver page summary")
         }
         if caregiverAlertCount == 0 {
             return NSLocalizedString("Contacts are saved. Turn support on for the people who should help with missed doses.", comment: "Caregiver page summary")
@@ -414,7 +429,17 @@ struct CaregiversView: View {
             .tint(AppColor.primary)
 
             if hasActiveSupport && caregiver.notifyOnMiss {
-                quietWarning(NSLocalizedString("Include this person in the current status update.", comment: "Caregiver current support note"))
+                if let phone = sanitizedPhone(caregiver.phone) {
+                    Button {
+                        notifyCaregiver(caregiver, phone: phone)
+                    } label: {
+                        Label(NSLocalizedString("Notify", comment: "Caregiver row notify action"), systemImage: "message")
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(AppColor.primary)
+                } else {
+                    quietWarning(NSLocalizedString("Add a phone number to send this person a reminder.", comment: "Caregiver current support note"))
+                }
             }
         }
         .padding(.vertical, EditorialSpacing.xs)
@@ -448,32 +473,47 @@ struct CaregiversView: View {
 
     private func buildSupportUpdate() -> String {
         var lines: [String] = []
-        lines.append(NSLocalizedString("Medication Support Update", comment: ""))
+        lines.append(NSLocalizedString("Medication support needed", comment: "Caregiver message title"))
         lines.append("")
 
         if !missedSupportItems.isEmpty {
-            lines.append(NSLocalizedString("Attention needed for:", comment: ""))
+            lines.append(NSLocalizedString("Missed doses:", comment: "Caregiver message section"))
             for item in missedSupportItems {
-                lines.append("• \(item.medication.name) - \(item.missedDays) days missed")
+                lines.append("• " + String(
+                    format: NSLocalizedString("%@ - %lld days missed", comment: "Caregiver message missed dose row"),
+                    item.medication.name,
+                    Int64(item.missedDays)
+                ))
             }
             lines.append("")
         }
 
-        if !enabledCaregivers.isEmpty {
-            lines.append(NSLocalizedString("Configured caregivers:", comment: ""))
-            for caregiver in enabledCaregivers {
-                if let phone = caregiver.phone, !phone.isEmpty {
-                    lines.append("• \(caregiver.name): \(phone)")
-                } else {
-                    lines.append("• \(caregiver.name)")
-                }
-            }
-            lines.append("")
-            lines.append(NSLocalizedString("Suggested next step:", comment: ""))
-            lines.append(NSLocalizedString("Reach out to a caregiver and share this update if you still need support taking your medication.", comment: ""))
-        }
+        lines.append(NSLocalizedString("Could you check in today and help confirm the medication routine?", comment: "Caregiver message ask"))
+        lines.append("")
+        lines.append(NSLocalizedString("This is a support reminder, not a medical emergency alert.", comment: "Caregiver message safety note"))
 
         return lines.joined(separator: "\n")
+    }
+
+    private func notifyEnabledCaregivers() {
+        let body = buildSupportUpdate()
+        let recipients = textableCaregivers.compactMap { sanitizedPhone($0.phone) }
+        if !recipients.isEmpty, MFMessageComposeViewController.canSendText() {
+            messageDraft = CaregiverMessageDraft(recipients: recipients, body: body)
+        } else {
+            shareText = body
+            showShare = true
+        }
+    }
+
+    private func notifyCaregiver(_ caregiver: CaregiverContact, phone: String) {
+        let body = buildSupportUpdate()
+        if MFMessageComposeViewController.canSendText() {
+            messageDraft = CaregiverMessageDraft(recipients: [phone], body: body)
+        } else {
+            shareText = "\(caregiver.name)\n\(body)"
+            showShare = true
+        }
     }
 
     private func removeCaregiver(_ caregiver: CaregiverContact) {
@@ -486,6 +526,12 @@ struct CaregiversView: View {
         let digits = phone.filter { $0.isNumber || $0 == "+" }
         guard !digits.isEmpty, let url = URL(string: "tel://\(digits)") else { return }
         UIApplication.shared.open(url)
+    }
+
+    private func sanitizedPhone(_ phone: String?) -> String? {
+        guard let phone else { return nil }
+        let digits = phone.filter { $0.isNumber || $0 == "+" }
+        return digits.isEmpty ? nil : digits
     }
 
     private func startContactImport() {
@@ -554,9 +600,9 @@ private struct AddCaregiverSheet: View {
                 }
 
                 Section {
-                    Toggle(NSLocalizedString("Remind me to share on missed doses", comment: ""), isOn: $notifyOnMiss)
+                    Toggle(NSLocalizedString("Include in missed-dose reminders", comment: "Caregiver add toggle"), isOn: $notifyOnMiss)
                 } footer: {
-                    Text(NSLocalizedString("When you miss medication for 2+ days, we'll remind you to share your status with this person.", comment: ""))
+                    Text(NSLocalizedString("When medication is missed for 2+ days, the app will prompt you to text this person.", comment: "Caregiver add toggle footer"))
                 }
             }
             .navigationTitle(NSLocalizedString("Add Caregiver", comment: ""))
@@ -609,6 +655,47 @@ private struct ContactPickerSheet: UIViewControllerRepresentable {
         }
 
         func contactPickerDidCancel(_ picker: CNContactPickerViewController) {
+            dismiss()
+        }
+    }
+}
+
+private struct CaregiverMessageDraft: Identifiable {
+    let id = UUID()
+    let recipients: [String]
+    let body: String
+}
+
+private struct MessageComposeSheet: UIViewControllerRepresentable {
+    let recipients: [String]
+    let body: String
+    @Environment(\.dismiss) private var dismiss
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(dismiss: dismiss)
+    }
+
+    func makeUIViewController(context: Context) -> MFMessageComposeViewController {
+        let controller = MFMessageComposeViewController()
+        controller.messageComposeDelegate = context.coordinator
+        controller.recipients = recipients
+        controller.body = body
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: MFMessageComposeViewController, context: Context) {}
+
+    final class Coordinator: NSObject, MFMessageComposeViewControllerDelegate {
+        private let dismiss: DismissAction
+
+        init(dismiss: DismissAction) {
+            self.dismiss = dismiss
+        }
+
+        func messageComposeViewController(
+            _ controller: MFMessageComposeViewController,
+            didFinishWith result: MessageComposeResult
+        ) {
             dismiss()
         }
     }
