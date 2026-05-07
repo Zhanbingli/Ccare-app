@@ -218,6 +218,12 @@ enum AdherenceCalculator {
         }
         if times.isEmpty { return 0 }
 
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        let todayLogs = medLogs.filter { $0.date >= today && $0.date < tomorrow }
+        if todayLogs.contains(where: { $0.status == .taken }) {
+            return 0
+        }
+
         var missed = 0
         for offset in 1..<60 {
             guard let day = calendar.date(byAdding: .day, value: -offset, to: today) else { break }

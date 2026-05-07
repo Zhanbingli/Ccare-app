@@ -225,6 +225,50 @@ struct ChronicCareTests {
         #expect(dailySummary.hasIssues == false)
     }
 
+    @Test func consecutiveMissedDaysClearsAfterTakenDoseToday() {
+        let cal = Calendar(identifier: .gregorian)
+        let now = DateComponents(calendar: cal, year: 2026, month: 5, day: 7, hour: 12).date!
+        let medID = UUID()
+        let med = Medication(
+            id: medID,
+            name: "Amlodipine",
+            dose: "5mg",
+            timesOfDay: [DateComponents(hour: 8, minute: 0)],
+            remindersEnabled: true
+        )
+        let fiveDaysAgo = cal.date(byAdding: .day, value: -5, to: now)!
+        let oldTaken = IntakeLog(
+            medicationID: medID,
+            date: cal.date(bySettingHour: 8, minute: 0, second: 0, of: fiveDaysAgo)!,
+            status: .taken,
+            scheduleKey: "08:00"
+        )
+        let todayTaken = IntakeLog(
+            medicationID: medID,
+            date: cal.date(bySettingHour: 8, minute: 0, second: 0, of: now)!,
+            status: .taken,
+            scheduleKey: "08:00"
+        )
+
+        let missedBeforeTodayLog = AdherenceCalculator.consecutiveMissedDays(
+            for: medID,
+            medications: [med],
+            intakeLogs: [oldTaken],
+            now: now,
+            calendar: cal
+        )
+        let missedAfterTodayLog = AdherenceCalculator.consecutiveMissedDays(
+            for: medID,
+            medications: [med],
+            intakeLogs: [oldTaken, todayTaken],
+            now: now,
+            calendar: cal
+        )
+
+        #expect(missedBeforeTodayLog == 4)
+        #expect(missedAfterTodayLog == 0)
+    }
+
     @Test func measurementClampsFutureDateToNow() {
         let now = Date()
         let future = now.addingTimeInterval(60 * 60 * 24)

@@ -284,7 +284,7 @@ struct DashboardView: View {
 
                     let safety = safetySummary
                     if safety.hasIssues {
-                        safetyNoticeCard(summary: safety)
+                        safetyNoticeCard(summary: safety, state: state)
                     }
 
                     if shouldShowReminderRepairCard(for: mode) {
@@ -1625,19 +1625,47 @@ private extension DashboardView {
 
     private func inactivityWarningCard(daysSince: Int) -> some View {
         TintedCard(tint: AppColor.warning) {
-            HStack(alignment: .center, spacing: 12) {
-                Image(systemName: "exclamationmark.triangle")
-                    .font(.system(size: 18, weight: .regular))
-                    .foregroundStyle(AppColor.warning)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(NSLocalizedString("No recent activity", comment: ""))
-                        .appFont(.headline)
-                    Text(String(format: NSLocalizedString("No doses recorded in the last %lld days. Are reminders working?", comment: ""), daysSince))
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundStyle(AppColor.warning)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(NSLocalizedString("No recent activity", comment: ""))
+                            .appFont(.headline)
+                        Text(String(format: NSLocalizedString("No scheduled dose has been recorded in the last %lld days. If the medication plan changed, update the medication list.", comment: "Dashboard medication inactivity warning"), daysSince))
+                            .appFont(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 4)
                 }
-                Spacer(minLength: 4)
+
+                HStack(spacing: EditorialSpacing.sm) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showFullTodaySchedule = true
+                        }
+                    } label: {
+                        Text(NSLocalizedString("Show today's doses", comment: "Medication inactivity action"))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
+                    Button {
+                        if let onOpenMedications {
+                            onOpenMedications()
+                        } else {
+                            showAddMedication = true
+                        }
+                    } label: {
+                        Text(NSLocalizedString("Update medication plan", comment: "Medication inactivity action"))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
             }
         }
     }
@@ -2412,32 +2440,116 @@ private extension DashboardView {
     }
 
     @ViewBuilder
-    private func safetyNoticeCard(summary: MedicationRules.DailySafetySummary) -> some View {
-        let items = summary.missEscalations + summary.timingConflicts
+    private func safetyNoticeCard(summary: MedicationRules.DailySafetySummary, state: TodayState) -> some View {
         let tint: Color = AppColor.warning
         let title = summary.missEscalations.isEmpty
             ? NSLocalizedString("Schedule overlap", comment: "")
-            : NSLocalizedString("Needs attention", comment: "")
+            : NSLocalizedString("Medication record gap", comment: "Medication safety card title")
 
         TintedCard(tint: tint) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "exclamationmark.triangle")
-                    .font(.system(size: 18, weight: .regular))
-                    .foregroundStyle(tint)
-                    .frame(width: 24, height: 24)
+            VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundStyle(tint)
+                        .frame(width: 24, height: 24)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(title).appFont(.headline)
-                    ForEach(items, id: \.self) { item in
-                        Text(item)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(title).appFont(.headline)
+
+                        if summary.missEscalations.isEmpty {
+                            ForEach(summary.timingConflicts, id: \.self) { item in
+                                Text(item)
+                                    .appFont(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        } else {
+                            ForEach(Array(summary.missEscalations.prefix(2))) { item in
+                                Text(item.message)
+                                    .appFont(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+
+                            if summary.missEscalations.count > 2 {
+                                Text(String(format: NSLocalizedString("%lld more medications need review.", comment: "Medication safety extra count"), Int64(summary.missEscalations.count - 2)))
+                                    .appFont(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+
+                if let primary = summary.missEscalations.first {
+                    VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                        Text(NSLocalizedString("Choose what is true today:", comment: "Medication safety action prompt"))
+                            .appFont(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(AppColor.textPrimary)
+
+                        medicationRecordGapActions(for: primary, state: state)
+
+                        Text(NSLocalizedString("This warning clears after a taken dose is recorded or the medication schedule is updated.", comment: "Medication safety clear condition"))
                             .appFont(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                Spacer(minLength: 0)
             }
         }
+    }
+
+    @ViewBuilder
+    private func medicationRecordGapActions(
+        for escalation: MedicationRules.DailySafetySummary.MissEscalation,
+        state: TodayState
+    ) -> some View {
+        if let dose = attentionSchedule(for: escalation, state: state) {
+            HStack(spacing: EditorialSpacing.sm) {
+                Button {
+                    beginTakeFlow(for: dose)
+                } label: {
+                    Text(NSLocalizedString("I took today's dose", comment: "Medication safety action"))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .tint(AppColor.primary)
+
+                Button {
+                    skipDose(for: dose)
+                } label: {
+                    Text(NSLocalizedString("Skipped today", comment: "Medication safety action"))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+
+        Button {
+            if let medication = store.medications.first(where: { $0.id == escalation.medicationID }) {
+                reminderFixTarget = medication
+            } else if let onOpenMedications {
+                onOpenMedications()
+            } else {
+                showAddMedication = true
+            }
+        } label: {
+            Text(NSLocalizedString("Update medication plan", comment: "Medication safety action"))
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+    }
+
+    private func attentionSchedule(
+        for escalation: MedicationRules.DailySafetySummary.MissEscalation,
+        state: TodayState
+    ) -> MedSchedule? {
+        state.actionableSchedules.first { $0.med.id == escalation.medicationID }
     }
 
     private func timeUntilText(_ target: Date) -> String {
