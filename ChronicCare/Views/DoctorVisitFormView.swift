@@ -10,6 +10,7 @@ struct DoctorVisitFormView: View {
 
     var editing: DoctorVisit?
     var showsCancelButton: Bool
+    var startsInPostVisitCapture: Bool
 
     @State private var scheduledDate: Date
     @State private var hospital: String
@@ -24,16 +25,17 @@ struct DoctorVisitFormView: View {
     @State private var hasNextVisitDate: Bool
     @State private var showDeleteConfirm = false
 
-    init(editing: DoctorVisit? = nil, showsCancelButton: Bool = true) {
+    init(editing: DoctorVisit? = nil, showsCancelButton: Bool = true, startsInPostVisitCapture: Bool = false) {
         self.editing = editing
         self.showsCancelButton = showsCancelButton
+        self.startsInPostVisitCapture = startsInPostVisitCapture
         let defaultScheduled = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
         _scheduledDate = State(initialValue: editing?.scheduledDate ?? defaultScheduled)
         _hospital = State(initialValue: editing?.hospital ?? "")
         _department = State(initialValue: editing?.department ?? "")
         _doctorName = State(initialValue: editing?.doctorName ?? "")
         _reason = State(initialValue: editing?.reason ?? "")
-        _isCompleted = State(initialValue: editing?.isCompleted ?? false)
+        _isCompleted = State(initialValue: startsInPostVisitCapture ? true : editing?.isCompleted ?? false)
         _notes = State(initialValue: editing?.notes ?? "")
         _medicationChangesSummary = State(initialValue: editing?.medicationChangesSummary ?? "")
         _followUpChecksSummary = State(initialValue: editing?.followUpChecksSummary ?? "")
@@ -43,20 +45,28 @@ struct DoctorVisitFormView: View {
 
     var body: some View {
         Form {
-            Section(NSLocalizedString("Appointment", comment: "")) {
-                DatePicker(NSLocalizedString("Date", comment: ""), selection: $scheduledDate, displayedComponents: [.date])
-                TextField(NSLocalizedString("Hospital", comment: ""), text: $hospital)
-                TextField(NSLocalizedString("Department", comment: ""), text: $department)
-                TextField(NSLocalizedString("Doctor", comment: ""), text: $doctorName)
-                TextField(NSLocalizedString("Reason", comment: ""), text: $reason, axis: .vertical)
-                    .lineLimit(2...4)
+            if startsInPostVisitCapture {
+                postVisitCaptureContext
+            } else {
+                Section(NSLocalizedString("Appointment", comment: "")) {
+                    DatePicker(NSLocalizedString("Date", comment: ""), selection: $scheduledDate, displayedComponents: [.date])
+                    TextField(NSLocalizedString("Hospital", comment: ""), text: $hospital)
+                    TextField(NSLocalizedString("Department", comment: ""), text: $department)
+                    TextField(NSLocalizedString("Doctor", comment: ""), text: $doctorName)
+                    TextField(NSLocalizedString("Reason", comment: ""), text: $reason, axis: .vertical)
+                        .lineLimit(2...4)
+                }
             }
 
             Section {
-                Toggle(NSLocalizedString("Visit completed", comment: ""), isOn: $isCompleted)
+                if !startsInPostVisitCapture {
+                    Toggle(NSLocalizedString("Visit completed", comment: ""), isOn: $isCompleted)
+                }
 
                 if showsAfterVisitFields {
-                    postVisitCaptureGuide
+                    if !startsInPostVisitCapture {
+                        postVisitCaptureGuide
+                    }
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text(NSLocalizedString("Doctor instructions", comment: "Post visit notes field label"))
@@ -109,7 +119,7 @@ struct DoctorVisitFormView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             } header: {
-                Text(NSLocalizedString("After Visit", comment: ""))
+                Text(startsInPostVisitCapture ? NSLocalizedString("Doctor's Plan", comment: "Focused post visit capture section") : NSLocalizedString("After Visit", comment: ""))
             } footer: {
                 if createsFollowUpVisit {
                     Text(NSLocalizedString("Saving will also add the next follow-up visit to your schedule.", comment: "Doctor visit follow-up creation helper"))
@@ -118,7 +128,7 @@ struct DoctorVisitFormView: View {
                 }
             }
 
-            if editing != nil {
+            if editing != nil && !startsInPostVisitCapture {
                 Section {
                     Button(role: .destructive) {
                         showDeleteConfirm = true
@@ -129,7 +139,7 @@ struct DoctorVisitFormView: View {
                 }
             }
         }
-        .navigationTitle(editing == nil ? NSLocalizedString("Add Visit", comment: "") : NSLocalizedString("Edit Visit", comment: ""))
+        .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if showsCancelButton {
@@ -154,6 +164,13 @@ struct DoctorVisitFormView: View {
             }
             Button(NSLocalizedString("Cancel", comment: ""), role: .cancel) { }
         }
+    }
+
+    private var navigationTitle: String {
+        if startsInPostVisitCapture {
+            return NSLocalizedString("Record Visit Notes", comment: "Focused post visit capture title")
+        }
+        return editing == nil ? NSLocalizedString("Add Visit", comment: "") : NSLocalizedString("Edit Visit", comment: "")
     }
 
     private func save() {
@@ -186,6 +203,24 @@ struct DoctorVisitFormView: View {
                 .foregroundStyle(AppColor.textPrimary)
         }
         .padding(.vertical, 4)
+    }
+
+    private var postVisitCaptureContext: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 6) {
+                Label(NSLocalizedString("Record what changed today", comment: "Focused post visit capture context title"), systemImage: "checklist")
+                    .appFont(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(AppColor.textPrimary)
+
+                if let editing {
+                    Text(editing.displayTitle)
+                        .appFont(.caption)
+                        .foregroundStyle(AppColor.textSecondary)
+                }
+            }
+            .padding(.vertical, 4)
+        }
     }
 
     private func trimmedOrNil(_ value: String) -> String? {

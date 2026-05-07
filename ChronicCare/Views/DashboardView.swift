@@ -27,6 +27,7 @@ struct DashboardView: View {
     @State private var showSymptomLog = false
     @State private var showDoctorVisitForm = false
     @State private var editingDoctorVisit: DoctorVisit?
+    @State private var capturingDoctorVisit: DoctorVisit?
     @State private var followUpReportRoute: FollowUpReportRoute?
     @State private var clarifyingSymptom: SymptomEntry?
     @State private var quickFeelingConfirmation: String?
@@ -320,6 +321,12 @@ struct DashboardView: View {
             .sheet(item: $editingDoctorVisit) { visit in
                 NavigationStack {
                     DoctorVisitFormView(editing: visit)
+                        .environmentObject(store)
+                }
+            }
+            .sheet(item: $capturingDoctorVisit) { visit in
+                NavigationStack {
+                    DoctorVisitFormView(editing: visit, startsInPostVisitCapture: true)
                         .environmentObject(store)
                 }
             }
@@ -823,7 +830,7 @@ private extension DashboardView {
         case .openVisitPrep(let visitID), .openDoctorSnapshot(let visitID):
             openPrimaryVisitReport(visitID: visitID)
         case .recordPostVisit(let visitID):
-            editingDoctorVisit = store.doctorVisits.first { $0.id == visitID }
+            capturingDoctorVisit = store.doctorVisits.first { $0.id == visitID }
         case .openMedications:
             if let onOpenMedications {
                 onOpenMedications()
@@ -1201,7 +1208,7 @@ private extension DashboardView {
                 Button {
                     markVisitDoneAndOpenCapture(visit)
                 } label: {
-                    Label(NSLocalizedString("Mark visit done and record notes", comment: "Visit day completion action"), systemImage: "checkmark.circle")
+                    Label(NSLocalizedString("After the visit, record doctor's plan", comment: "Visit day post appointment action"), systemImage: "square.and.pencil")
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity, minHeight: 46)
                 }
@@ -1316,9 +1323,9 @@ private extension DashboardView {
     private func markVisitDoneAndOpenCapture(_ visit: DoctorVisit) {
         store.completeDoctorVisit(visit)
         if let completed = store.doctorVisits.first(where: { $0.id == visit.id }) {
-            editingDoctorVisit = completed
+            capturingDoctorVisit = completed
         } else {
-            editingDoctorVisit = visit
+            capturingDoctorVisit = visit
         }
     }
 
@@ -1333,74 +1340,53 @@ private extension DashboardView {
 
             AppDivider()
 
-            VStack(alignment: .leading, spacing: EditorialSpacing.md) {
-                postVisitStatusLine(
-                    title: NSLocalizedString("Doctor notes", comment: "Post visit status"),
-                    value: visit.hasDoctorNotes
-                        ? NSLocalizedString("Saved", comment: "")
-                        : NSLocalizedString("Not saved yet", comment: "")
-                )
-                AppDivider()
-                postVisitStatusLine(
-                    title: NSLocalizedString("Medication plan", comment: "Post visit status"),
-                    value: visit.hasMedicationPlan
-                        ? NSLocalizedString("Saved", comment: "")
-                        : NSLocalizedString("Not saved yet", comment: "")
-                )
-                AppDivider()
-                postVisitStatusLine(
-                    title: NSLocalizedString("Tests or checks", comment: "Post visit status"),
-                    value: visit.hasFollowUpChecksPlan
-                        ? NSLocalizedString("Saved", comment: "")
-                        : NSLocalizedString("Not saved yet", comment: "")
-                )
-                AppDivider()
-                postVisitStatusLine(
-                    title: NSLocalizedString("Next visit", comment: "Post visit status"),
-                    value: visit.nextVisitDate?.formatted(date: .abbreviated, time: .omitted) ?? NSLocalizedString("Not set", comment: "")
-                )
-            }
+            postVisitCaptureSummary(visit)
 
             VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
                 Button {
-                    editingDoctorVisit = visit
+                    capturingDoctorVisit = visit
                 } label: {
-                    Label(NSLocalizedString("Record Visit Notes", comment: "Post visit capture action"), systemImage: "square.and.pencil")
+                    Label(NSLocalizedString("Continue visit record", comment: "Post visit capture action"), systemImage: "square.and.pencil")
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity, minHeight: 52)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(EditorialPalette.primary)
 
-                Button {
-                    if let onOpenMedications {
-                        onOpenMedications()
-                    } else {
-                        showAddMedication = true
+                if visit.hasMedicationPlan {
+                    Button {
+                        if let onOpenMedications {
+                            onOpenMedications()
+                        } else {
+                            showAddMedication = true
+                        }
+                    } label: {
+                        Label(NSLocalizedString("Update Medication List", comment: "Post visit medication action"), systemImage: "pills.fill")
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity, minHeight: 48)
                     }
-                } label: {
-                    Label(NSLocalizedString("Update Medication List", comment: "Post visit medication action"), systemImage: "pills.fill")
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity, minHeight: 48)
+                    .buttonStyle(.bordered)
+                    .tint(EditorialPalette.primary)
                 }
-                .buttonStyle(.bordered)
-                .tint(EditorialPalette.primary)
             }
         }
         .padding(.vertical, EditorialSpacing.sm)
     }
 
-    private func postVisitStatusLine(title: String, value: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
+    private func postVisitCaptureSummary(_ visit: DoctorVisit) -> some View {
+        let missingItems = visit.postVisitMissingItems
+        let text = missingItems.isEmpty
+            ? NSLocalizedString("Post-visit plan saved.", comment: "Post visit capture complete state")
+            : String(format: NSLocalizedString("Still needs: %@", comment: "Post visit capture missing summary"), missingItems.joined(separator: ", "))
+
+        return Label {
+            Text(text)
                 .appFont(.body)
                 .foregroundStyle(AppColor.textPrimary)
-            Spacer(minLength: EditorialSpacing.md)
-            Text(value)
-                .appFont(.body)
-                .fontWeight(.semibold)
-                .foregroundStyle(AppColor.textSecondary)
-                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: missingItems.isEmpty ? "checkmark.circle.fill" : "checklist")
+                .foregroundStyle(missingItems.isEmpty ? AppColor.success : AppColor.warning)
         }
         .padding(.vertical, EditorialSpacing.xs)
     }
