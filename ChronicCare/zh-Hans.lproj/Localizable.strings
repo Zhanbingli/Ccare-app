@@ -1809,7 +1809,9 @@
 "Open visit report" = "打开复诊报告";
 "Data readiness" = "数据准备";
 "Doctor-ready data" = "医生可用数据";
+"Still needed for visit" = "复诊前还缺";
 "What your doctor can use at the appointment." = "这次复诊时医生可以直接使用的信息。";
+"Handle these so the report is useful at the appointment." = "补齐这些内容，复诊报告才更有用。";
 "%lld / %lld ready" = "%lld / %lld 已准备";
 "Before the visit" = "复诊前建议完成";
 "%lld / 6" = "%lld / 6";

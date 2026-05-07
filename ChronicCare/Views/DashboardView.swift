@@ -254,9 +254,12 @@ struct DashboardView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     homeHeader()
 
-                    let showsDoseBeforeVisitCard = isVisitDayMode(mode) && currentAction != nil
-                    if showsDoseBeforeVisitCard, let currentAction {
+                    let prioritizesMedication = shouldPrioritizeRoutineMedicationContent(for: mode)
+                    if prioritizesMedication, let currentAction {
                         currentDoseActionCard(item: currentAction, mode: mode)
+                    }
+                    if prioritizesMedication {
+                        routineMedicationContent(state: state, mode: mode)
                     }
 
                     switch mode {
@@ -264,24 +267,20 @@ struct DashboardView: View {
                         dailyStatusHero(state: state)
                     case .lightPrep(let visit, let days):
                         lightPrepHero(visit: visit, daysUntil: days, state: state)
-                        visitDataReadinessCard(visit: visit, mode: mode)
+                        visitDataReadinessCard(visit: visit)
                     case .activePrep(let visit, let days):
                         lightPrepHero(visit: visit, daysUntil: days, state: state)
-                        visitDataReadinessCard(visit: visit, mode: mode)
+                        visitDataReadinessCard(visit: visit)
                     case .visitDay(let visit):
                         visitDayBoardingPass(visit: visit)
                     case .postVisitCapture(let visit):
                         postVisitCaptureCard(visit: visit)
                     }
 
-                    if shouldShowSeparateDoseAction(for: mode),
-                       !showsDoseBeforeVisitCard,
+                    if !prioritizesMedication,
+                       shouldShowSeparateDoseAction(for: mode),
                        let currentAction {
                         currentDoseActionCard(item: currentAction, mode: mode)
-                    }
-
-                    if shouldPrioritizeRoutineMedicationContent(for: mode) {
-                        routineMedicationContent(state: state, mode: mode)
                     }
 
                     if let agentNextAction {
@@ -304,7 +303,7 @@ struct DashboardView: View {
                         inactivityWarningCard(daysSince: gap)
                     }
 
-                    if !shouldPrioritizeRoutineMedicationContent(for: mode) {
+                    if !prioritizesMedication {
                         routineMedicationContent(state: state, mode: mode)
                     }
                 }
@@ -459,11 +458,6 @@ private struct TakenConfirmationOverlay: View {
 }
 
 private extension DashboardView {
-    private enum VisitPrepPriority {
-        case pinned
-        case secondary
-    }
-
     private enum ReadinessStatus: Equatable {
         case ready
         case needsAction
@@ -491,12 +485,6 @@ private extension DashboardView {
         let detail: String
         let status: ReadinessStatus
         let countsTowardScore: Bool
-        let action: () -> Void
-    }
-
-    private struct VisitPrepTask {
-        let title: String
-        let detail: String
         let action: () -> Void
     }
 
@@ -545,10 +533,10 @@ private extension DashboardView {
 
     private func visibleAgentNextAction(_ action: FollowUpAgentNextAction?, mode: HomeMode) -> FollowUpAgentNextAction? {
         guard let action else { return nil }
-        guard isVisitPrepMode(mode), isReportOpeningAction(action.target) else {
-            return action
+        if isVisitPrepMode(mode) {
+            return nil
         }
-        return nil
+        return action
     }
 
     private func isVisitPrepMode(_ mode: HomeMode) -> Bool {
@@ -560,23 +548,9 @@ private extension DashboardView {
         }
     }
 
-    private func isReportOpeningAction(_ target: FollowUpAgentActionTarget) -> Bool {
-        switch target {
-        case .openHypertensionReport, .openDiabetesReport, .openVisitPrep, .openDoctorSnapshot:
-            return true
-        case .logMeasurement, .clarifySymptom, .recordPostVisit, .openMedications, .openProfile:
-            return false
-        }
-    }
-
     private func visit(for id: UUID?) -> DoctorVisit? {
         guard let id else { return store.nextDoctorVisit }
         return store.doctorVisits.first { $0.id == id } ?? store.nextDoctorVisit
-    }
-
-    private func isVisitDayMode(_ mode: HomeMode) -> Bool {
-        if case .visitDay = mode { return true }
-        return false
     }
 
     private func shouldShowSeparateDoseAction(for mode: HomeMode) -> Bool {
@@ -1423,10 +1397,12 @@ private extension DashboardView {
         .padding(.vertical, EditorialSpacing.xs)
     }
 
-    private func visitDataReadinessCard(visit: DoctorVisit, mode: HomeMode) -> some View {
+    private func visitDataReadinessCard(visit: DoctorVisit) -> some View {
         let items = visitReadinessItems(for: visit)
-        let tasks = preVisitTasks(from: items)
-        let visibleItems = Array(items.prefix(3))
+        let missingItems = Array(items.filter { $0.status == .needsAction }.prefix(3))
+        let visibleItems = missingItems.isEmpty
+            ? Array(items.filter { $0.status != .optional }.prefix(3))
+            : missingItems
         let requiredItems = items.filter(\.countsTowardScore)
         let readinessCount = requiredItems.filter { $0.status == .ready }.count
         let readinessTotal = requiredItems.count
@@ -1434,7 +1410,9 @@ private extension DashboardView {
         return VStack(alignment: .leading, spacing: EditorialSpacing.md) {
             VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(NSLocalizedString("Doctor-ready data", comment: "Visit prep readiness card title"))
+                    Text(missingItems.isEmpty
+                         ? NSLocalizedString("Doctor-ready data", comment: "Visit prep readiness card title")
+                         : NSLocalizedString("Still needed for visit", comment: "Visit prep missing data card title"))
                         .appFont(.headline)
                         .foregroundStyle(AppColor.textPrimary)
                     Spacer()
@@ -1442,7 +1420,9 @@ private extension DashboardView {
                         .appFontNumeric(.caption)
                         .foregroundStyle(AppColor.textSecondary)
                 }
-                Text(NSLocalizedString("What your doctor can use at the appointment.", comment: "Visit prep readiness subtitle"))
+                Text(missingItems.isEmpty
+                     ? NSLocalizedString("What your doctor can use at the appointment.", comment: "Visit prep readiness subtitle")
+                     : NSLocalizedString("Handle these so the report is useful at the appointment.", comment: "Visit prep missing data subtitle"))
                     .appFont(.body)
                     .foregroundStyle(AppColor.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1460,43 +1440,6 @@ private extension DashboardView {
                     )
                     if index < visibleItems.count - 1 {
                         AppDivider()
-                    }
-                }
-            }
-
-            if !tasks.isEmpty {
-                AppDivider()
-                VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
-                    Text(NSLocalizedString("Before the visit", comment: "Visit prep action section title"))
-                        .appFont(.micro)
-                        .textCase(.uppercase)
-                        .tracking(0.7)
-                        .foregroundStyle(AppColor.textSecondary)
-
-                    ForEach(Array(tasks.enumerated()), id: \.offset) { index, task in
-                        Button(action: task.action) {
-                            HStack(alignment: .top, spacing: EditorialSpacing.sm) {
-                                Text("\(index + 1)")
-                                    .appFontNumeric(.caption)
-                                    .foregroundStyle(AppColor.primary)
-                                    .frame(width: 18, alignment: .leading)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(task.title)
-                                        .appFont(.subheadline)
-                                        .foregroundStyle(AppColor.textPrimary)
-                                    Text(task.detail)
-                                        .appFont(.caption)
-                                        .foregroundStyle(AppColor.textSecondary)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                                Spacer(minLength: EditorialSpacing.sm)
-                                Image(systemName: "arrow.right")
-                                    .font(.system(size: 11, weight: .regular))
-                                    .foregroundStyle(AppColor.textTertiary)
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -1605,19 +1548,6 @@ private extension DashboardView {
         )
     }
 
-    private func preVisitTasks(from items: [VisitReadinessItem]) -> [VisitPrepTask] {
-        items
-            .filter { $0.status == .needsAction }
-            .prefix(3)
-            .map {
-                VisitPrepTask(
-                    title: $0.title,
-                    detail: $0.detail,
-                    action: $0.action
-                )
-            }
-    }
-
     private func latestCompletedVisit(before date: Date) -> DoctorVisit? {
         store.completedDoctorVisits.first { visit in
             (visit.completedDate ?? visit.scheduledDate) < date
@@ -1679,73 +1609,6 @@ private extension DashboardView {
         return store.symptomEntries.filter { $0.date >= cutoff }.count
     }
 
-    private func preVisitPrepCard(priority: VisitPrepPriority) -> some View {
-        let visit = store.nextDoctorVisit
-        let tint = visit.map(visitPrepTint) ?? EditorialPalette.textSecondary
-        return TintedCard(tint: tint) {
-            VStack(alignment: .leading, spacing: EditorialSpacing.lg) {
-                VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
-                    Text(visit.map { visitPrepTitle($0, priority: priority) } ?? NSLocalizedString("Plan your next appointment", comment: ""))
-                        .appFont(priority == .pinned ? .displayTitle : .headline)
-                        .fontWeight(priority == .pinned ? .bold : .semibold)
-                        .foregroundStyle(priority == .pinned ? tint : EditorialPalette.textPrimary)
-                    Text(visit.map { visitPrepSubtitle($0, priority: priority) } ?? NSLocalizedString("Add a visit date when you know your next appointment.", comment: ""))
-                        .appFont(.caption)
-                        .foregroundStyle(EditorialPalette.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                HStack(spacing: 10) {
-                    visitPrimaryActionButton(visit: visit, priority: priority)
-
-                    if visit != nil {
-                        Button {
-                            showDoctorVisitForm = true
-                        } label: {
-                            Image(systemName: "calendar.badge.plus")
-                                .frame(width: 42)
-                        }
-                        .buttonStyle(.bordered)
-                        .accessibilityLabel(NSLocalizedString("Add Visit", comment: ""))
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func visitPrimaryActionButton(visit: DoctorVisit?, priority: VisitPrepPriority) -> some View {
-        if priority == .pinned {
-            Button {
-                openVisitPrimaryAction(visit: visit)
-            } label: {
-                visitPrimaryActionLabel(visit: visit, priority: priority)
-            }
-            .buttonStyle(.borderedProminent)
-        } else {
-            Button {
-                openVisitPrimaryAction(visit: visit)
-            } label: {
-                visitPrimaryActionLabel(visit: visit, priority: priority)
-            }
-            .buttonStyle(.bordered)
-        }
-    }
-
-    private func visitPrimaryActionLabel(visit: DoctorVisit?, priority: VisitPrepPriority) -> some View {
-        Label(visit == nil ? NSLocalizedString("Add Visit", comment: "") : primaryVisitActionTitle(for: priority),
-              systemImage: visit == nil ? "plus" : "doc.text.magnifyingglass")
-            .frame(maxWidth: .infinity)
-    }
-
-    private func openVisitPrimaryAction(visit: DoctorVisit?) {
-        if visit == nil {
-            showDoctorVisitForm = true
-        } else {
-            openPrimaryVisitReport(visitID: visit?.id)
-        }
-    }
-
     private func openPrimaryVisitReport(visitID: UUID?) {
         followUpReportRoute = FollowUpReportRoute(kind: primaryReportKind(), visitID: visitID)
     }
@@ -1764,54 +1627,6 @@ private extension DashboardView {
         }
 
         return .hypertension
-    }
-
-    private func visitIconName(for priority: VisitPrepPriority, visit: DoctorVisit?) -> String {
-        guard let visit else { return "calendar.badge.plus" }
-        guard let days = visit.daysUntil() else { return "calendar" }
-        if days <= 0 { return "stethoscope" }
-        return priority == .pinned ? "stethoscope" : "calendar.badge.clock"
-    }
-
-    private func primaryVisitActionTitle(for priority: VisitPrepPriority) -> String {
-        priority == .pinned
-            ? NSLocalizedString("Open Visit Report", comment: "Visit prep primary action")
-            : NSLocalizedString("Review Visit Report", comment: "Visit prep secondary action")
-    }
-
-    private func visitPrepTitle(_ visit: DoctorVisit, priority: VisitPrepPriority) -> String {
-        guard let days = visit.daysUntil() else {
-            return NSLocalizedString("Visit completed", comment: "")
-        }
-        if days == 0 { return NSLocalizedString("Appointment today", comment: "") }
-        if days < 0 { return String(format: NSLocalizedString("%lld days overdue", comment: ""), abs(days)) }
-        if priority == .secondary {
-            return NSLocalizedString("Next appointment planned", comment: "")
-        }
-        if days > 0 {
-            return String(format: NSLocalizedString("%lld days until appointment", comment: ""), days)
-        }
-        return NSLocalizedString("Next appointment planned", comment: "")
-    }
-
-    private func visitPrepSubtitle(_ visit: DoctorVisit, priority: VisitPrepPriority) -> String {
-        let title = visit.displayTitle
-        if priority == .secondary, let days = visit.daysUntil(), days > 3 {
-            return String(format: NSLocalizedString("%@. Scheduled for %@. Keep logging quietly until the visit gets close.", comment: ""), title, visit.scheduledDate.formatted(date: .abbreviated, time: .omitted))
-        }
-        if let reason = visit.reason, !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "\(title). \(reason)"
-        }
-        if let days = visit.daysUntil(), days <= 3 {
-            return String(format: NSLocalizedString("%@. Prepare the visit report now.", comment: ""), title)
-        }
-        return String(format: NSLocalizedString("%@. Keep logging doses, symptoms, and measurements.", comment: ""), title)
-    }
-
-    private func visitPrepTint(_ visit: DoctorVisit) -> Color {
-        guard let days = visit.daysUntil() else { return EditorialPalette.textSecondary }
-        if days < 0 { return EditorialPalette.warning }
-        return days <= 3 ? EditorialPalette.primary : EditorialPalette.textSecondary
     }
 
     private func inactivityWarningCard(daysSince: Int) -> some View {
