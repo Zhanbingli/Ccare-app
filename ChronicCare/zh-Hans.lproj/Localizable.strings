@@ -897,9 +897,17 @@
 
 /* Follow-up Agent */
 "AI Follow-up Agent" = "AI 复诊 Agent";
+"Follow-up organizer" = "复诊整理";
 "Refresh Follow-up Agent" = "刷新复诊 Agent";
+"I organize daily records into a visit-ready report." = "我会把日常记录整理成复诊当天可用的报告。";
 "One clinical next step, based on daily records." = "基于日常记录，只给出一个临床相关下一步。";
 "Current focus" = "当前重点";
+"I found" = "我发现";
+"Suggested next step" = "建议补充";
+"Already prepared" = "已准备好";
+"Visit report" = "复诊报告";
+"The current report is ready from the records available now." = "当前报告已根据现有记录准备好。";
+"The report is available now and will improve after the suggested update." = "报告现在可以打开；补完建议项后会更完整。";
 "No action needed" = "现在不需要处理";
 "Keep recording blood pressure, medication intake, symptoms, and visit dates." = "继续记录血压、服药、症状和复诊日期。";
 "Watching" = "正在观察";

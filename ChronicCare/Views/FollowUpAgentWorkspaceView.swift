@@ -17,6 +17,11 @@ struct FollowUpAgentWorkspaceView: View {
         FollowUpAgentPlanner.nextAction(store: store, stage: currentStage)
     }
 
+    private var suggestedAction: FollowUpAgentNextAction? {
+        guard let action, !isReportOpeningTarget(action.target) else { return nil }
+        return action
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: EditorialSpacing.xl) {
@@ -26,15 +31,18 @@ struct FollowUpAgentWorkspaceView: View {
                     safetyCard(urgent)
                 }
 
-                decisionCard
-                signalPanel
+                findingsCard
+                if let suggestedAction {
+                    suggestedActionCard(suggestedAction)
+                }
+                preparedCard
                 safetyFooter
             }
             .padding(.horizontal, EditorialSpacing.lg)
             .padding(.vertical, EditorialSpacing.lg)
         }
         .background(AppColor.background)
-        .navigationTitle(NSLocalizedString("AI Follow-up Agent", comment: "Follow-up agent title"))
+        .navigationTitle(NSLocalizedString("Follow-up organizer", comment: "Follow-up agent title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -62,98 +70,14 @@ struct FollowUpAgentWorkspaceView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
-            Text(NSLocalizedString("AI Follow-up Agent", comment: "Follow-up agent heading"))
+            Text(NSLocalizedString("Follow-up organizer", comment: "Follow-up agent heading"))
                 .appFont(.displayTitle)
                 .fontWeight(.bold)
                 .foregroundStyle(AppColor.textPrimary)
-            Text(NSLocalizedString("One clinical next step, based on daily records.", comment: "Follow-up agent subtitle"))
+            Text(NSLocalizedString("I organize daily records into a visit-ready report.", comment: "Follow-up agent subtitle"))
                 .appFont(.body)
                 .foregroundStyle(AppColor.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    @ViewBuilder
-    private var decisionCard: some View {
-        if let action {
-            Card {
-                VStack(alignment: .leading, spacing: EditorialSpacing.md) {
-                    HStack(alignment: .top, spacing: EditorialSpacing.md) {
-                        Image(systemName: action.systemImage)
-                            .font(.system(size: 18, weight: .regular))
-                            .foregroundStyle(tint(for: action))
-                            .frame(width: 28, height: 28)
-
-                        VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
-                            Text(NSLocalizedString("Current focus", comment: "Follow-up agent current focus label"))
-                                .appFont(.micro)
-                                .textCase(.uppercase)
-                                .tracking(0.7)
-                                .foregroundStyle(AppColor.textTertiary)
-
-                            Text(action.title)
-                                .appFont(.headline)
-                                .foregroundStyle(AppColor.textPrimary)
-                                .fixedSize(horizontal: false, vertical: true)
-
-                            Text(action.detail)
-                                .appFont(.body)
-                                .foregroundStyle(AppColor.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-
-                        Spacer(minLength: 0)
-                    }
-
-                    AppDivider()
-
-                    Text(reason(for: action))
-                        .appFont(.caption)
-                        .foregroundStyle(AppColor.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    actionControl(action)
-                }
-            }
-        } else {
-            Card {
-                VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
-                    Label(NSLocalizedString("No action needed", comment: "Follow-up agent empty title"), systemImage: "checkmark.circle")
-                        .appFont(.headline)
-                        .foregroundStyle(AppColor.textPrimary)
-                    Text(NSLocalizedString("Keep recording blood pressure, medication intake, symptoms, and visit dates.", comment: "Follow-up agent empty detail"))
-                        .appFont(.body)
-                        .foregroundStyle(AppColor.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-    }
-
-    private var signalPanel: some View {
-        EditorialSection(NSLocalizedString("Watching", comment: "Follow-up agent signal section")) {
-            VStack(spacing: EditorialSpacing.md) {
-                signalRow(
-                    icon: "waveform.path.ecg",
-                    title: NSLocalizedString("Blood pressure", comment: "Follow-up agent signal"),
-                    detail: bloodPressureSignal,
-                    tint: AppColor.primary
-                )
-                AppDivider()
-                signalRow(
-                    icon: "pills",
-                    title: NSLocalizedString("Medication", comment: "Follow-up agent signal"),
-                    detail: medicationSignal,
-                    tint: AppColor.primary
-                )
-                AppDivider()
-                signalRow(
-                    icon: "heart.text.square",
-                    title: NSLocalizedString("Symptoms", comment: "Follow-up agent signal"),
-                    detail: symptomSignal,
-                    tint: AppColor.primary
-                )
-            }
         }
     }
 
@@ -190,7 +114,70 @@ struct FollowUpAgentWorkspaceView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func signalRow(icon: String, title: String, detail: String, tint: Color) -> some View {
+    private var findingsCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+                sectionTitle(NSLocalizedString("I found", comment: "Follow-up agent findings section"))
+                ForEach(Array(findings.enumerated()), id: \.element.id) { index, finding in
+                    organizerRow(
+                        icon: finding.systemImage,
+                        title: finding.title,
+                        detail: finding.detail,
+                        tint: finding.tint
+                    )
+                    if index < findings.count - 1 {
+                        AppDivider()
+                    }
+                }
+            }
+        }
+    }
+
+    private func suggestedActionCard(_ action: FollowUpAgentNextAction) -> some View {
+        Card {
+            VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+                sectionTitle(NSLocalizedString("Suggested next step", comment: "Follow-up agent suggested action section"))
+                organizerRow(
+                    icon: action.systemImage,
+                    title: action.title,
+                    detail: action.detail,
+                    tint: tint(for: action)
+                )
+                actionControl(action)
+            }
+        }
+    }
+
+    private var preparedCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+                sectionTitle(NSLocalizedString("Already prepared", comment: "Follow-up agent prepared section"))
+                organizerRow(
+                    icon: "doc.text.magnifyingglass",
+                    title: NSLocalizedString("Visit report", comment: "Follow-up agent prepared report title"),
+                    detail: preparedReportDetail,
+                    tint: AppColor.primary
+                )
+                NavigationLink {
+                    destination(for: primaryReportRoute(visitID: currentStage.visitID))
+                } label: {
+                    actionButtonLabel(NSLocalizedString("Open Visit Report", comment: "Follow-up agent prepared report action"))
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(AppColor.primary)
+            }
+        }
+    }
+
+    private func sectionTitle(_ title: String) -> some View {
+        Text(title)
+            .appFont(.micro)
+            .textCase(.uppercase)
+            .tracking(0.7)
+            .foregroundStyle(AppColor.textTertiary)
+    }
+
+    private func organizerRow(icon: String, title: String, detail: String, tint: Color) -> some View {
         HStack(alignment: .top, spacing: EditorialSpacing.md) {
             Image(systemName: icon)
                 .font(.system(size: 16, weight: .regular))
@@ -207,6 +194,39 @@ struct FollowUpAgentWorkspaceView: View {
             }
             Spacer(minLength: 0)
         }
+    }
+
+    private var findings: [OrganizerFinding] {
+        [
+            OrganizerFinding(
+                id: "bloodPressure",
+                title: NSLocalizedString("Blood pressure", comment: "Follow-up agent signal"),
+                detail: bloodPressureSignal,
+                systemImage: "waveform.path.ecg",
+                tint: AppColor.primary
+            ),
+            OrganizerFinding(
+                id: "medication",
+                title: NSLocalizedString("Medication", comment: "Follow-up agent signal"),
+                detail: medicationSignal,
+                systemImage: "pills",
+                tint: AppColor.primary
+            ),
+            OrganizerFinding(
+                id: "symptoms",
+                title: NSLocalizedString("Symptoms", comment: "Follow-up agent signal"),
+                detail: symptomSignal,
+                systemImage: "heart.text.square",
+                tint: AppColor.primary
+            )
+        ]
+    }
+
+    private var preparedReportDetail: String {
+        if suggestedAction == nil {
+            return NSLocalizedString("The current report is ready from the records available now.", comment: "Follow-up agent prepared report detail")
+        }
+        return NSLocalizedString("The report is available now and will improve after the suggested update.", comment: "Follow-up agent prepared report detail")
     }
 
     private var bloodPressureSignal: String {
@@ -277,35 +297,21 @@ struct FollowUpAgentWorkspaceView: View {
             .allSatisfy { benignTags.contains($0) }
     }
 
-    private func reason(for action: FollowUpAgentNextAction) -> String {
-        switch action.target {
-        case .logMeasurement(.bloodPressure):
-            return NSLocalizedString("The report needs current home BP context before it can be useful to a doctor.", comment: "Follow-up agent reason")
-        case .logMeasurement(.bloodGlucose):
-            return NSLocalizedString("The report needs current home glucose context before it can be useful to a doctor.", comment: "Follow-up agent reason")
-        case .clarifySymptom:
-            return NSLocalizedString("A symptom was recorded without enough timing or medication context.", comment: "Follow-up agent reason")
-        case .openHypertensionReport, .openDiabetesReport:
-            return NSLocalizedString("The agent has enough structured data to prepare a doctor-facing summary.", comment: "Follow-up agent reason")
-        case .openVisitPrep, .openDoctorSnapshot:
-            return NSLocalizedString("The visit is close enough that questions and records should be reviewed together.", comment: "Follow-up agent reason")
-        case .recordPostVisit:
-            return NSLocalizedString("The next cycle should start from what the doctor changed at this visit.", comment: "Follow-up agent reason")
-        case .openMedications:
-            return NSLocalizedString("Medication list and schedule are core evidence for a follow-up report.", comment: "Follow-up agent reason")
-        case .openProfile:
-            return NSLocalizedString("Caregiver support matters when missed doses need follow-up.", comment: "Follow-up agent reason")
-        case .logMeasurement:
-            return NSLocalizedString("The report needs current measurement context before it can be useful to a doctor.", comment: "Follow-up agent reason")
-        }
-    }
-
     private func tint(for action: FollowUpAgentNextAction) -> Color {
         switch action.severity {
         case .urgent, .caution:
             return AppColor.warning
         case .information:
             return AppColor.primary
+        }
+    }
+
+    private func isReportOpeningTarget(_ target: FollowUpAgentActionTarget) -> Bool {
+        switch target {
+        case .openHypertensionReport, .openDiabetesReport, .openVisitPrep, .openDoctorSnapshot:
+            return true
+        case .logMeasurement, .clarifySymptom, .recordPostVisit, .openMedications, .openProfile:
+            return false
         }
     }
 
@@ -426,6 +432,14 @@ struct FollowUpAgentWorkspaceView: View {
     private func symptom(for id: UUID) -> SymptomEntry? {
         store.symptomEntries.first { $0.id == id }
     }
+}
+
+private struct OrganizerFinding: Identifiable {
+    let id: String
+    let title: String
+    let detail: String
+    let systemImage: String
+    let tint: Color
 }
 
 private struct FollowUpAgentWorkspaceRoute: Identifiable, Hashable {
