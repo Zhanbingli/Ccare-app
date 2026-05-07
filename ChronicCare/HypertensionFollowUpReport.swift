@@ -582,14 +582,14 @@ enum HypertensionFollowUpReportTextExporter {
         lines.append("")
 
         appendSection(NSLocalizedString("Questions for Doctor", comment: "Hypertension report section"), to: &lines)
-        for question in report.doctorQuestions.prefix(3) {
-            lines.append("- \(question.prompt)")
+        let questions: [String]
+        if let aiQuestions = aiDraft?.questions, !aiQuestions.isEmpty {
+            questions = Array(aiQuestions.prefix(3))
+        } else {
+            questions = report.doctorQuestions.prefix(3).map(\.prompt)
         }
-
-        if let doctorSummary = aiDraft?.doctorSummary {
-            lines.append("")
-            appendSection(NSLocalizedString("AI drafted wording", comment: "Hypertension report one-page export section"), to: &lines)
-            lines.append(doctorSummary)
+        for question in questions {
+            lines.append("- \(question)")
         }
 
         lines.append("")
@@ -619,23 +619,6 @@ enum HypertensionFollowUpReportTextExporter {
         }
         lines.append("")
 
-        if let aiDraft {
-            appendSection(NSLocalizedString("AI Draft", comment: "Hypertension report AI section"), to: &lines)
-            if let patientSummary = aiDraft.patientSummary {
-                lines.append("\(NSLocalizedString("Patient summary", comment: "Hypertension report AI draft label")): \(patientSummary)")
-            }
-            if let doctorSummary = aiDraft.doctorSummary {
-                lines.append("\(NSLocalizedString("Doctor summary", comment: "Hypertension report AI draft label")): \(doctorSummary)")
-            }
-            if !aiDraft.questions.isEmpty {
-                lines.append(NSLocalizedString("Questions", comment: "Hypertension report AI draft label"))
-                for question in aiDraft.questions {
-                    lines.append("- \(question)")
-                }
-            }
-            lines.append("")
-        }
-
         appendSection(NSLocalizedString("Doctor-Facing Summary", comment: "Hypertension report section"), to: &lines)
         for line in report.doctorSummaryLines {
             lines.append("- \(line)")
@@ -652,9 +635,21 @@ enum HypertensionFollowUpReportTextExporter {
         }
         lines.append("")
 
+        if let patientSummary = aiDraft?.patientSummary {
+            appendSection(NSLocalizedString("Patient Prep Notes", comment: "Hypertension report AI patient section"), to: &lines)
+            lines.append("- \(patientSummary)")
+            lines.append("")
+        }
+
         appendSection(NSLocalizedString("Questions for Doctor", comment: "Hypertension report section"), to: &lines)
-        for question in report.doctorQuestions {
-            lines.append("- \(question.prompt)")
+        if aiDraft?.questions.isEmpty == false {
+            for question in aiDraft?.questions ?? [] {
+                lines.append("- \(question)")
+            }
+        } else {
+            for question in report.doctorQuestions {
+                lines.append("- \(question.prompt)")
+            }
         }
         lines.append("")
 

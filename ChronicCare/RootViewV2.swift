@@ -13,10 +13,23 @@ struct RootViewV2: View {
     @State private var showAdherenceCalendar = false
     @State private var showInsightsSheet = false
     @State private var showMedicationSheet = false
-    @State private var showVisitSnapshot = false
-    @State private var deepLinkVisitID: UUID? = nil
+    @State private var visitReportRoute: VisitReportRoute?
     @State private var pendingMeasurementType: MeasurementType = .bloodPressure
     @State private var deepLinkMedicationID: UUID? = nil
+
+    private struct VisitReportRoute: Identifiable {
+        enum Kind: String {
+            case hypertension
+            case diabetes
+        }
+
+        let kind: Kind
+        let visitID: UUID?
+
+        var id: String {
+            "\(kind.rawValue).\(visitID?.uuidString ?? "current")"
+        }
+    }
 
     var body: some View {
         if showOnboarding {
@@ -102,16 +115,14 @@ struct RootViewV2: View {
                 }
             }
         }
-        .sheet(isPresented: $showVisitSnapshot, onDismiss: {
-            deepLinkVisitID = nil
-        }) {
+        .sheet(item: $visitReportRoute) { route in
             NavigationStack {
-                ConsultationSnapshotView(visit: selectedDeepLinkVisit)
+                visitReportDestination(route)
                     .environmentObject(store)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
                             Button(NSLocalizedString("Done", comment: "")) {
-                                showVisitSnapshot = false
+                                visitReportRoute = nil
                             }
                         }
                     }
@@ -131,10 +142,7 @@ struct RootViewV2: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("openVisitSnapshot"))) { notification in
             if let visitID = notification.object as? UUID {
-                deepLinkVisitID = visitID
-                showProfileDrawer = false
-                showMedicationSheet = false
-                showVisitSnapshot = true
+                openVisitReport(visitID: visitID)
             }
         }
         .onOpenURL { url in
@@ -142,9 +150,43 @@ struct RootViewV2: View {
         }
     }
 
-    private var selectedDeepLinkVisit: DoctorVisit? {
-        guard let deepLinkVisitID else { return store.nextDoctorVisit }
-        return store.doctorVisits.first { $0.id == deepLinkVisitID } ?? store.nextDoctorVisit
+    @ViewBuilder
+    private func visitReportDestination(_ route: VisitReportRoute) -> some View {
+        switch route.kind {
+        case .hypertension:
+            HypertensionFollowUpReportView(visit: visit(for: route.visitID))
+        case .diabetes:
+            DiabetesFollowUpReportView(visit: visit(for: route.visitID))
+        }
+    }
+
+    private func visit(for id: UUID?) -> DoctorVisit? {
+        guard let id else { return store.nextDoctorVisit }
+        return store.doctorVisits.first { $0.id == id } ?? store.nextDoctorVisit
+    }
+
+    private func openVisitReport(visitID: UUID?) {
+        showProfileDrawer = false
+        showMedicationSheet = false
+        showAdherenceCalendar = false
+        showInsightsSheet = false
+        visitReportRoute = VisitReportRoute(kind: primaryReportKind(), visitID: visitID)
+    }
+
+    private func primaryReportKind() -> VisitReportRoute.Kind {
+        let hasHypertensionContext = store.medications.contains { $0.category == .antihypertensive }
+            || store.measurements.contains { $0.type == .bloodPressure }
+        if hasHypertensionContext {
+            return .hypertension
+        }
+
+        let hasDiabetesContext = store.medications.contains { $0.category == .antidiabetic }
+            || store.measurements.contains { $0.type == .bloodGlucose }
+        if hasDiabetesContext {
+            return .diabetes
+        }
+
+        return .hypertension
     }
 
     private func handleDeepLink(_ url: URL) {
@@ -173,10 +215,7 @@ struct RootViewV2: View {
             showInsightsSheet = true
         case "visit", "snapshot":
             let candidate = pathComponents.first ?? url.lastPathComponent
-            deepLinkVisitID = UUID(uuidString: candidate)
-            showProfileDrawer = false
-            showMedicationSheet = false
-            showVisitSnapshot = true
+            openVisitReport(visitID: UUID(uuidString: candidate))
         default:
             break
         }
