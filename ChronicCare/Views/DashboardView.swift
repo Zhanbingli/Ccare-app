@@ -280,6 +280,10 @@ struct DashboardView: View {
                         currentDoseActionCard(item: currentAction, mode: mode)
                     }
 
+                    if shouldPrioritizeRoutineMedicationContent(for: mode) {
+                        routineMedicationContent(state: state, mode: mode)
+                    }
+
                     if let agentNextAction {
                         agentNextActionCard(agentNextAction)
                     }
@@ -300,7 +304,9 @@ struct DashboardView: View {
                         inactivityWarningCard(daysSince: gap)
                     }
 
-                    routineMedicationContent(state: state, mode: mode)
+                    if !shouldPrioritizeRoutineMedicationContent(for: mode) {
+                        routineMedicationContent(state: state, mode: mode)
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 10)
@@ -600,8 +606,16 @@ private extension DashboardView {
     }
 
     private func shouldShowRoutineMedicationContent(for mode: HomeMode) -> Bool {
-        if case .quietAccumulation = mode { return true }
-        return false
+        true
+    }
+
+    private func shouldPrioritizeRoutineMedicationContent(for mode: HomeMode) -> Bool {
+        switch mode {
+        case .lightPrep, .activePrep, .visitDay:
+            return true
+        case .quietAccumulation, .postVisitCapture:
+            return false
+        }
     }
 
     private func shouldShowEmptyMedicationPrompt(for mode: HomeMode) -> Bool {
