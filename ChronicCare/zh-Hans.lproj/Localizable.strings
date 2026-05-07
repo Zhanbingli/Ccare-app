@@ -1083,6 +1083,8 @@
 "Healthy" = "状态良好";
 "Review Snapshot" = "回顾概览";
 "Open Doctor Snapshot" = "打开就诊摘要";
+"Open Visit Report" = "打开复诊报告";
+"Review Visit Report" = "查看复诊报告";
 "Next appointment planned" = "已安排下次复诊";
 "%@ · %@. Keep logging quietly until the visit gets close." = "%@ · %@。复诊临近前，继续安静记录即可。";
 "%@. Scheduled for %@. Keep logging quietly until the visit gets close." = "%@。计划于 %@。复诊临近前继续安静记录即可。";
@@ -1447,6 +1449,7 @@
 "Add an appointment so your medication, symptoms, and measurements become a focused doctor summary." = "添加复诊时间，让用药、症状和测量自动整理成给医生看的摘要。";
 "No visit scheduled" = "暂无复诊安排";
 "Add your next appointment so the app can prepare a focused doctor snapshot." = "添加下一次复诊，应用会提前准备聚焦的就诊摘要。";
+"Add your next appointment so the app can prepare a focused visit report." = "添加下一次复诊，应用会提前准备聚焦的复诊报告。";
 "Add Visit" = "添加复诊";
 "Edit Visit" = "编辑复诊";
 "Appointment" = "复诊信息";
@@ -1484,6 +1487,8 @@
 "tests or checks" = "检查或复查";
 "next visit" = "下次复诊";
 "Doctor-facing summary for the appointment" = "给医生看的本次复诊摘要";
+"Prepare Visit Report" = "准备复诊报告";
+"One-page summary, questions, and export for the appointment" = "本次复诊的一页摘要、问题和导出";
 "Time, doctor, department, and reason" = "时间、医生、科室和复诊原因";
 "Upcoming" = "即将到来";
 "Overdue" = "已逾期";
@@ -1539,6 +1544,7 @@
 "AI drafted wording" = "AI 起草文本";
 "Safety Note" = "安全说明";
 "AI Draft" = "AI 草稿";
+"Patient Prep Notes" = "患者复诊准备";
 "Drafting..." = "正在起草…";
 "AI drafted %@" = "AI 于 %@ 起草";
 "Patient summary" = "患者摘要";
@@ -1677,6 +1683,7 @@
 "Prepare for your doctor visit" = "准备复诊";
 "Visit preparation" = "复诊准备";
 "Open the doctor snapshot and review medication, symptoms, and measurements." = "打开就诊摘要，复核用药、症状和家庭测量。";
+"Open the visit report and review medication, symptoms, and measurements." = "打开复诊报告，复核用药、症状和家庭测量。";
 "Medication routine maintained" = "用药记录保持稳定";
 "%@ has been logged consistently for %lld days." = "%@ 已连续记录 %lld 天。";
 "%@ is coming up. Review your medication, symptoms, and measurements before the appointment." = "%@ 即将到来。复诊前请查看用药、症状和测量摘要。";
@@ -1685,6 +1692,7 @@
 "%@ · prepare the doctor snapshot now." = "%@ · 现在可以准备就诊摘要。";
 "%@ · keep logging doses, symptoms, and measurements." = "%@ · 继续记录服药、症状和测量。";
 "%@. Prepare the doctor snapshot now." = "%@。现在可以准备就诊摘要。";
+"%@. Prepare the visit report now." = "%@。现在可以准备复诊报告。";
 "%@. Keep logging doses, symptoms, and measurements." = "%@。继续记录服药、症状和测量。";
 "Patient-reported · not from hospital records" = "患者自报 · 非病历数据";
 "No medications recorded." = "暂无用药记录。";
@@ -1770,6 +1778,7 @@
 "30d feelings" = "30天感觉";
 "Today is your appointment" = "今天去复诊";
 "Show Doctor Snapshot" = "展示就诊摘要";
+"Show Visit Report" = "展示复诊报告";
 "Bring ID, insurance card, and your medication list." = "记得带身份证、医保卡和用药清单。";
 "Record doctor notes after the visit" = "就诊后记录医生交代";
 "Capture what the doctor said" = "趁现在记下医生说了什么";
@@ -1792,9 +1801,12 @@
 "%lld/3 ready" = "%lld/3 已准备";
 "Today complete. Appointment in %lld days; your records are getting ready." = "今天已完成。距离复诊 %lld 天，记录正在积累。";
 "Today complete. Appointment in %lld days; review the doctor snapshot next." = "今天已完成。距离复诊 %lld 天，接下来查看就诊摘要。";
+"Today complete. Appointment in %lld days; review the visit report next." = "今天已完成。距离复诊 %lld 天，接下来查看复诊报告。";
 "Today complete. This appointment is overdue; update it after the visit." = "今天已完成。这次复诊已逾期，就诊后请更新记录。";
 "Today complete. Keep the doctor snapshot ready for the appointment." = "今天已完成。就诊时保持摘要可随时展示。";
+"Today complete. Keep the visit report ready for the appointment." = "今天已完成。复诊报告已准备好，就诊时可随时打开。";
 "Open visit summary" = "打开就诊摘要";
+"Open visit report" = "打开复诊报告";
 "Data readiness" = "数据准备";
 "Doctor-ready data" = "医生可用数据";
 "What your doctor can use at the appointment." = "这次复诊时医生可以直接使用的信息。";
@@ -1908,6 +1920,8 @@
 "Keep the visit snapshot ready" = "准备好就诊摘要";
 "Use the appointment summary to keep medication lists, questions, and recent records in one place." = "用就诊摘要把用药清单、问题和近期记录放在一起。";
 "Open Visit Snapshot" = "打开就诊摘要";
+"Keep the visit report ready" = "准备好复诊报告";
+"Use the report to keep medication lists, questions, and recent records in one place." = "用复诊报告把用药清单、问题和近期记录放在一起。";
 "Open Support" = "打开照护支持";
 "Add more blood pressure readings" = "补充更多血压记录";
 "Add more glucose readings" = "补充更多血糖记录";

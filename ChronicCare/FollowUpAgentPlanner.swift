@@ -219,11 +219,11 @@ enum FollowUpAgentPlanner {
 
     private static func doctorSnapshotAction(visitID: UUID) -> FollowUpAgentNextAction {
         FollowUpAgentNextAction(
-            stableKey: "agent.next.snapshot.\(visitID.uuidString)",
+            stableKey: "agent.next.report.\(visitID.uuidString)",
             eyebrow: eyebrow,
-            title: NSLocalizedString("Keep the visit snapshot ready", comment: "Follow-up agent visit day snapshot title"),
-            detail: NSLocalizedString("Use the appointment summary to keep medication lists, questions, and recent records in one place.", comment: "Follow-up agent visit day snapshot detail"),
-            buttonTitle: NSLocalizedString("Open Visit Snapshot", comment: "Follow-up agent snapshot action button"),
+            title: NSLocalizedString("Keep the visit report ready", comment: "Follow-up agent visit day report title"),
+            detail: NSLocalizedString("Use the report to keep medication lists, questions, and recent records in one place.", comment: "Follow-up agent visit day report detail"),
+            buttonTitle: NSLocalizedString("Open Visit Report", comment: "Follow-up agent report action button"),
             systemImage: "calendar.badge.clock",
             severity: .information,
             target: .openDoctorSnapshot(visitID)
@@ -390,7 +390,7 @@ enum FollowUpAgentPlanner {
         case .openVisitPrep:
             return NSLocalizedString("Open Visit Prep", comment: "Follow-up agent action button")
         case .openDoctorSnapshot:
-            return NSLocalizedString("Open Visit Snapshot", comment: "Follow-up agent snapshot action button")
+            return NSLocalizedString("Open Visit Report", comment: "Follow-up agent report action button")
         case .recordPostVisit:
             return NSLocalizedString("Record Visit Notes", comment: "Follow-up agent post visit action button")
         case .openMedications:

@@ -54,7 +54,7 @@ struct HypertensionFollowUpReportView: View {
                 safetySection(report)
                 doctorOnePageSection(report)
                 questionsSection(report)
-                aiDraftSection
+                patientPrepNotesSection
                 rawDataSection(report)
                 disclaimer(report)
             }
@@ -170,9 +170,9 @@ struct HypertensionFollowUpReportView: View {
     }
 
     @ViewBuilder
-    private var aiDraftSection: some View {
-        if isDraftingAI || aiDraft != nil {
-            reportSection(NSLocalizedString("AI Draft", comment: "Hypertension report AI section")) {
+    private var patientPrepNotesSection: some View {
+        if isDraftingAI || aiDraft?.patientSummary != nil {
+            reportSection(NSLocalizedString("Patient Prep Notes", comment: "Hypertension report AI patient section")) {
                 if isDraftingAI {
                     HStack(spacing: 10) {
                         ProgressView()
@@ -195,36 +195,6 @@ struct HypertensionFollowUpReportView: View {
                             detail: patientSummary,
                             tint: AppColor.primary
                         )
-                    }
-                    if let doctorSummary = aiDraft.doctorSummary {
-                        AppDivider()
-                        reportLine(
-                            icon: "stethoscope",
-                            title: NSLocalizedString("Doctor summary", comment: "Hypertension report AI draft label"),
-                            detail: doctorSummary,
-                            tint: AppColor.primary
-                        )
-                    }
-                    if !aiDraft.questions.isEmpty {
-                        AppDivider()
-                        VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
-                            Text(NSLocalizedString("Questions", comment: "Hypertension report AI draft label"))
-                                .appFont(.body)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(AppColor.textPrimary)
-                            ForEach(Array(aiDraft.questions.enumerated()), id: \.offset) { _, question in
-                                HStack(alignment: .top, spacing: 8) {
-                                    Image(systemName: "questionmark.circle")
-                                        .font(.system(size: 14, weight: .regular))
-                                        .foregroundStyle(AppColor.primary)
-                                        .frame(width: 18)
-                                    Text(question)
-                                        .appFont(.caption)
-                                        .foregroundStyle(AppColor.textPrimary)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                            }
-                        }
                     }
                 }
             }
@@ -326,31 +296,6 @@ struct HypertensionFollowUpReportView: View {
 
     private func doctorOnePageSection(_ report: HypertensionFollowUpReport) -> some View {
         reportSection(NSLocalizedString("Doctor One-Page Summary", comment: "Hypertension report section")) {
-            LazyVGrid(columns: metricColumns, alignment: .leading, spacing: EditorialSpacing.sm) {
-                reportMetric(
-                    title: NSLocalizedString("Average BP", comment: "Hypertension report metric"),
-                    value: HypertensionFollowUpReportBuilder.formatAverageBP(report.bloodPressure.averageSystolic, report.bloodPressure.averageDiastolic),
-                    detail: String(format: NSLocalizedString("%lld readings", comment: "Hypertension report metric detail"), Int64(report.bloodPressure.totalReadings))
-                )
-                reportMetric(
-                    title: NSLocalizedString("Morning / Evening", comment: "Hypertension report metric"),
-                    value: "\(HypertensionFollowUpReportBuilder.formatAverageBP(report.bloodPressure.morningAverageSystolic, report.bloodPressure.morningAverageDiastolic)) / \(HypertensionFollowUpReportBuilder.formatAverageBP(report.bloodPressure.eveningAverageSystolic, report.bloodPressure.eveningAverageDiastolic))",
-                    detail: NSLocalizedString("Home timing pattern", comment: "Hypertension report metric detail")
-                )
-                reportMetric(
-                    title: NSLocalizedString("Adherence", comment: "Hypertension report metric"),
-                    value: adherenceMetricValue(report),
-                    detail: String(format: NSLocalizedString("%lld missed doses", comment: "Hypertension report metric detail"), Int64(report.adherence.missedDoseCount))
-                )
-                reportMetric(
-                    title: NSLocalizedString("Symptoms", comment: "Hypertension report metric"),
-                    value: "\(report.symptoms.count)",
-                    detail: String(format: NSLocalizedString("%lld severe", comment: "Hypertension report metric detail"), Int64(report.symptoms.severeCount))
-                )
-            }
-
-            AppDivider()
-
             VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
                 ForEach(Array(doctorScanLines(report).enumerated()), id: \.offset) { index, line in
                     compactBullet(line)
@@ -377,15 +322,34 @@ struct HypertensionFollowUpReportView: View {
 
     private func questionsSection(_ report: HypertensionFollowUpReport) -> some View {
         reportSection(NSLocalizedString("Questions for Doctor", comment: "Hypertension report section")) {
-            ForEach(Array(report.doctorQuestions.enumerated()), id: \.element.id) { index, question in
-                reportLine(
-                    icon: "questionmark.circle",
-                    title: question.prompt,
-                    detail: question.reason,
-                    tint: AppColor.primary
-                )
-                if index < report.doctorQuestions.count - 1 {
-                    AppDivider()
+            if let aiDraft, !aiDraft.questions.isEmpty {
+                if let generatedAt = aiDraftGeneratedAt {
+                    Text(String(format: NSLocalizedString("AI drafted %@", comment: "Hypertension report AI generated metadata"), generatedAt.formatted(date: .omitted, time: .shortened)))
+                        .appFont(.caption)
+                        .foregroundStyle(AppColor.textSecondary)
+                }
+                ForEach(Array(aiDraft.questions.enumerated()), id: \.offset) { index, question in
+                    reportLine(
+                        icon: "questionmark.circle",
+                        title: question,
+                        detail: nil,
+                        tint: AppColor.primary
+                    )
+                    if index < aiDraft.questions.count - 1 {
+                        AppDivider()
+                    }
+                }
+            } else {
+                ForEach(Array(report.doctorQuestions.enumerated()), id: \.element.id) { index, question in
+                    reportLine(
+                        icon: "questionmark.circle",
+                        title: question.prompt,
+                        detail: question.reason,
+                        tint: AppColor.primary
+                    )
+                    if index < report.doctorQuestions.count - 1 {
+                        AppDivider()
+                    }
                 }
             }
         }
@@ -477,43 +441,6 @@ struct HypertensionFollowUpReportView: View {
                 }
             }
         }
-    }
-
-    private var metricColumns: [GridItem] {
-        [
-            GridItem(.flexible(), spacing: EditorialSpacing.sm),
-            GridItem(.flexible(), spacing: EditorialSpacing.sm)
-        ]
-    }
-
-    private func reportMetric(title: String, value: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
-            Text(title)
-                .appFont(.caption)
-                .foregroundStyle(AppColor.textSecondary)
-                .lineLimit(1)
-            Text(value)
-                .appFontNumeric(.headline)
-                .fontWeight(.semibold)
-                .foregroundStyle(AppColor.textPrimary)
-                .lineLimit(2)
-                .minimumScaleFactor(0.82)
-            Text(detail)
-                .appFont(.caption)
-                .foregroundStyle(AppColor.textTertiary)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(EditorialSpacing.sm)
-        .frame(maxWidth: .infinity, minHeight: 86, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
-                .fill(AppColor.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
-                .stroke(AppColor.divider, lineWidth: 1)
-        )
     }
 
     private func compactBullet(_ text: String, icon: String? = nil) -> some View {

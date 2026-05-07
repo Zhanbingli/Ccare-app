@@ -27,8 +27,6 @@ struct DashboardView: View {
     @State private var showSymptomLog = false
     @State private var showDoctorVisitForm = false
     @State private var editingDoctorVisit: DoctorVisit?
-    @State private var showVisitSnapshot = false
-    @State private var snapshotVisitID: UUID?
     @State private var followUpReportRoute: FollowUpReportRoute?
     @State private var clarifyingSymptom: SymptomEntry?
     @State private var quickFeelingConfirmation: String?
@@ -323,21 +321,6 @@ struct DashboardView: View {
                         .environmentObject(store)
                 }
             }
-            .sheet(isPresented: $showVisitSnapshot, onDismiss: {
-                snapshotVisitID = nil
-            }) {
-                NavigationStack {
-                    ConsultationSnapshotView(visit: selectedSnapshotVisit)
-                        .environmentObject(store)
-                        .toolbar {
-                            ToolbarItem(placement: .topBarTrailing) {
-                                Button(NSLocalizedString("Done", comment: "")) {
-                                    showVisitSnapshot = false
-                                }
-                            }
-                        }
-                }
-            }
             .sheet(item: $followUpReportRoute) { route in
                 NavigationStack {
                     followUpReportDestination(route)
@@ -551,11 +534,6 @@ private extension DashboardView {
         case .postVisitCapture(let visit):
             return .postVisitCapture(visitID: visit.id)
         }
-    }
-
-    private var selectedSnapshotVisit: DoctorVisit? {
-        guard let snapshotVisitID else { return store.nextDoctorVisit }
-        return store.doctorVisits.first { $0.id == snapshotVisitID } ?? store.nextDoctorVisit
     }
 
     private func visit(for id: UUID?) -> DoctorVisit? {
@@ -820,8 +798,7 @@ private extension DashboardView {
         case .openDiabetesReport(let visitID):
             followUpReportRoute = FollowUpReportRoute(kind: .diabetes, visitID: visitID)
         case .openVisitPrep(let visitID), .openDoctorSnapshot(let visitID):
-            snapshotVisitID = visitID
-            showVisitSnapshot = true
+            openPrimaryVisitReport(visitID: visitID)
         case .recordPostVisit(let visitID):
             editingDoctorVisit = store.doctorVisits.first { $0.id == visitID }
         case .openMedications:
@@ -1125,10 +1102,10 @@ private extension DashboardView {
             }
 
             Button {
-                showVisitSnapshot = true
+                openPrimaryVisitReport(visitID: visit.id)
             } label: {
                 HStack {
-                    Text(NSLocalizedString("Open visit summary", comment: "Visit prep summary action"))
+                    Text(NSLocalizedString("Open visit report", comment: "Visit prep summary action"))
                         .appFont(.subheadline)
                         .fontWeight(.medium)
                         .foregroundStyle(AppColor.textPrimary)
@@ -1171,9 +1148,9 @@ private extension DashboardView {
             visitDayPlaceSummary(visit)
 
             Button {
-                showVisitSnapshot = true
+                openPrimaryVisitReport(visitID: visit.id)
             } label: {
-                Label(NSLocalizedString("Show Doctor Snapshot", comment: "Visit day primary action"), systemImage: "doc.text.magnifyingglass")
+                Label(NSLocalizedString("Show Visit Report", comment: "Visit day primary action"), systemImage: "doc.text.magnifyingglass")
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity, minHeight: 52)
             }
@@ -1724,8 +1701,28 @@ private extension DashboardView {
         if visit == nil {
             showDoctorVisitForm = true
         } else {
-            showVisitSnapshot = true
+            openPrimaryVisitReport(visitID: visit?.id)
         }
+    }
+
+    private func openPrimaryVisitReport(visitID: UUID?) {
+        followUpReportRoute = FollowUpReportRoute(kind: primaryReportKind(), visitID: visitID)
+    }
+
+    private func primaryReportKind() -> FollowUpReportRoute.Kind {
+        let hasHypertensionContext = store.medications.contains { $0.category == .antihypertensive }
+            || store.measurements.contains { $0.type == .bloodPressure }
+        if hasHypertensionContext {
+            return .hypertension
+        }
+
+        let hasDiabetesContext = store.medications.contains { $0.category == .antidiabetic }
+            || store.measurements.contains { $0.type == .bloodGlucose }
+        if hasDiabetesContext {
+            return .diabetes
+        }
+
+        return .hypertension
     }
 
     private func visitIconName(for priority: VisitPrepPriority, visit: DoctorVisit?) -> String {
@@ -1737,8 +1734,8 @@ private extension DashboardView {
 
     private func primaryVisitActionTitle(for priority: VisitPrepPriority) -> String {
         priority == .pinned
-            ? NSLocalizedString("Open Doctor Snapshot", comment: "")
-            : NSLocalizedString("Review Snapshot", comment: "")
+            ? NSLocalizedString("Open Visit Report", comment: "Visit prep primary action")
+            : NSLocalizedString("Review Visit Report", comment: "Visit prep secondary action")
     }
 
     private func visitPrepTitle(_ visit: DoctorVisit, priority: VisitPrepPriority) -> String {
@@ -1765,7 +1762,7 @@ private extension DashboardView {
             return "\(title). \(reason)"
         }
         if let days = visit.daysUntil(), days <= 3 {
-            return String(format: NSLocalizedString("%@. Prepare the doctor snapshot now.", comment: ""), title)
+            return String(format: NSLocalizedString("%@. Prepare the visit report now.", comment: ""), title)
         }
         return String(format: NSLocalizedString("%@. Keep logging doses, symptoms, and measurements.", comment: ""), title)
     }
@@ -2357,10 +2354,10 @@ private extension DashboardView {
             if days < 0 {
                 return NSLocalizedString("Today complete. This appointment is overdue; update it after the visit.", comment: "Complete summary with overdue visit")
             }
-            return String(format: NSLocalizedString("Today complete. Appointment in %lld days; review the doctor snapshot next.", comment: "Complete summary with active visit prep"), days)
+            return String(format: NSLocalizedString("Today complete. Appointment in %lld days; review the visit report next.", comment: "Complete summary with active visit prep"), days)
         }
         if case .visitDay = mode {
-            return NSLocalizedString("Today complete. Keep the doctor snapshot ready for the appointment.", comment: "Complete summary on visit day")
+            return NSLocalizedString("Today complete. Keep the visit report ready for the appointment.", comment: "Complete summary on visit day")
         }
         if skipped > 0 {
             return String(format: NSLocalizedString("%lld taken, %lld skipped out of %lld", comment: "complete summary"), taken, skipped, total)

@@ -181,31 +181,6 @@ struct DiabetesFollowUpReportView: View {
 
     private func doctorOnePageSection(_ report: DiabetesFollowUpReport) -> some View {
         reportSection(NSLocalizedString("Doctor One-Page Summary", comment: "Diabetes report section")) {
-            LazyVGrid(columns: metricColumns, alignment: .leading, spacing: EditorialSpacing.sm) {
-                reportMetric(
-                    title: NSLocalizedString("Average Glucose", comment: "Diabetes report metric"),
-                    value: report.glucose.averageGlucose.map { DiabetesFollowUpReportBuilder.formattedGlucose($0) } ?? NSLocalizedString("not enough data", comment: "Diabetes report missing value"),
-                    detail: String(format: NSLocalizedString("%lld readings", comment: "Diabetes report metric detail"), Int64(report.glucose.totalReadings))
-                )
-                reportMetric(
-                    title: NSLocalizedString("Morning / Evening", comment: "Diabetes report metric"),
-                    value: "\(formattedGlucoseAverage(report.glucose.morningAverageGlucose)) / \(formattedGlucoseAverage(report.glucose.eveningAverageGlucose))",
-                    detail: NSLocalizedString("Home timing pattern", comment: "Diabetes report metric detail")
-                )
-                reportMetric(
-                    title: NSLocalizedString("Low / High", comment: "Diabetes report metric"),
-                    value: "\(report.glucose.lowReadingsCount) / \(report.glucose.highReadingsCount)",
-                    detail: NSLocalizedString("Below 70 / at or above 240", comment: "Diabetes report metric detail")
-                )
-                reportMetric(
-                    title: NSLocalizedString("Adherence", comment: "Diabetes report metric"),
-                    value: adherenceMetricValue(report),
-                    detail: String(format: NSLocalizedString("%lld missed doses", comment: "Diabetes report metric detail"), Int64(report.adherence.missedDoseCount))
-                )
-            }
-
-            AppDivider()
-
             VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
                 ForEach(Array(doctorScanLines(report).enumerated()), id: \.offset) { index, line in
                     compactLine(line)
@@ -332,43 +307,6 @@ struct DiabetesFollowUpReportView: View {
                 }
             }
         }
-    }
-
-    private var metricColumns: [GridItem] {
-        [
-            GridItem(.flexible(), spacing: EditorialSpacing.sm),
-            GridItem(.flexible(), spacing: EditorialSpacing.sm)
-        ]
-    }
-
-    private func reportMetric(title: String, value: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
-            Text(title)
-                .appFont(.caption)
-                .foregroundStyle(AppColor.textSecondary)
-                .lineLimit(1)
-            Text(value)
-                .appFontNumeric(.headline)
-                .fontWeight(.semibold)
-                .foregroundStyle(AppColor.textPrimary)
-                .lineLimit(2)
-                .minimumScaleFactor(0.82)
-            Text(detail)
-                .appFont(.caption)
-                .foregroundStyle(AppColor.textTertiary)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(EditorialSpacing.sm)
-        .frame(maxWidth: .infinity, minHeight: 86, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
-                .fill(AppColor.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: EditorialSpacing.sm, style: .continuous)
-                .stroke(AppColor.divider, lineWidth: 1)
-        )
     }
 
     private func compactLine(_ text: String, icon: String? = nil) -> some View {
