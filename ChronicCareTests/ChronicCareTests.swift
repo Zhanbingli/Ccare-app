@@ -1100,6 +1100,26 @@ struct ChronicCareTests {
     }
 
     @MainActor
+    @Test func agentInboxDoesNotClarifyBenignQuickFeeling() {
+        let store = DataStore()
+        store.clearAll()
+        let now = Date()
+        let symptom = SymptomEntry(
+            date: now,
+            tags: ["Felt okay"],
+            severity: .mild,
+            note: nil
+        )
+        store.addSymptomEntry(symptom)
+
+        store.refreshAgentInbox(now: now)
+
+        #expect(store.openAgentInboxItems.contains {
+            $0.stableKey == "clarification.symptom.\(symptom.id.uuidString)"
+        } == false)
+    }
+
+    @MainActor
     @Test func symptomClarificationUpsertReplacesSameSymptom() {
         let store = DataStore()
         store.clearAll()

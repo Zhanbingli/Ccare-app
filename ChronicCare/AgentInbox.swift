@@ -301,8 +301,31 @@ enum AgentInboxGenerator {
     }
 
     private static func symptomNeedsClarification(_ symptom: SymptomEntry) -> Bool {
+        if isBenignQuickFeeling(symptom) { return false }
+        if symptom.severity == .severe { return true }
+
         let note = symptom.note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return note.count < 12 || symptom.tags.count <= 1 || symptom.severity == .severe
+        return note.count < 12 || symptom.tags.count <= 1
+    }
+
+    private static func isBenignQuickFeeling(_ symptom: SymptomEntry) -> Bool {
+        let note = symptom.note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard note.isEmpty,
+              symptom.severity == .mild,
+              symptom.relatedMedicationIDs?.isEmpty != false,
+              !symptom.tags.isEmpty else {
+            return false
+        }
+
+        let benignTags: Set<String> = [
+            "felt good",
+            "felt okay",
+            "今天感觉好",
+            "今天感觉一般"
+        ]
+        return symptom.tags
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .allSatisfy { benignTags.contains($0) }
     }
 
     private static func deduplicated(_ items: [AgentInboxItem]) -> [AgentInboxItem] {
