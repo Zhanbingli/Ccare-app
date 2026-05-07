@@ -4,7 +4,6 @@ struct FollowUpAgentWorkspaceView: View {
     @EnvironmentObject var store: DataStore
     @State private var showMeasurementSheet = false
     @State private var pendingMeasurementType: MeasurementType = .bloodPressure
-    @State private var route: FollowUpAgentWorkspaceRoute?
 
     private var openItems: [FollowUpAgentTask] {
         store.followUpAgentTasks.filter(\.isOpen)
@@ -55,20 +54,6 @@ struct FollowUpAgentWorkspaceView: View {
                 Haptics.success()
             }
             .presentationDetents([.medium, .large])
-        }
-        .navigationDestination(
-            isPresented: Binding(
-                get: { route != nil },
-                set: { isActive in
-                    if !isActive { route = nil }
-                }
-            )
-        ) {
-            if let route {
-                destination(for: route)
-            } else {
-                EmptyView()
-            }
         }
         .onAppear {
             store.refreshFollowUpAgentTasks()
@@ -127,21 +112,7 @@ struct FollowUpAgentWorkspaceView: View {
                         .foregroundStyle(AppColor.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    Button {
-                        Haptics.impact(.light)
-                        handle(action.target)
-                    } label: {
-                        HStack {
-                            Text(action.buttonTitle)
-                                .fontWeight(.semibold)
-                            Spacer()
-                            Image(systemName: "arrow.right")
-                                .font(.system(size: 13, weight: .semibold))
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 42)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(tint(for: action))
+                    actionControl(action)
                 }
             }
         } else {
@@ -196,17 +167,18 @@ struct FollowUpAgentWorkspaceView: View {
                     .appFont(.body)
                     .foregroundStyle(AppColor.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Button {
-                    Haptics.impact(.light)
-                    let target: FollowUpAgentActionTarget = item.action == .openDiabetesReport
-                        ? .openDiabetesReport(item.relatedID)
-                        : .openHypertensionReport(item.relatedID)
-                    handle(target)
-                } label: {
-                    Label(NSLocalizedString("Open Report", comment: "Follow-up agent safety action"), systemImage: "doc.text.magnifyingglass")
+                let target: FollowUpAgentActionTarget = item.action == .openDiabetesReport
+                    ? .openDiabetesReport(item.relatedID)
+                    : .openHypertensionReport(item.relatedID)
+                if let route = navigationRoute(for: target) {
+                    NavigationLink {
+                        destination(for: route)
+                    } label: {
+                        Label(NSLocalizedString("Open Report", comment: "Follow-up agent safety action"), systemImage: "doc.text.magnifyingglass")
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(AppColor.warning)
                 }
-                .buttonStyle(.borderless)
-                .foregroundStyle(AppColor.warning)
             }
         }
     }
@@ -337,25 +309,90 @@ struct FollowUpAgentWorkspaceView: View {
         }
     }
 
+    @ViewBuilder
+    private func actionControl(_ action: FollowUpAgentNextAction) -> some View {
+        if let route = navigationRoute(for: action.target) {
+            NavigationLink {
+                destination(for: route)
+            } label: {
+                actionButtonLabel(action.buttonTitle)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(tint(for: action))
+        } else {
+            Button {
+                Haptics.impact(.light)
+                handle(action.target)
+            } label: {
+                actionButtonLabel(action.buttonTitle)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(tint(for: action))
+        }
+    }
+
+    private func actionButtonLabel(_ title: String) -> some View {
+        HStack {
+            Text(title)
+                .fontWeight(.semibold)
+            Spacer()
+            Image(systemName: "arrow.right")
+                .font(.system(size: 13, weight: .semibold))
+        }
+        .frame(maxWidth: .infinity, minHeight: 42)
+    }
+
+    private func navigationRoute(for target: FollowUpAgentActionTarget) -> FollowUpAgentWorkspaceRoute? {
+        switch target {
+        case .logMeasurement:
+            return nil
+        case .clarifySymptom(let symptomID):
+            return FollowUpAgentWorkspaceRoute(kind: .symptomClarification, relatedID: symptomID)
+        case .openHypertensionReport(let visitID):
+            return FollowUpAgentWorkspaceRoute(kind: .hypertensionReport, relatedID: visitID)
+        case .openDiabetesReport(let visitID):
+            return FollowUpAgentWorkspaceRoute(kind: .diabetesReport, relatedID: visitID)
+        case .openVisitPrep(let visitID), .openDoctorSnapshot(let visitID):
+            return primaryReportRoute(visitID: visitID)
+        case .recordPostVisit(let visitID):
+            return FollowUpAgentWorkspaceRoute(kind: .visitPrep, relatedID: visitID)
+        case .openMedications:
+            return FollowUpAgentWorkspaceRoute(kind: .medications, relatedID: nil)
+        case .openProfile:
+            return FollowUpAgentWorkspaceRoute(kind: .caregivers, relatedID: nil)
+        }
+    }
+
+    private func primaryReportRoute(visitID: UUID?) -> FollowUpAgentWorkspaceRoute {
+        let hasHypertensionContext = store.medications.contains { $0.category == .antihypertensive }
+            || store.measurements.contains { $0.type == .bloodPressure }
+        if hasHypertensionContext {
+            return FollowUpAgentWorkspaceRoute(kind: .hypertensionReport, relatedID: visitID)
+        }
+
+        let hasDiabetesContext = store.medications.contains { $0.category == .antidiabetic }
+            || store.measurements.contains { $0.type == .bloodGlucose }
+        if hasDiabetesContext {
+            return FollowUpAgentWorkspaceRoute(kind: .diabetesReport, relatedID: visitID)
+        }
+
+        return FollowUpAgentWorkspaceRoute(kind: .hypertensionReport, relatedID: visitID)
+    }
+
     private func handle(_ target: FollowUpAgentActionTarget) {
         switch target {
         case .logMeasurement(let type):
             pendingMeasurementType = type
             showMeasurementSheet = true
-        case .clarifySymptom(let symptomID):
-            route = FollowUpAgentWorkspaceRoute(kind: .symptomClarification, relatedID: symptomID)
-        case .openHypertensionReport(let visitID):
-            route = FollowUpAgentWorkspaceRoute(kind: .hypertensionReport, relatedID: visitID)
-        case .openDiabetesReport(let visitID):
-            route = FollowUpAgentWorkspaceRoute(kind: .diabetesReport, relatedID: visitID)
-        case .openVisitPrep(let visitID), .openDoctorSnapshot(let visitID):
-            route = FollowUpAgentWorkspaceRoute(kind: .visitPrep, relatedID: visitID)
-        case .recordPostVisit(let visitID):
-            route = FollowUpAgentWorkspaceRoute(kind: .visitPrep, relatedID: visitID)
-        case .openMedications:
-            route = FollowUpAgentWorkspaceRoute(kind: .medications, relatedID: nil)
-        case .openProfile:
-            route = FollowUpAgentWorkspaceRoute(kind: .caregivers, relatedID: nil)
+        case .clarifySymptom,
+             .openHypertensionReport,
+             .openDiabetesReport,
+             .openVisitPrep,
+             .openDoctorSnapshot,
+             .recordPostVisit,
+             .openMedications,
+             .openProfile:
+            break
         }
     }
 
