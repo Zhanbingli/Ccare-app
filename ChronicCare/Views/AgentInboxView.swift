@@ -4,30 +4,38 @@ struct AgentInboxView: View {
     @EnvironmentObject var store: DataStore
     @State private var showMeasurementSheet = false
     @State private var pendingMeasurementType: MeasurementType = .bloodPressure
+    @State private var route: AgentWorkspaceRoute?
 
     private var openItems: [AgentInboxItem] {
         store.agentInboxItems.filter(\.isOpen)
     }
 
-    private var dismissedItems: [AgentInboxItem] {
-        store.agentInboxItems.filter { !$0.isOpen }
+    private var safetyItems: [AgentInboxItem] {
+        openItems.filter { $0.category == .safety }
+    }
+
+    private var action: FollowUpAgentNextAction? {
+        FollowUpAgentPlanner.nextAction(store: store, stage: currentStage)
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: EditorialSpacing.xl) {
                 header
-                openSection
-                if !dismissedItems.isEmpty {
-                    dismissedSection
+
+                if let urgent = safetyItems.first {
+                    safetyCard(urgent)
                 }
-                safetyNote
+
+                decisionCard
+                signalPanel
+                safetyFooter
             }
             .padding(.horizontal, EditorialSpacing.lg)
             .padding(.vertical, EditorialSpacing.lg)
         }
         .background(AppColor.background)
-        .navigationTitle(NSLocalizedString("Agent Inbox", comment: "Agent inbox title"))
+        .navigationTitle(NSLocalizedString("AI Follow-up Agent", comment: "Follow-up agent title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -37,7 +45,7 @@ struct AgentInboxView: View {
                 } label: {
                     Image(systemName: "arrow.clockwise")
                 }
-                .accessibilityLabel(NSLocalizedString("Refresh Agent Inbox", comment: "Agent inbox refresh action"))
+                .accessibilityLabel(NSLocalizedString("Refresh Follow-up Agent", comment: "Follow-up agent refresh action"))
             }
         }
         .sheet(isPresented: $showMeasurementSheet) {
@@ -48,6 +56,20 @@ struct AgentInboxView: View {
             }
             .presentationDetents([.medium, .large])
         }
+        .navigationDestination(
+            isPresented: Binding(
+                get: { route != nil },
+                set: { isActive in
+                    if !isActive { route = nil }
+                }
+            )
+        ) {
+            if let route {
+                destination(for: route)
+            } else {
+                EmptyView()
+            }
+        }
         .onAppear {
             store.refreshAgentInbox()
         }
@@ -55,295 +77,335 @@ struct AgentInboxView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
-            Text(NSLocalizedString("Agent Inbox", comment: "Agent inbox heading"))
+            Text(NSLocalizedString("AI Follow-up Agent", comment: "Follow-up agent heading"))
                 .appFont(.displayTitle)
                 .fontWeight(.bold)
                 .foregroundStyle(AppColor.textPrimary)
-            Text(NSLocalizedString("A local follow-up agent turns daily records into the next useful action.", comment: "Agent inbox subtitle"))
+            Text(NSLocalizedString("One clinical next step, based on daily records.", comment: "Follow-up agent subtitle"))
                 .appFont(.body)
                 .foregroundStyle(AppColor.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: EditorialSpacing.md) {
-                metric(value: "\(openItems.count)", label: NSLocalizedString("Open", comment: "Agent inbox metric"))
-                metricDivider
-                metric(value: "\(urgentCount)", label: NSLocalizedString("Urgent", comment: "Agent inbox metric"))
-                metricDivider
-                metric(value: "\(reportCount)", label: NSLocalizedString("Reports", comment: "Agent inbox metric"))
-            }
-            .padding(.top, EditorialSpacing.xs)
         }
     }
 
-    private var openSection: some View {
-        EditorialSection(
-            NSLocalizedString("Open Items", comment: "Agent inbox section"),
-            trailing: String(format: NSLocalizedString("%lld open", comment: "Agent inbox open count"), Int64(openItems.count))
-        ) {
-            if openItems.isEmpty {
-                VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
-                    Text(NSLocalizedString("Nothing needs attention right now.", comment: "Agent inbox empty title"))
+    @ViewBuilder
+    private var decisionCard: some View {
+        if let action {
+            Card {
+                VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+                    HStack(alignment: .top, spacing: EditorialSpacing.md) {
+                        Image(systemName: action.systemImage)
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundStyle(tint(for: action))
+                            .frame(width: 28, height: 28)
+
+                        VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                            Text(NSLocalizedString("Current focus", comment: "Follow-up agent current focus label"))
+                                .appFont(.micro)
+                                .textCase(.uppercase)
+                                .tracking(0.7)
+                                .foregroundStyle(AppColor.textTertiary)
+
+                            Text(action.title)
+                                .appFont(.headline)
+                                .foregroundStyle(AppColor.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            Text(action.detail)
+                                .appFont(.body)
+                                .foregroundStyle(AppColor.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+
+                    AppDivider()
+
+                    Text(reason(for: action))
+                        .appFont(.caption)
+                        .foregroundStyle(AppColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Button {
+                        Haptics.impact(.light)
+                        handle(action.target)
+                    } label: {
+                        HStack {
+                            Text(action.buttonTitle)
+                                .fontWeight(.semibold)
+                            Spacer()
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 42)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(tint(for: action))
+                }
+            }
+        } else {
+            Card {
+                VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
+                    Label(NSLocalizedString("No action needed", comment: "Follow-up agent empty title"), systemImage: "checkmark.circle")
                         .appFont(.headline)
                         .foregroundStyle(AppColor.textPrimary)
-                    Text(NSLocalizedString("Keep recording medication intake, measurements, symptoms, and visit dates.", comment: "Agent inbox empty detail"))
+                    Text(NSLocalizedString("Keep recording blood pressure, medication intake, symptoms, and visit dates.", comment: "Follow-up agent empty detail"))
                         .appFont(.body)
                         .foregroundStyle(AppColor.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.vertical, EditorialSpacing.xs)
-            } else {
-                VStack(spacing: EditorialSpacing.md) {
-                    ForEach(Array(openItems.enumerated()), id: \.element.id) { index, item in
-                        inboxRow(item, isDismissed: false)
-                        if index < openItems.count - 1 {
-                            AppDivider()
-                        }
-                    }
-                }
             }
         }
     }
 
-    private var dismissedSection: some View {
-        EditorialSection(
-            NSLocalizedString("Dismissed", comment: "Agent inbox section"),
-            trailing: String(format: NSLocalizedString("%lld dismissed", comment: "Agent inbox dismissed count"), Int64(dismissedItems.count))
-        ) {
+    private var signalPanel: some View {
+        EditorialSection(NSLocalizedString("Watching", comment: "Follow-up agent signal section")) {
             VStack(spacing: EditorialSpacing.md) {
-                ForEach(Array(dismissedItems.prefix(5).enumerated()), id: \.element.id) { index, item in
-                    inboxRow(item, isDismissed: true)
-                    if index < min(dismissedItems.count, 5) - 1 {
-                        AppDivider()
-                    }
-                }
+                signalRow(
+                    icon: "waveform.path.ecg",
+                    title: NSLocalizedString("Blood pressure", comment: "Follow-up agent signal"),
+                    detail: bloodPressureSignal,
+                    tint: AppColor.primary
+                )
+                AppDivider()
+                signalRow(
+                    icon: "pills",
+                    title: NSLocalizedString("Medication", comment: "Follow-up agent signal"),
+                    detail: medicationSignal,
+                    tint: AppColor.primary
+                )
+                AppDivider()
+                signalRow(
+                    icon: "heart.text.square",
+                    title: NSLocalizedString("Symptoms", comment: "Follow-up agent signal"),
+                    detail: symptomSignal,
+                    tint: AppColor.primary
+                )
             }
         }
     }
 
-    private var safetyNote: some View {
-        Text(NSLocalizedString("Safety signals are rule-based. AI may draft summaries elsewhere, but it does not decide medical risk or medication changes.", comment: "Agent inbox safety note"))
+    private func safetyCard(_ item: AgentInboxItem) -> some View {
+        TintedCard(tint: AppColor.warning) {
+            VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
+                Label(item.title, systemImage: "exclamationmark.triangle")
+                    .appFont(.headline)
+                    .foregroundStyle(AppColor.textPrimary)
+                Text(item.detail)
+                    .appFont(.body)
+                    .foregroundStyle(AppColor.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    Haptics.impact(.light)
+                    let target: FollowUpAgentActionTarget = item.action == .openDiabetesReport
+                        ? .openDiabetesReport(item.relatedID)
+                        : .openHypertensionReport(item.relatedID)
+                    handle(target)
+                } label: {
+                    Label(NSLocalizedString("Open Report", comment: "Follow-up agent safety action"), systemImage: "doc.text.magnifyingglass")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(AppColor.warning)
+            }
+        }
+    }
+
+    private var safetyFooter: some View {
+        Text(NSLocalizedString("Safety warnings are rule-based. AI drafts summaries, not diagnoses or medication changes.", comment: "Follow-up agent safety footer"))
             .appFont(.caption)
             .foregroundStyle(AppColor.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func inboxRow(_ item: AgentInboxItem, isDismissed: Bool) -> some View {
-        VStack(alignment: .leading, spacing: EditorialSpacing.md) {
-            HStack(alignment: .top, spacing: EditorialSpacing.md) {
-                Image(systemName: item.category.iconName)
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundStyle(item.tint)
-                    .frame(width: 28, height: 28)
-
-                VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
-                    HStack(spacing: EditorialSpacing.sm) {
-                        Text(item.category.displayName)
-                            .appFont(.micro)
-                            .foregroundStyle(AppColor.textTertiary)
-                            .textCase(.uppercase)
-                        if item.source == .rule {
-                            Text(NSLocalizedString("Rule", comment: "Agent inbox source badge"))
-                                .appFont(.micro)
-                                .foregroundStyle(AppColor.warning)
-                                .textCase(.uppercase)
-                        }
-                    }
-                    Text(item.title)
-                        .appFont(.headline)
-                        .foregroundStyle(AppColor.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(item.detail)
-                        .appFont(.body)
-                        .foregroundStyle(AppColor.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: EditorialSpacing.sm)
-
-                if !isDismissed {
-                    Button {
-                        store.dismissAgentInboxItem(item)
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 13, weight: .regular))
-                            .foregroundStyle(AppColor.textTertiary)
-                            .frame(width: 30, height: 30)
-                    }
-                    .accessibilityLabel(NSLocalizedString("Dismiss", comment: "Agent inbox dismiss action"))
-                }
+    private func signalRow(icon: String, title: String, detail: String, tint: Color) -> some View {
+        HStack(alignment: .top, spacing: EditorialSpacing.md) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(tint)
+                .frame(width: 26, height: 26)
+            VStack(alignment: .leading, spacing: EditorialSpacing.xxs) {
+                Text(title)
+                    .appFont(.body)
+                    .foregroundStyle(AppColor.textPrimary)
+                Text(detail)
+                    .appFont(.caption)
+                    .foregroundStyle(AppColor.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-
-            if isDismissed {
-                Button {
-                    store.reopenAgentInboxItem(item)
-                } label: {
-                    Label(NSLocalizedString("Reopen", comment: "Agent inbox reopen action"), systemImage: "arrow.uturn.backward")
-                }
-                .buttonStyle(.borderless)
-                .foregroundStyle(AppColor.primary)
-            } else {
-                actionControl(for: item)
-            }
+            Spacer(minLength: 0)
         }
-        .padding(.vertical, EditorialSpacing.xs)
-        .opacity(isDismissed ? 0.72 : 1)
     }
 
-    @ViewBuilder
-    private func actionControl(for item: AgentInboxItem) -> some View {
-        switch item.action {
-        case .logBloodPressure:
-            Button {
-                pendingMeasurementType = .bloodPressure
-                showMeasurementSheet = true
-            } label: {
-                Label(NSLocalizedString("Log BP", comment: "Agent inbox action"), systemImage: "plus")
-            }
-            .buttonStyle(.borderless)
-            .foregroundStyle(AppColor.primary)
-        case .logBloodGlucose:
-            Button {
-                pendingMeasurementType = .bloodGlucose
-                showMeasurementSheet = true
-            } label: {
-                Label(NSLocalizedString("Log Glucose", comment: "Agent inbox action"), systemImage: "plus")
-            }
-            .buttonStyle(.borderless)
-            .foregroundStyle(AppColor.primary)
-        case .openHypertensionReport:
-            NavigationLink {
-                HypertensionFollowUpReportView(visit: visit(for: item))
-            } label: {
-                Label(NSLocalizedString("Open Report", comment: "Agent inbox action"), systemImage: "doc.text.magnifyingglass")
-            }
-            .foregroundStyle(AppColor.primary)
-        case .openDiabetesReport:
-            NavigationLink {
-                DiabetesFollowUpReportView(visit: visit(for: item))
-            } label: {
-                Label(NSLocalizedString("Open Report", comment: "Agent inbox action"), systemImage: "doc.text.magnifyingglass")
-            }
-            .foregroundStyle(AppColor.primary)
-        case .openVisitPrep:
-            NavigationLink {
-                DoctorVisitsView()
-            } label: {
-                Label(NSLocalizedString("Open Visit Prep", comment: "Agent inbox action"), systemImage: "calendar.badge.clock")
-            }
-            .foregroundStyle(AppColor.primary)
-        case .openCaregivers:
-            NavigationLink {
-                CaregiversView()
-            } label: {
-                Label(NSLocalizedString("Open Caregivers", comment: "Agent inbox action"), systemImage: "person.2")
-            }
-            .foregroundStyle(AppColor.primary)
-        case .openMedications:
-            NavigationLink {
-                MedicationsView()
-            } label: {
-                Label(NSLocalizedString("Open Medications", comment: "Agent inbox action"), systemImage: "pills")
-            }
-            .foregroundStyle(AppColor.primary)
+    private var bloodPressureSignal: String {
+        let count = recentMeasurements(type: .bloodPressure, days: 30).count
+        if count == 0 {
+            return NSLocalizedString("No recent BP readings", comment: "Follow-up agent BP signal")
+        }
+        return String(format: NSLocalizedString("%lld readings in 30 days", comment: "Follow-up agent BP signal"), Int64(count))
+    }
+
+    private var medicationSignal: String {
+        let scheduled = store.medications.filter { $0.isAsNeeded != true && !$0.timesOfDay.isEmpty }
+        guard !scheduled.isEmpty else {
+            return NSLocalizedString("No scheduled medication routine", comment: "Follow-up agent medication signal")
+        }
+        let percent = Int(store.adherencePercent(days: 14).rounded())
+        return String(format: NSLocalizedString("%lld%% adherence in 14 days", comment: "Follow-up agent medication signal"), Int64(percent))
+    }
+
+    private var symptomSignal: String {
+        let count = recentSymptoms(days: 14).filter { !isBenignFeeling($0) }.count
+        if count == 0 {
+            return NSLocalizedString("No recent discomfort logs", comment: "Follow-up agent symptom signal")
+        }
+        return String(format: NSLocalizedString("%lld recent symptom logs", comment: "Follow-up agent symptom signal"), Int64(count))
+    }
+
+    private var currentStage: FollowUpAgentStage {
+        if let visit = recentCompletedVisitForCapture {
+            return .postVisitCapture(visitID: visit.id)
+        }
+
+        guard let visit = store.nextDoctorVisit,
+              let days = visit.daysUntil() else {
+            return .quietAccumulation
+        }
+
+        if days == 0 { return .visitDay(visitID: visit.id) }
+        if days <= 3 { return .activePrep(visitID: visit.id, daysUntil: days) }
+        if days <= 7 { return .lightPrep(visitID: visit.id, daysUntil: days) }
+        return .quietAccumulation
+    }
+
+    private var recentCompletedVisitForCapture: DoctorVisit? {
+        let now = Date()
+        return store.completedDoctorVisits.first { visit in
+            guard let completedDate = visit.completedDate else { return false }
+            return now.timeIntervalSince(completedDate) <= 48 * 60 * 60 && visit.needsPostVisitCapture
+        }
+    }
+
+    private func recentMeasurements(type: MeasurementType, days: Int) -> [Measurement] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days + 1, to: Calendar.current.startOfDay(for: Date())) ?? Date()
+        return store.measurements.filter { $0.type == type && $0.date >= cutoff }
+    }
+
+    private func recentSymptoms(days: Int) -> [SymptomEntry] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days + 1, to: Calendar.current.startOfDay(for: Date())) ?? Date()
+        return store.symptomEntries.filter { $0.date >= cutoff }
+    }
+
+    private func isBenignFeeling(_ symptom: SymptomEntry) -> Bool {
+        let note = symptom.note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard note.isEmpty, symptom.severity == .mild else { return false }
+        let benignTags: Set<String> = ["felt good", "felt okay", "今天感觉好", "今天感觉一般"]
+        return symptom.tags
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .allSatisfy { benignTags.contains($0) }
+    }
+
+    private func reason(for action: FollowUpAgentNextAction) -> String {
+        switch action.target {
+        case .logMeasurement(.bloodPressure):
+            return NSLocalizedString("The report needs current home BP context before it can be useful to a doctor.", comment: "Follow-up agent reason")
+        case .logMeasurement(.bloodGlucose):
+            return NSLocalizedString("The report needs current home glucose context before it can be useful to a doctor.", comment: "Follow-up agent reason")
         case .clarifySymptom:
-            if let symptom = symptom(for: item) {
-                NavigationLink {
-                    SymptomClarificationView(symptom: symptom)
-                } label: {
-                    Label(NSLocalizedString("Clarify Symptom", comment: "Agent inbox action"), systemImage: "questionmark.bubble")
-                }
-                .foregroundStyle(AppColor.primary)
-            } else {
-                Button {
-                    store.dismissAgentInboxItem(item)
-                } label: {
-                    Label(NSLocalizedString("Mark Done", comment: "Agent inbox action"), systemImage: "checkmark")
-                }
-                .buttonStyle(.borderless)
-                .foregroundStyle(AppColor.primary)
-            }
-        case .none:
-            Button {
-                store.dismissAgentInboxItem(item)
-            } label: {
-                Label(NSLocalizedString("Mark Done", comment: "Agent inbox action"), systemImage: "checkmark")
-            }
-            .buttonStyle(.borderless)
-            .foregroundStyle(AppColor.primary)
+            return NSLocalizedString("A symptom was recorded without enough timing or medication context.", comment: "Follow-up agent reason")
+        case .openHypertensionReport, .openDiabetesReport:
+            return NSLocalizedString("The agent has enough structured data to prepare a doctor-facing summary.", comment: "Follow-up agent reason")
+        case .openVisitPrep, .openDoctorSnapshot:
+            return NSLocalizedString("The visit is close enough that questions and records should be reviewed together.", comment: "Follow-up agent reason")
+        case .recordPostVisit:
+            return NSLocalizedString("The next cycle should start from what the doctor changed at this visit.", comment: "Follow-up agent reason")
+        case .openMedications:
+            return NSLocalizedString("Medication list and schedule are core evidence for a follow-up report.", comment: "Follow-up agent reason")
+        case .openProfile:
+            return NSLocalizedString("Caregiver support matters when missed doses need follow-up.", comment: "Follow-up agent reason")
+        case .logMeasurement:
+            return NSLocalizedString("The report needs current measurement context before it can be useful to a doctor.", comment: "Follow-up agent reason")
         }
     }
 
-    private var urgentCount: Int {
-        openItems.filter { $0.severity == .urgent }.count
-    }
-
-    private var reportCount: Int {
-        openItems.filter { $0.category == .report }.count
-    }
-
-    private var metricDivider: some View {
-        Rectangle()
-            .fill(AppColor.divider)
-            .frame(width: 1, height: 34)
-    }
-
-    private func metric(value: String, label: String) -> some View {
-        VStack(alignment: .leading, spacing: EditorialSpacing.xxs) {
-            Text(value)
-                .appFontNumeric(.headline)
-                .foregroundStyle(AppColor.textPrimary)
-            Text(label)
-                .appFont(.caption)
-                .foregroundStyle(AppColor.textSecondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func visit(for item: AgentInboxItem) -> DoctorVisit? {
-        if let id = item.relatedID {
-            return store.doctorVisits.first { $0.id == id } ?? store.nextDoctorVisit
-        }
-        return store.nextDoctorVisit
-    }
-
-    private func symptom(for item: AgentInboxItem) -> SymptomEntry? {
-        guard let id = item.relatedID else { return nil }
-        return store.symptomEntries.first { $0.id == id }
-    }
-}
-
-private extension AgentInboxItem {
-    var tint: Color {
-        switch severity {
+    private func tint(for action: FollowUpAgentNextAction) -> Color {
+        switch action.severity {
         case .urgent, .caution:
             return AppColor.warning
         case .information:
-            return category == .report ? AppColor.primary : AppColor.textSecondary
+            return AppColor.primary
         }
+    }
+
+    private func handle(_ target: FollowUpAgentActionTarget) {
+        switch target {
+        case .logMeasurement(let type):
+            pendingMeasurementType = type
+            showMeasurementSheet = true
+        case .clarifySymptom(let symptomID):
+            route = AgentWorkspaceRoute(kind: .symptomClarification, relatedID: symptomID)
+        case .openHypertensionReport(let visitID):
+            route = AgentWorkspaceRoute(kind: .hypertensionReport, relatedID: visitID)
+        case .openDiabetesReport(let visitID):
+            route = AgentWorkspaceRoute(kind: .diabetesReport, relatedID: visitID)
+        case .openVisitPrep(let visitID), .openDoctorSnapshot(let visitID):
+            route = AgentWorkspaceRoute(kind: .visitPrep, relatedID: visitID)
+        case .recordPostVisit(let visitID):
+            route = AgentWorkspaceRoute(kind: .visitPrep, relatedID: visitID)
+        case .openMedications:
+            route = AgentWorkspaceRoute(kind: .medications, relatedID: nil)
+        case .openProfile:
+            route = AgentWorkspaceRoute(kind: .caregivers, relatedID: nil)
+        }
+    }
+
+    @ViewBuilder
+    private func destination(for route: AgentWorkspaceRoute) -> some View {
+        switch route.kind {
+        case .hypertensionReport:
+            HypertensionFollowUpReportView(visit: visit(for: route.relatedID))
+        case .diabetesReport:
+            DiabetesFollowUpReportView(visit: visit(for: route.relatedID))
+        case .visitPrep:
+            DoctorVisitsView()
+        case .caregivers:
+            CaregiversView()
+        case .medications:
+            MedicationsView()
+        case .symptomClarification:
+            if let symptom = route.relatedID.flatMap(symptom(for:)) {
+                SymptomClarificationView(symptom: symptom)
+            } else {
+                DoctorVisitsView()
+            }
+        }
+    }
+
+    private func visit(for id: UUID?) -> DoctorVisit? {
+        guard let id else { return store.nextDoctorVisit }
+        return store.doctorVisits.first { $0.id == id } ?? store.nextDoctorVisit
+    }
+
+    private func symptom(for id: UUID) -> SymptomEntry? {
+        store.symptomEntries.first { $0.id == id }
     }
 }
 
-private extension AgentInboxCategory {
-    var displayName: String {
-        switch self {
-        case .safety: return NSLocalizedString("Safety", comment: "Agent inbox category")
-        case .missingData: return NSLocalizedString("Missing Data", comment: "Agent inbox category")
-        case .adherence: return NSLocalizedString("Adherence", comment: "Agent inbox category")
-        case .clarification: return NSLocalizedString("Clarify", comment: "Agent inbox category")
-        case .report: return NSLocalizedString("Report", comment: "Agent inbox category")
-        case .caregiver: return NSLocalizedString("Caregiver", comment: "Agent inbox category")
-        }
+private struct AgentWorkspaceRoute: Identifiable, Hashable {
+    enum Kind: Hashable {
+        case hypertensionReport
+        case diabetesReport
+        case visitPrep
+        case caregivers
+        case medications
+        case symptomClarification
     }
 
-    var iconName: String {
-        switch self {
-        case .safety: return "exclamationmark.triangle"
-        case .missingData: return "waveform.path.ecg"
-        case .adherence: return "pills"
-        case .clarification: return "questionmark.circle"
-        case .report: return "doc.text.magnifyingglass"
-        case .caregiver: return "person.2"
-        }
+    let kind: Kind
+    let relatedID: UUID?
+
+    var id: String {
+        "\(kind)-\(relatedID?.uuidString ?? "none")"
     }
 }
 

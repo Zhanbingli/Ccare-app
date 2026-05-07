@@ -883,9 +883,33 @@
 "%lld saved" = "已保存 %lld 位";
 "%@ has been missed for %lld days." = "%@ 已漏服 %lld 天。";
 
-/* Agent Inbox */
-"Agent Inbox" = "Agent 收件箱";
-"Refresh Agent Inbox" = "刷新 Agent 收件箱";
+/* Follow-up Agent */
+"Agent Inbox" = "AI 复诊 Agent";
+"Refresh Agent Inbox" = "刷新复诊 Agent";
+"AI Follow-up Agent" = "AI 复诊 Agent";
+"Refresh Follow-up Agent" = "刷新复诊 Agent";
+"One clinical next step, based on daily records." = "基于日常记录，只给出一个临床相关下一步。";
+"Current focus" = "当前重点";
+"No action needed" = "现在不需要处理";
+"The agent is watching daily records and will surface one concrete next step when it matters." = "Agent 会观察日常记录，在需要时给出一个具体下一步。";
+"Keep recording blood pressure, medication intake, symptoms, and visit dates." = "继续记录血压、服药、症状和复诊日期。";
+"Watching" = "正在观察";
+"No recent BP readings" = "近期没有血压记录";
+"%lld readings in 30 days" = "30 天内 %lld 条记录";
+"No scheduled medication routine" = "还没有固定用药计划";
+"%lld%% adherence in 14 days" = "14 天服药率 %lld%%";
+"No recent discomfort logs" = "近期没有不适记录";
+"%lld recent symptom logs" = "近期 %lld 条症状记录";
+"Safety warnings are rule-based. AI drafts summaries, not diagnoses or medication changes." = "安全提醒由规则触发。AI 只生成摘要，不诊断，也不调整用药。";
+"The report needs current home BP context before it can be useful to a doctor." = "报告需要近期家庭血压，医生才更容易判断趋势。";
+"The report needs current home glucose context before it can be useful to a doctor." = "报告需要近期家庭血糖，医生才更容易判断趋势。";
+"A symptom was recorded without enough timing or medication context." = "有症状记录缺少发生时间或与用药的关系。";
+"The agent has enough structured data to prepare a doctor-facing summary." = "已有足够结构化记录，可以整理成给医生看的摘要。";
+"The visit is close enough that questions and records should be reviewed together." = "复诊临近，需要把问题和记录放在一起检查。";
+"The next cycle should start from what the doctor changed at this visit." = "下一轮记录应该从这次医生调整的方案开始。";
+"Medication list and schedule are core evidence for a follow-up report." = "用药清单和服药时间是复诊报告的核心证据。";
+"Caregiver support matters when missed doses need follow-up." = "出现连续漏服时，照护支持需要一起纳入。";
+"The report needs current measurement context before it can be useful to a doctor." = "报告需要近期测量背景，医生才更容易判断趋势。";
 "A local follow-up agent turns daily records into the next useful action." = "本地复诊 Agent 会把日常记录整理成下一步可执行事项。";
 "Open Items" = "待处理事项";
 "No open agent items" = "暂无待处理 Agent 事项";
@@ -1888,7 +1912,7 @@
 "Export Data Files" = "导出数据文件";
 "Back up this device or export raw data files for your own records." = "备份此设备，或导出原始数据文件供自己留存。";
 "handle above" = "在上方处理";
-"Agent next step" = "Agent 下一步";
+"Agent next step" = "AI 复诊 Agent";
 "Save what changed today so the next follow-up report starts from the doctor’s plan." = "保存今天医生调整了什么，让下一次复诊报告从医生方案开始。";
 "Still missing: %@. Save the doctor’s plan before daily tracking continues." = "还缺：%@。先保存医生方案，再继续日常记录。";
 "Capture today’s visit plan" = "记录今天的复诊方案";

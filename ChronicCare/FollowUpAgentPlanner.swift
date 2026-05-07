@@ -98,6 +98,10 @@ struct FollowUpReportReadiness: Equatable {
 }
 
 enum FollowUpAgentPlanner {
+    private static var eyebrow: String {
+        NSLocalizedString("AI Follow-up Agent", comment: "Follow-up agent card eyebrow")
+    }
+
     @MainActor
     static func nextAction(
         store: DataStore,
@@ -183,7 +187,7 @@ enum FollowUpAgentPlanner {
 
         return FollowUpAgentNextAction(
             stableKey: "agent.next.postVisit.\(visitID.uuidString)",
-            eyebrow: NSLocalizedString("Agent next step", comment: "Follow-up agent card eyebrow"),
+            eyebrow: eyebrow,
             title: NSLocalizedString("Capture today’s visit plan", comment: "Follow-up agent post visit action title"),
             detail: detail,
             buttonTitle: NSLocalizedString("Record Visit Notes", comment: "Follow-up agent post visit action button"),
@@ -201,7 +205,7 @@ enum FollowUpAgentPlanner {
             let readiness = reportReadiness(store: store, domain: domain, visitID: visitID, now: now)
             return FollowUpAgentNextAction(
                 stableKey: "agent.next.visitDay.\(report.stableKey)",
-                eyebrow: NSLocalizedString("Agent next step", comment: "Follow-up agent card eyebrow"),
+                eyebrow: eyebrow,
                 title: NSLocalizedString("Use the doctor summary today", comment: "Follow-up agent visit day action title"),
                 detail: reportReviewDetail(readiness),
                 buttonTitle: NSLocalizedString("Open Report", comment: "Follow-up agent report action button"),
@@ -216,7 +220,7 @@ enum FollowUpAgentPlanner {
     private static func doctorSnapshotAction(visitID: UUID) -> FollowUpAgentNextAction {
         FollowUpAgentNextAction(
             stableKey: "agent.next.snapshot.\(visitID.uuidString)",
-            eyebrow: NSLocalizedString("Agent next step", comment: "Follow-up agent card eyebrow"),
+            eyebrow: eyebrow,
             title: NSLocalizedString("Keep the visit snapshot ready", comment: "Follow-up agent visit day snapshot title"),
             detail: NSLocalizedString("Use the appointment summary to keep medication lists, questions, and recent records in one place.", comment: "Follow-up agent visit day snapshot detail"),
             buttonTitle: NSLocalizedString("Open Visit Snapshot", comment: "Follow-up agent snapshot action button"),
@@ -234,7 +238,7 @@ enum FollowUpAgentPlanner {
 
         return FollowUpAgentNextAction(
             stableKey: "agent.next.readiness.\(domain).\(visitID)",
-            eyebrow: NSLocalizedString("Agent next step", comment: "Follow-up agent card eyebrow"),
+            eyebrow: eyebrow,
             title: NSLocalizedString("Strengthen the follow-up report", comment: "Follow-up agent readiness action title"),
             detail: reportGapDetail(readiness),
             buttonTitle: buttonTitle(for: gap.target),
@@ -268,7 +272,7 @@ enum FollowUpAgentPlanner {
         let readiness = reportReadiness(store: store, domain: domain, visitID: visitID, now: now)
         return FollowUpAgentNextAction(
             stableKey: "agent.next.\(item.stableKey)",
-            eyebrow: NSLocalizedString("Agent next step", comment: "Follow-up agent card eyebrow"),
+            eyebrow: eyebrow,
             title: item.title,
             detail: reportReviewDetail(readiness),
             buttonTitle: NSLocalizedString("Open Report", comment: "Follow-up agent action button"),
@@ -292,7 +296,7 @@ enum FollowUpAgentPlanner {
 
         return FollowUpAgentNextAction(
             stableKey: "agent.next.\(item.stableKey)",
-            eyebrow: NSLocalizedString("Agent next step", comment: "Follow-up agent card eyebrow"),
+            eyebrow: eyebrow,
             title: item.title,
             detail: item.detail,
             buttonTitle: buttonTitle,
