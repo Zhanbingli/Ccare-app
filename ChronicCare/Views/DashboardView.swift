@@ -254,13 +254,7 @@ struct DashboardView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     homeHeader()
 
-                    let prioritizesMedication = shouldPrioritizeRoutineMedicationContent(for: mode)
-                    if prioritizesMedication, let currentAction {
-                        currentDoseActionCard(item: currentAction, mode: mode)
-                    }
-                    if prioritizesMedication {
-                        routineMedicationContent(state: state, mode: mode)
-                    }
+                    let placesMedicationAtBottom = shouldPlaceMedicationAtBottom(for: mode)
 
                     switch mode {
                     case .quietAccumulation:
@@ -277,7 +271,7 @@ struct DashboardView: View {
                         postVisitCaptureCard(visit: visit)
                     }
 
-                    if !prioritizesMedication,
+                    if !placesMedicationAtBottom,
                        shouldShowSeparateDoseAction(for: mode),
                        let currentAction {
                         currentDoseActionCard(item: currentAction, mode: mode)
@@ -303,9 +297,11 @@ struct DashboardView: View {
                         inactivityWarningCard(daysSince: gap)
                     }
 
-                    if !prioritizesMedication {
-                        routineMedicationContent(state: state, mode: mode)
+                    if placesMedicationAtBottom, let currentAction {
+                        currentDoseActionCard(item: currentAction, mode: mode)
                     }
+
+                    routineMedicationContent(state: state, mode: mode)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 10)
@@ -583,7 +579,7 @@ private extension DashboardView {
         true
     }
 
-    private func shouldPrioritizeRoutineMedicationContent(for mode: HomeMode) -> Bool {
+    private func shouldPlaceMedicationAtBottom(for mode: HomeMode) -> Bool {
         switch mode {
         case .lightPrep, .activePrep, .visitDay:
             return true
