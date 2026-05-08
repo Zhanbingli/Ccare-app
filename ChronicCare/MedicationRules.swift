@@ -301,7 +301,7 @@ enum MedicationRules {
             switch escalationLevel(for: med.id, consecutiveMissedDays: missed) {
             case .gentle(let days), .urgent(let days):
                 let message = String(
-                    format: NSLocalizedString("No dose record for %@ in the last %lld days. This may be a logging gap. Record today's status, or ask your clinician how to restart if doses were actually missed.", comment: "Missed dose escalation safety message"),
+                    format: NSLocalizedString("No dose record for %@ in the last %lld days.", comment: "Missed dose escalation safety message"),
                     med.name,
                     days
                 )

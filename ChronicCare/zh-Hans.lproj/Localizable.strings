@@ -326,12 +326,14 @@
 "Great job taking %@ consistently!" = "%@ 服药非常规律，继续保持！";
 "Missed Medication" = "漏服提醒";
 "You haven't taken %@ for %lld days. Please take it or talk to your doctor." = "你已经 %2$lld 天没有服用 %1$@，请尽快服药或咨询医生。";
+"No dose record for %@ in the last %lld days." = "过去 %2$lld 天没有 %1$@ 的服药记录。";
 "No dose record for %@ in the last %lld days. This may be a logging gap. Record today's status, or ask your clinician how to restart if doses were actually missed." = "过去 %2$lld 天没有看到 %1$@ 的服药记录。这可能只是漏记；请记录今天的实际状态。如果确实连续漏服，请询问医生如何恢复用药。";
 "%lld more medications need review." = "还有 %lld 种药物需要核对。";
 "Choose what is true today:" = "选择今天的真实情况：";
 "I took today's dose" = "今天已服";
 "Skipped today" = "今天未服";
 "Update medication plan" = "更新用药方案";
+"Update plan" = "更新方案";
 "This warning clears after a taken dose is recorded or the medication schedule is updated." = "记录一次已服，或更新用药时间/停用状态后，这条提醒会消失。";
 "You've snoozed too many times. Marking as missed." = "延后次数过多，已标记为漏服。";
 
