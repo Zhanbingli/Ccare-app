@@ -151,7 +151,7 @@ struct SymptomClarificationView: View {
             updatedAt: now
         )
         store.upsertSymptomClarification(clarification)
-        store.refreshAgentInbox()
+        store.refreshFollowUpAgentTasks()
         Haptics.success()
         dismiss()
     }

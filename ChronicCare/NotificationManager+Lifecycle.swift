@@ -234,7 +234,7 @@ extension NotificationManager {
                 let content = UNMutableNotificationContent()
                 content.title = NSLocalizedString("Visit preparation", comment: "Doctor visit notification title")
                 content.subtitle = visit.displayTitle
-                content.body = NSLocalizedString("Open the doctor snapshot and review medication, symptoms, and measurements.", comment: "Doctor visit notification body")
+                content.body = NSLocalizedString("Open the visit report and review medication, symptoms, and measurements.", comment: "Doctor visit notification body")
                 content.sound = .default
                 content.categoryIdentifier = Self.visitPrepCategoryId
                 content.userInfo = ["doctorVisitID": visit.id.uuidString]

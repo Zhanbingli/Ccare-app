@@ -15,7 +15,7 @@ final class DataStore: ObservableObject {
     @Published private(set) var symptomEntries: [SymptomEntry] = []
     @Published private(set) var symptomClarifications: [SymptomClarification] = []
     @Published private(set) var doctorVisits: [DoctorVisit] = []
-    @Published private(set) var agentInboxItems: [AgentInboxItem] = []
+    @Published private(set) var followUpAgentTasks: [FollowUpAgentTask] = []
     @Published private(set) var hypertensionAIDrafts: [HypertensionFollowUpAIDraftRecord] = []
     @Published private(set) var reportDataRevision: Int = 0
 
@@ -29,7 +29,7 @@ final class DataStore: ObservableObject {
     private let symptomEntriesURL: URL
     private let symptomClarificationsURL: URL
     private let doctorVisitsURL: URL
-    private let agentInboxItemsURL: URL
+    private let followUpAgentTasksURL: URL
     private let hypertensionAIDraftsURL: URL
     private let goalsDefaults = UserDefaults.standard
 
@@ -44,7 +44,8 @@ final class DataStore: ObservableObject {
         self.symptomEntriesURL = docs.appendingPathComponent("symptom_entries.json")
         self.symptomClarificationsURL = docs.appendingPathComponent("symptom_clarifications.json")
         self.doctorVisitsURL = docs.appendingPathComponent("doctor_visits.json")
-        self.agentInboxItemsURL = docs.appendingPathComponent("agent_inbox_items.json")
+        // Keep the legacy filename so existing task state is loaded after the rename.
+        self.followUpAgentTasksURL = docs.appendingPathComponent("agent_inbox_items.json")
         self.hypertensionAIDraftsURL = docs.appendingPathComponent("hypertension_ai_drafts.json")
 
         load()
@@ -99,10 +100,10 @@ final class DataStore: ObservableObject {
             .sink { [weak self] _ in self?.saveDoctorVisits() }
             .store(in: &cancellables)
 
-        $agentInboxItems
+        $followUpAgentTasks
             .dropFirst()
             .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
-            .sink { [weak self] _ in self?.saveAgentInboxItems() }
+            .sink { [weak self] _ in self?.saveFollowUpAgentTasks() }
             .store(in: &cancellables)
 
         $hypertensionAIDrafts
@@ -427,12 +428,12 @@ final class DataStore: ObservableObject {
         symptomEntries.removeAll()
         symptomClarifications.removeAll()
         doctorVisits.removeAll()
-        agentInboxItems.removeAll()
+        followUpAgentTasks.removeAll()
         hypertensionAIDrafts.removeAll()
         saveEmergencyInfo()
         saveSymptomClarifications()
         saveDoctorVisits()
-        saveAgentInboxItems()
+        saveFollowUpAgentTasks()
         saveHypertensionAIDrafts()
         markReportDataChanged()
     }
@@ -571,24 +572,24 @@ final class DataStore: ObservableObject {
         }
     }
 
-    // MARK: - Agent Inbox
-    var openAgentInboxItems: [AgentInboxItem] {
-        agentInboxItems.filter(\.isOpen)
+    // MARK: - AI Follow-up Agent
+    var openFollowUpAgentTasks: [FollowUpAgentTask] {
+        followUpAgentTasks.filter(\.isOpen)
     }
 
-    func refreshAgentInbox(now: Date = Date()) {
-        let generated = AgentInboxGenerator.generate(store: self, now: now)
-        agentInboxItems = AgentInboxGenerator.merge(generated: generated, existing: agentInboxItems, now: now)
+    func refreshFollowUpAgentTasks(now: Date = Date()) {
+        let generated = FollowUpAgentTaskGenerator.generate(store: self, now: now)
+        followUpAgentTasks = FollowUpAgentTaskGenerator.merge(generated: generated, existing: followUpAgentTasks, now: now)
     }
 
-    func dismissAgentInboxItem(_ item: AgentInboxItem) {
-        guard let idx = agentInboxItems.firstIndex(where: { $0.id == item.id }) else { return }
-        agentInboxItems[idx].status = .dismissed
+    func dismissFollowUpAgentTask(_ item: FollowUpAgentTask) {
+        guard let idx = followUpAgentTasks.firstIndex(where: { $0.id == item.id }) else { return }
+        followUpAgentTasks[idx].status = .dismissed
     }
 
-    func reopenAgentInboxItem(_ item: AgentInboxItem) {
-        guard let idx = agentInboxItems.firstIndex(where: { $0.id == item.id }) else { return }
-        agentInboxItems[idx].status = .open
+    func reopenFollowUpAgentTask(_ item: FollowUpAgentTask) {
+        guard let idx = followUpAgentTasks.firstIndex(where: { $0.id == item.id }) else { return }
+        followUpAgentTasks[idx].status = .open
     }
 
     // MARK: - AI Drafts
@@ -649,7 +650,7 @@ final class DataStore: ObservableObject {
         symptomEntries = (backup.symptomEntries ?? []).sorted(by: { $0.date > $1.date })
         symptomClarifications = backup.symptomClarifications ?? []
         doctorVisits = (backup.doctorVisits ?? []).sorted(by: { $0.scheduledDate < $1.scheduledDate })
-        agentInboxItems = backup.agentInboxItems ?? []
+        followUpAgentTasks = backup.followUpAgentTasks ?? []
         hypertensionAIDrafts = backup.hypertensionAIDrafts ?? []
         markReportDataChanged()
     }
@@ -667,7 +668,7 @@ final class DataStore: ObservableObject {
         self.symptomEntries = loadResilient(from: symptomEntriesURL, label: "symptom entries").sorted(by: { $0.date > $1.date })
         self.symptomClarifications = loadResilient(from: symptomClarificationsURL, label: "symptom clarifications")
         self.doctorVisits = loadResilient(from: doctorVisitsURL, label: "doctor visits").sorted(by: { $0.scheduledDate < $1.scheduledDate })
-        self.agentInboxItems = loadResilient(from: agentInboxItemsURL, label: "agent inbox items")
+        self.followUpAgentTasks = loadResilient(from: followUpAgentTasksURL, label: "follow-up agent tasks")
         self.hypertensionAIDrafts = loadResilient(from: hypertensionAIDraftsURL, label: "hypertension AI drafts")
         updateWidgetData()
     }
@@ -735,9 +736,9 @@ final class DataStore: ObservableObject {
         persist(snapshot, to: doctorVisitsURL, label: "doctor visits")
     }
 
-    private func saveAgentInboxItems() {
-        let snapshot = agentInboxItems
-        persist(snapshot, to: agentInboxItemsURL, label: "agent inbox items")
+    private func saveFollowUpAgentTasks() {
+        let snapshot = followUpAgentTasks
+        persist(snapshot, to: followUpAgentTasksURL, label: "follow-up agent tasks")
     }
 
     private func saveHypertensionAIDrafts() {

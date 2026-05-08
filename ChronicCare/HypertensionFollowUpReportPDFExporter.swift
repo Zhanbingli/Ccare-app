@@ -98,19 +98,6 @@ enum HypertensionFollowUpReportPDFExporter {
                 }
             }
 
-            if let aiDraft {
-                drawSection(NSLocalizedString("AI Draft", comment: "Hypertension report AI section"))
-                if let patientSummary = aiDraft.patientSummary {
-                    drawBullet("\(NSLocalizedString("Patient summary", comment: "Hypertension report AI draft label")): \(patientSummary)")
-                }
-                if let doctorSummary = aiDraft.doctorSummary {
-                    drawBullet("\(NSLocalizedString("Doctor summary", comment: "Hypertension report AI draft label")): \(doctorSummary)")
-                }
-                for question in aiDraft.questions {
-                    drawBullet(question)
-                }
-            }
-
             drawSection(NSLocalizedString("Doctor-Facing Summary", comment: "Hypertension report section"))
             for line in report.doctorSummaryLines {
                 drawBullet(line)
@@ -125,9 +112,20 @@ enum HypertensionFollowUpReportPDFExporter {
                 }
             }
 
+            if let patientSummary = aiDraft?.patientSummary {
+                drawSection(NSLocalizedString("Patient Prep Notes", comment: "Hypertension report AI patient section"))
+                drawBullet(patientSummary)
+            }
+
             drawSection(NSLocalizedString("Questions for Doctor", comment: "Hypertension report section"))
-            for question in report.doctorQuestions {
-                drawBullet(question.prompt)
+            if aiDraft?.questions.isEmpty == false {
+                for question in aiDraft?.questions ?? [] {
+                    drawBullet(question)
+                }
+            } else {
+                for question in report.doctorQuestions {
+                    drawBullet(question.prompt)
+                }
             }
 
             drawSection(NSLocalizedString("Blood Pressure Appendix", comment: "Hypertension report section"))

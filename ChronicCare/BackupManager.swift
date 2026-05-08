@@ -11,9 +11,91 @@ struct AppBackup: Codable {
     var symptomEntries: [SymptomEntry]?
     var symptomClarifications: [SymptomClarification]?
     var doctorVisits: [DoctorVisit]?
-    var agentInboxItems: [AgentInboxItem]?
+    var followUpAgentTasks: [FollowUpAgentTask]?
     var hypertensionAIDrafts: [HypertensionFollowUpAIDraftRecord]?
     var medicationImagesByPath: [String: Data]?
+
+    private enum CodingKeys: String, CodingKey {
+        case version
+        case date
+        case measurements
+        case medications
+        case intakeLogs
+        case emergencyInfo
+        case caregivers
+        case symptomEntries
+        case symptomClarifications
+        case doctorVisits
+        case followUpAgentTasks
+        case agentInboxItems
+        case hypertensionAIDrafts
+        case medicationImagesByPath
+    }
+
+    init(
+        version: Int,
+        date: Date,
+        measurements: [Measurement],
+        medications: [Medication],
+        intakeLogs: [IntakeLog],
+        emergencyInfo: EmergencyInfo?,
+        caregivers: [CaregiverContact]?,
+        symptomEntries: [SymptomEntry]?,
+        symptomClarifications: [SymptomClarification]?,
+        doctorVisits: [DoctorVisit]?,
+        followUpAgentTasks: [FollowUpAgentTask]?,
+        hypertensionAIDrafts: [HypertensionFollowUpAIDraftRecord]?,
+        medicationImagesByPath: [String: Data]?
+    ) {
+        self.version = version
+        self.date = date
+        self.measurements = measurements
+        self.medications = medications
+        self.intakeLogs = intakeLogs
+        self.emergencyInfo = emergencyInfo
+        self.caregivers = caregivers
+        self.symptomEntries = symptomEntries
+        self.symptomClarifications = symptomClarifications
+        self.doctorVisits = doctorVisits
+        self.followUpAgentTasks = followUpAgentTasks
+        self.hypertensionAIDrafts = hypertensionAIDrafts
+        self.medicationImagesByPath = medicationImagesByPath
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        version = try container.decode(Int.self, forKey: .version)
+        date = try container.decode(Date.self, forKey: .date)
+        measurements = try container.decode([Measurement].self, forKey: .measurements)
+        medications = try container.decode([Medication].self, forKey: .medications)
+        intakeLogs = try container.decode([IntakeLog].self, forKey: .intakeLogs)
+        emergencyInfo = try container.decodeIfPresent(EmergencyInfo.self, forKey: .emergencyInfo)
+        caregivers = try container.decodeIfPresent([CaregiverContact].self, forKey: .caregivers)
+        symptomEntries = try container.decodeIfPresent([SymptomEntry].self, forKey: .symptomEntries)
+        symptomClarifications = try container.decodeIfPresent([SymptomClarification].self, forKey: .symptomClarifications)
+        doctorVisits = try container.decodeIfPresent([DoctorVisit].self, forKey: .doctorVisits)
+        followUpAgentTasks = try container.decodeIfPresent([FollowUpAgentTask].self, forKey: .followUpAgentTasks)
+            ?? container.decodeIfPresent([FollowUpAgentTask].self, forKey: .agentInboxItems)
+        hypertensionAIDrafts = try container.decodeIfPresent([HypertensionFollowUpAIDraftRecord].self, forKey: .hypertensionAIDrafts)
+        medicationImagesByPath = try container.decodeIfPresent([String: Data].self, forKey: .medicationImagesByPath)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(version, forKey: .version)
+        try container.encode(date, forKey: .date)
+        try container.encode(measurements, forKey: .measurements)
+        try container.encode(medications, forKey: .medications)
+        try container.encode(intakeLogs, forKey: .intakeLogs)
+        try container.encodeIfPresent(emergencyInfo, forKey: .emergencyInfo)
+        try container.encodeIfPresent(caregivers, forKey: .caregivers)
+        try container.encodeIfPresent(symptomEntries, forKey: .symptomEntries)
+        try container.encodeIfPresent(symptomClarifications, forKey: .symptomClarifications)
+        try container.encodeIfPresent(doctorVisits, forKey: .doctorVisits)
+        try container.encodeIfPresent(followUpAgentTasks, forKey: .followUpAgentTasks)
+        try container.encodeIfPresent(hypertensionAIDrafts, forKey: .hypertensionAIDrafts)
+        try container.encodeIfPresent(medicationImagesByPath, forKey: .medicationImagesByPath)
+    }
 }
 
 enum BackupManager {
@@ -54,7 +136,7 @@ enum BackupManager {
             symptomEntries: store.symptomEntries,
             symptomClarifications: store.symptomClarifications,
             doctorVisits: store.doctorVisits,
-            agentInboxItems: store.agentInboxItems,
+            followUpAgentTasks: store.followUpAgentTasks,
             hypertensionAIDrafts: store.hypertensionAIDrafts,
             medicationImagesByPath: medicationImagesByPath.isEmpty ? nil : medicationImagesByPath
         )
@@ -64,7 +146,7 @@ enum BackupManager {
         return url
     }
 
-    static let currentVersion = 6
+    static let currentVersion = 7
 
     static func loadBackup(from url: URL) throws -> AppBackup {
         let data = try Data(contentsOf: url)
@@ -75,6 +157,9 @@ enum BackupManager {
     /// Migrate older backup versions to the current format.
     private static func migrate(_ backup: AppBackup) -> AppBackup {
         var result = backup
+        if result.followUpAgentTasks == nil {
+            result.followUpAgentTasks = []
+        }
         if result.version < 2 {
             // v1 -> v2: emergencyInfo and caregivers were added; ensure non-nil defaults
             if result.caregivers == nil { result.caregivers = [] }
@@ -86,8 +171,8 @@ enum BackupManager {
             result.version = 3
         }
         if result.version < 4 {
-            // v3 -> v4: local agent inbox state was added.
-            if result.agentInboxItems == nil { result.agentInboxItems = [] }
+            // v3 -> v4: local follow-up agent state was added.
+            if result.followUpAgentTasks == nil { result.followUpAgentTasks = [] }
             result.version = 4
         }
         if result.version < 5 {
@@ -99,6 +184,10 @@ enum BackupManager {
             // v5 -> v6: structured symptom clarifications were added.
             if result.symptomClarifications == nil { result.symptomClarifications = [] }
             result.version = 6
+        }
+        if result.version < 7 {
+            // v6 -> v7: follow-up agent task naming replaced the old inbox naming.
+            result.version = 7
         }
         return result
     }

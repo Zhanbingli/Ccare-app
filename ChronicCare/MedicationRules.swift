@@ -268,11 +268,20 @@ enum MedicationRules {
     // MARK: - Daily Safety Summary
 
     struct DailySafetySummary {
+        struct MissEscalation: Identifiable, Hashable {
+            let medicationID: UUID
+            let medicationName: String
+            let missedDays: Int
+            let message: String
+
+            var id: UUID { medicationID }
+        }
+
         /// Timing conflicts are intentionally not surfaced in the daily dashboard.
         /// Many chronic-care regimens require taking multiple medications together;
         /// low-confidence spacing warnings create noise and reduce trust.
         let timingConflicts: [String]
-        let missEscalations: [String]
+        let missEscalations: [MissEscalation]
 
         var hasIssues: Bool {
             !missEscalations.isEmpty
@@ -285,13 +294,25 @@ enum MedicationRules {
         consecutiveMissedDaysProvider: (UUID) -> Int,
         now: Date = Date()
     ) -> DailySafetySummary {
-        var missEscalations: [String] = []
+        var missEscalations: [DailySafetySummary.MissEscalation] = []
 
         for med in medications where med.remindersEnabled {
             let missed = consecutiveMissedDaysProvider(med.id)
             switch escalationLevel(for: med.id, consecutiveMissedDays: missed) {
             case .gentle(let days), .urgent(let days):
-                missEscalations.append(String(format: NSLocalizedString("You haven't taken %@ for %lld days. Please take it or talk to your doctor.", comment: ""), med.name, days))
+                let message = String(
+                    format: NSLocalizedString("No dose record for %@ in the last %lld days.", comment: "Missed dose escalation safety message"),
+                    med.name,
+                    days
+                )
+                missEscalations.append(
+                    DailySafetySummary.MissEscalation(
+                        medicationID: med.id,
+                        medicationName: med.name,
+                        missedDays: days,
+                        message: message
+                    )
+                )
             case .none:
                 break
             }

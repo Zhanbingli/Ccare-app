@@ -225,6 +225,50 @@ struct ChronicCareTests {
         #expect(dailySummary.hasIssues == false)
     }
 
+    @Test func consecutiveMissedDaysClearsAfterTakenDoseToday() {
+        let cal = Calendar(identifier: .gregorian)
+        let now = DateComponents(calendar: cal, year: 2026, month: 5, day: 7, hour: 12).date!
+        let medID = UUID()
+        let med = Medication(
+            id: medID,
+            name: "Amlodipine",
+            dose: "5mg",
+            timesOfDay: [DateComponents(hour: 8, minute: 0)],
+            remindersEnabled: true
+        )
+        let fiveDaysAgo = cal.date(byAdding: .day, value: -5, to: now)!
+        let oldTaken = IntakeLog(
+            medicationID: medID,
+            date: cal.date(bySettingHour: 8, minute: 0, second: 0, of: fiveDaysAgo)!,
+            status: .taken,
+            scheduleKey: "08:00"
+        )
+        let todayTaken = IntakeLog(
+            medicationID: medID,
+            date: cal.date(bySettingHour: 8, minute: 0, second: 0, of: now)!,
+            status: .taken,
+            scheduleKey: "08:00"
+        )
+
+        let missedBeforeTodayLog = AdherenceCalculator.consecutiveMissedDays(
+            for: medID,
+            medications: [med],
+            intakeLogs: [oldTaken],
+            now: now,
+            calendar: cal
+        )
+        let missedAfterTodayLog = AdherenceCalculator.consecutiveMissedDays(
+            for: medID,
+            medications: [med],
+            intakeLogs: [oldTaken, todayTaken],
+            now: now,
+            calendar: cal
+        )
+
+        #expect(missedBeforeTodayLog == 4)
+        #expect(missedAfterTodayLog == 0)
+    }
+
     @Test func measurementClampsFutureDateToNow() {
         let now = Date()
         let future = now.addingTimeInterval(60 * 60 * 24)
@@ -897,7 +941,7 @@ struct ChronicCareTests {
     }
 
     @MainActor
-    @Test func agentInboxCreatesBloodPressureGapItemForHypertensionContext() {
+    @Test func followUpAgentCreatesBloodPressureGapTaskForHypertensionContext() {
         let store = DataStore()
         store.clearAll()
         let medication = Medication(
@@ -909,14 +953,129 @@ struct ChronicCareTests {
         )
         #expect(store.addMedication(medication) == nil)
 
-        store.refreshAgentInbox(now: Date())
+        store.refreshFollowUpAgentTasks(now: Date())
 
-        #expect(store.openAgentInboxItems.contains { $0.stableKey == "measurement_gap.bp" })
+        #expect(store.openFollowUpAgentTasks.contains { $0.stableKey == "measurement_gap.bp" })
     }
 
-    @Test func agentInboxMergePreservesDismissedStateForStableKey() {
+    @MainActor
+    @Test func followUpAgentPlannerSurfacesBloodPressureGapDuringQuietStage() {
+        let store = DataStore()
+        store.clearAll()
+        let medication = Medication(
+            name: "Amlodipine",
+            dose: "5mg",
+            timesOfDay: [DateComponents(hour: 8, minute: 0)],
+            remindersEnabled: true,
+            category: .antihypertensive
+        )
+        #expect(store.addMedication(medication) == nil)
+
+        let action = FollowUpAgentPlanner.nextAction(
+            store: store,
+            stage: .quietAccumulation,
+            now: Date()
+        )
+
+        #expect(action?.target == .logMeasurement(.bloodPressure))
+    }
+
+    @MainActor
+    @Test func followUpAgentPlannerHonorsDismissedStableKeys() {
+        let store = DataStore()
+        store.clearAll()
+        let medication = Medication(
+            name: "Amlodipine",
+            dose: "5mg",
+            timesOfDay: [DateComponents(hour: 8, minute: 0)],
+            remindersEnabled: true,
+            category: .antihypertensive
+        )
+        #expect(store.addMedication(medication) == nil)
         let now = Date()
-        let previous = AgentInboxItem(
+
+        store.refreshFollowUpAgentTasks(now: now)
+        if let item = store.openFollowUpAgentTasks.first(where: { $0.stableKey == "measurement_gap.bp" }) {
+            store.dismissFollowUpAgentTask(item)
+        }
+
+        let action = FollowUpAgentPlanner.nextAction(
+            store: store,
+            stage: .quietAccumulation,
+            now: now
+        )
+
+        #expect(action == nil)
+    }
+
+    @MainActor
+    @Test func followUpAgentPlannerPrioritizesReportOnVisitDay() {
+        let store = DataStore()
+        store.clearAll()
+        let medication = Medication(
+            name: "Amlodipine",
+            dose: "5mg",
+            timesOfDay: [DateComponents(hour: 8, minute: 0)],
+            remindersEnabled: true,
+            category: .antihypertensive
+        )
+        let now = Date()
+        let visit = DoctorVisit(scheduledDate: now)
+        #expect(store.addMedication(medication) == nil)
+        store.addDoctorVisit(visit)
+
+        let action = FollowUpAgentPlanner.nextAction(
+            store: store,
+            stage: .visitDay(visitID: visit.id),
+            now: now
+        )
+
+        #expect(action?.target == .openHypertensionReport(visit.id))
+    }
+
+    @MainActor
+    @Test func followUpAgentPlannerStrengthensSparseHypertensionReportBeforeVisit() {
+        let store = DataStore()
+        store.clearAll()
+        let now = Date()
+        let visitDate = Calendar.current.date(byAdding: .day, value: 2, to: now) ?? now
+        let visit = DoctorVisit(scheduledDate: visitDate)
+        let medication = Medication(
+            name: "Amlodipine",
+            dose: "5mg",
+            timesOfDay: [DateComponents(hour: 8, minute: 0)],
+            remindersEnabled: true,
+            category: .antihypertensive
+        )
+        #expect(store.addMedication(medication) == nil)
+        store.addDoctorVisit(visit)
+        store.addMeasurement(Measurement(
+            type: .bloodPressure,
+            value: 142,
+            diastolic: 88,
+            date: now,
+            note: nil
+        ))
+
+        let readiness = FollowUpAgentPlanner.reportReadiness(
+            store: store,
+            domain: .hypertension,
+            visitID: visit.id,
+            now: now
+        )
+        let action = FollowUpAgentPlanner.nextAction(
+            store: store,
+            stage: .activePrep(visitID: visit.id, daysUntil: 2),
+            now: now
+        )
+
+        #expect(readiness.missingItems.contains { $0.target == .logMeasurement(.bloodPressure) })
+        #expect(action?.target == .logMeasurement(.bloodPressure))
+    }
+
+    @Test func followUpAgentTaskMergePreservesDismissedStateForStableKey() {
+        let now = Date()
+        let previous = FollowUpAgentTask(
             stableKey: "measurement_gap.bp",
             title: "Old",
             detail: "Old detail",
@@ -929,7 +1088,7 @@ struct ChronicCareTests {
             updatedAt: now,
             status: .dismissed
         )
-        let generated = AgentInboxItem(
+        let generated = FollowUpAgentTask(
             stableKey: "measurement_gap.bp",
             title: "New",
             detail: "New detail",
@@ -942,7 +1101,7 @@ struct ChronicCareTests {
             updatedAt: now.addingTimeInterval(60)
         )
 
-        let merged = AgentInboxGenerator.merge(generated: [generated], existing: [previous], now: now.addingTimeInterval(120))
+        let merged = FollowUpAgentTaskGenerator.merge(generated: [generated], existing: [previous], now: now.addingTimeInterval(120))
 
         #expect(merged.count == 1)
         #expect(merged.first?.id == previous.id)
@@ -950,8 +1109,46 @@ struct ChronicCareTests {
         #expect(merged.first?.title == "New")
     }
 
+    @Test func backupDecodesLegacyFollowUpAgentTaskKey() throws {
+        struct LegacyBackup: Codable {
+            let version: Int
+            let date: Date
+            let measurements: [ChronicCare.Measurement]
+            let medications: [Medication]
+            let intakeLogs: [IntakeLog]
+            let agentInboxItems: [FollowUpAgentTask]
+        }
+
+        let now = Date()
+        let task = FollowUpAgentTask(
+            stableKey: "measurement_gap.bp",
+            title: "Blood pressure record is stale",
+            detail: "No recent BP readings",
+            category: .missingData,
+            severity: .information,
+            source: .localSummary,
+            action: .logBloodPressure,
+            relatedID: nil,
+            generatedAt: now,
+            updatedAt: now
+        )
+        let legacy = LegacyBackup(
+            version: 6,
+            date: now,
+            measurements: [],
+            medications: [],
+            intakeLogs: [],
+            agentInboxItems: [task]
+        )
+
+        let data = try JSONEncoder().encode(legacy)
+        let decoded = try JSONDecoder().decode(AppBackup.self, from: data)
+
+        #expect(decoded.followUpAgentTasks?.first?.stableKey == "measurement_gap.bp")
+    }
+
     @MainActor
-    @Test func agentInboxDoesNotAskClarificationAfterSymptomClarified() {
+    @Test func followUpAgentDoesNotAskClarificationAfterSymptomClarified() {
         let store = DataStore()
         store.clearAll()
         let now = Date()
@@ -963,10 +1160,10 @@ struct ChronicCareTests {
         )
         store.addSymptomEntry(symptom)
 
-        store.refreshAgentInbox(now: now)
+        store.refreshFollowUpAgentTasks(now: now)
 
         let stableKey = "clarification.symptom.\(symptom.id.uuidString)"
-        #expect(store.openAgentInboxItems.contains {
+        #expect(store.openFollowUpAgentTasks.contains {
             $0.stableKey == stableKey && $0.action == .clarifySymptom
         })
 
@@ -979,9 +1176,29 @@ struct ChronicCareTests {
             redFlagSigns: [],
             followUpRelevanceNote: nil
         ))
-        store.refreshAgentInbox(now: now)
+        store.refreshFollowUpAgentTasks(now: now)
 
-        #expect(store.openAgentInboxItems.contains { $0.stableKey == stableKey } == false)
+        #expect(store.openFollowUpAgentTasks.contains { $0.stableKey == stableKey } == false)
+    }
+
+    @MainActor
+    @Test func followUpAgentDoesNotClarifyBenignQuickFeeling() {
+        let store = DataStore()
+        store.clearAll()
+        let now = Date()
+        let symptom = SymptomEntry(
+            date: now,
+            tags: ["Felt okay"],
+            severity: .mild,
+            note: nil
+        )
+        store.addSymptomEntry(symptom)
+
+        store.refreshFollowUpAgentTasks(now: now)
+
+        #expect(store.openFollowUpAgentTasks.contains {
+            $0.stableKey == "clarification.symptom.\(symptom.id.uuidString)"
+        } == false)
     }
 
     @MainActor
@@ -1050,6 +1267,126 @@ struct ChronicCareTests {
 
         #expect(store.hypertensionAIDrafts.count == 1)
         #expect(record?.draft == second)
+    }
+
+    @Test func hypertensionDoctorOnePageExportOmitsRawAppendix() {
+        let now = Date()
+        let report = HypertensionFollowUpReport(
+            id: UUID(),
+            generatedAt: now,
+            periodStart: now.addingTimeInterval(-29 * 24 * 60 * 60),
+            periodEnd: now,
+            visitTitle: "Cardiology",
+            bloodPressure: HypertensionFollowUpReport.BloodPressureSummary(
+                totalReadings: 8,
+                averageSystolic: 138,
+                averageDiastolic: 86,
+                morningAverageSystolic: 145,
+                morningAverageDiastolic: 90,
+                eveningAverageSystolic: 130,
+                eveningAverageDiastolic: 82,
+                aboveTargetCount: 3,
+                measurementGapDays: 2,
+                latestReading: "136/84 mmHg"
+            ),
+            adherence: HypertensionFollowUpReport.AdherenceSummary(
+                medicationCount: 1,
+                scheduledDoseCount: 30,
+                takenDoseCount: 27,
+                missedDoseCount: 3,
+                adherenceRate: 0.9,
+                worstMissedTimeLabel: "08:00"
+            ),
+            symptoms: HypertensionFollowUpReport.SymptomSummary(
+                count: 1,
+                severeCount: 0,
+                summaries: ["Moderate: dizziness; clarified: after medication"]
+            ),
+            redFlags: [],
+            patientInsights: [],
+            doctorSummaryLines: [],
+            doctorQuestions: [
+                AgentQuestion(
+                    prompt: "Should we review medication timing?",
+                    reason: nil
+                )
+            ],
+            rawBloodPressureRows: [
+                HypertensionFollowUpReport.RawBloodPressureRow(
+                    date: now,
+                    systolic: 136,
+                    diastolic: 84,
+                    note: "raw appendix note"
+                )
+            ],
+            disclaimer: "Safety disclaimer"
+        )
+
+        let text = HypertensionFollowUpReportTextExporter.doctorOnePageText(report)
+
+        #expect(text.contains("Clinical snapshot"))
+        #expect(text.contains("Should we review medication timing?"))
+        #expect(text.contains("raw appendix note") == false)
+        #expect(text.contains("Blood Pressure Appendix") == false)
+    }
+
+    @Test func diabetesDoctorOnePageExportOmitsRawAppendix() {
+        let now = Date()
+        let report = DiabetesFollowUpReport(
+            id: UUID(),
+            generatedAt: now,
+            periodStart: now.addingTimeInterval(-29 * 24 * 60 * 60),
+            periodEnd: now,
+            visitTitle: "Endocrinology",
+            glucose: DiabetesFollowUpReport.GlucoseSummary(
+                totalReadings: 10,
+                averageGlucose: 142,
+                morningAverageGlucose: 150,
+                eveningAverageGlucose: 132,
+                lowReadingsCount: 1,
+                veryLowReadingsCount: 0,
+                highReadingsCount: 2,
+                measurementGapDays: 1,
+                latestReading: "138 mg/dL"
+            ),
+            adherence: DiabetesFollowUpReport.AdherenceSummary(
+                medicationCount: 1,
+                scheduledDoseCount: 30,
+                takenDoseCount: 26,
+                missedDoseCount: 4,
+                adherenceRate: 0.86,
+                worstMissedTimeLabel: "20:00"
+            ),
+            symptoms: DiabetesFollowUpReport.SymptomSummary(
+                count: 1,
+                severeCount: 0,
+                summaries: ["May 6, 2026: dizziness (Moderate); clarified: nearby measurement: 68 mg/dL"]
+            ),
+            redFlags: [],
+            patientInsights: [],
+            doctorSummaryLines: [],
+            doctorQuestions: [
+                AgentQuestion(
+                    prompt: "What glucose target range should I use at home?",
+                    reason: nil
+                )
+            ],
+            rawGlucoseRows: [
+                DiabetesFollowUpReport.RawGlucoseRow(
+                    date: now,
+                    glucose: 138,
+                    note: "raw glucose appendix note"
+                )
+            ],
+            disclaimer: "Safety disclaimer"
+        )
+
+        let text = DiabetesFollowUpReportTextExporter.doctorOnePageText(report)
+
+        #expect(text.contains("Clinical snapshot"))
+        #expect(text.contains("What glucose target range should I use at home?"))
+        #expect(text.contains("raw glucose appendix note") == false)
+        #expect(text.contains("Glucose Appendix") == false)
     }
 
 }

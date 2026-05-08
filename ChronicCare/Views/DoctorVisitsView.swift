@@ -34,23 +34,12 @@ struct DoctorVisitsView: View {
                     nextVisitHeader(visit)
 
                     NavigationLink {
-                        ConsultationSnapshotView(visit: visit)
-                    } label: {
-                        visitActionRow(
-                            title: NSLocalizedString("Review Snapshot", comment: ""),
-                            subtitle: NSLocalizedString("Doctor-facing summary for the appointment", comment: ""),
-                            systemImage: "doc.text.magnifyingglass",
-                            tint: AppColor.primary
-                        )
-                    }
-
-                    NavigationLink {
                         HypertensionFollowUpReportView(visit: visit)
                     } label: {
                         visitActionRow(
-                            title: NSLocalizedString("Hypertension Report", comment: "Hypertension report title"),
-                            subtitle: NSLocalizedString("BP, adherence, symptoms, and rule-based safety signals", comment: "Hypertension report row subtitle"),
-                            systemImage: "heart.text.square",
+                            title: NSLocalizedString("Prepare Visit Report", comment: "Visit prep primary report action"),
+                            subtitle: NSLocalizedString("One-page summary, questions, and export for the appointment", comment: "Visit prep primary report subtitle"),
+                            systemImage: "doc.text.magnifyingglass",
                             tint: AppColor.primary
                         )
                     }
@@ -82,7 +71,7 @@ struct DoctorVisitsView: View {
                     EmptyStateView(
                         systemImage: "calendar.badge.plus",
                         title: NSLocalizedString("No visit scheduled", comment: ""),
-                        subtitle: NSLocalizedString("Add your next appointment so the app can prepare a focused doctor snapshot.", comment: ""),
+                        subtitle: NSLocalizedString("Add your next appointment so the app can prepare a focused visit report.", comment: ""),
                         actionTitle: NSLocalizedString("Add Visit", comment: ""),
                         action: { showNewVisit = true }
                     )

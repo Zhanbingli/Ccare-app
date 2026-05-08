@@ -32,12 +32,12 @@ struct ProfileDrawerV2: View {
 
                 Section(NSLocalizedString("Review", comment: "")) {
                     navRow(
-                        icon: "tray.full.fill",
-                        tint: agentInboxTint,
-                        title: NSLocalizedString("Agent Inbox", comment: "Agent inbox drawer title"),
-                        subtitle: agentInboxSubtitle
+                        icon: "sparkles",
+                        tint: followUpAgentTint,
+                        title: NSLocalizedString("AI Follow-up Agent", comment: "Follow-up agent drawer title"),
+                        subtitle: followUpAgentSubtitle
                     ) {
-                        AgentInboxView()
+                        FollowUpAgentWorkspaceView()
                             .environmentObject(store)
                     }
 
@@ -98,7 +98,7 @@ struct ProfileDrawerV2: View {
             .navigationTitle(NSLocalizedString("Profile", comment: ""))
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
-                store.refreshAgentInbox()
+                store.refreshFollowUpAgentTasks()
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -134,18 +134,36 @@ struct ProfileDrawerV2: View {
         return String(format: NSLocalizedString("%d measurements", comment: ""), store.measurements.count)
     }
 
-    private var agentInboxSubtitle: String {
-        let count = store.openAgentInboxItems.count
-        if count == 0 {
-            return NSLocalizedString("No open agent items", comment: "Agent inbox drawer subtitle")
+    private var followUpAgentSubtitle: String {
+        if let action = FollowUpAgentPlanner.nextAction(store: store, stage: followUpAgentStage) {
+            return action.title
         }
-        return String(format: NSLocalizedString("%lld open agent items", comment: "Agent inbox drawer subtitle"), Int64(count))
+        return NSLocalizedString("No action needed", comment: "Follow-up agent empty title")
     }
 
-    private var agentInboxTint: Color {
-        store.openAgentInboxItems.contains { $0.severity == .urgent || $0.severity == .caution }
+    private var followUpAgentTint: Color {
+        store.openFollowUpAgentTasks.contains { $0.severity == .urgent || $0.severity == .caution }
             ? AppColor.warning
             : AppColor.primary
+    }
+
+    private var followUpAgentStage: FollowUpAgentStage {
+        if let visit = store.completedDoctorVisits.first(where: { visit in
+            guard let completedDate = visit.completedDate else { return false }
+            return Date().timeIntervalSince(completedDate) <= 48 * 60 * 60 && visit.needsPostVisitCapture
+        }) {
+            return .postVisitCapture(visitID: visit.id)
+        }
+
+        guard let visit = store.nextDoctorVisit,
+              let days = visit.daysUntil() else {
+            return .quietAccumulation
+        }
+
+        if days == 0 { return .visitDay(visitID: visit.id) }
+        if days <= 3 { return .activePrep(visitID: visit.id, daysUntil: days) }
+        if days <= 7 { return .lightPrep(visitID: visit.id, daysUntil: days) }
+        return .quietAccumulation
     }
 
     private var visitPrepSubtitle: String {
