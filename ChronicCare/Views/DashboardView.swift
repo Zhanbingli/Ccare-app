@@ -31,154 +31,8 @@ struct DashboardView: View {
     @State private var followUpReportRoute: FollowUpReportRoute?
     @State private var clarifyingSymptom: SymptomEntry?
     @State private var quickFeelingConfirmation: String?
-    @State private var visitDayChecklistRevision = 0
+    @State private var showSecondaryAlerts = false
     private let refreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
-
-    private struct MedSchedule: Identifiable {
-        let id: String // medID_HH:MM
-        let med: Medication
-        let time: Date
-        var scheduleKey: String {
-            let comps = Calendar.current.dateComponents([.hour, .minute], from: time)
-            return String(format: "%@_%02d:%02d", med.id.uuidString, comps.hour ?? 0, comps.minute ?? 0)
-        }
-    }
-
-    private struct ScheduleLookupKey: Hashable {
-        let medicationID: UUID
-        let scheduleKey: String?
-    }
-
-    private enum TodayMedStatus {
-        case none
-        case taken(Date)
-        case skipped(Date)
-        case snoozed(Date)
-        case dueSoon // past scheduled time but within grace period
-        case overdue
-
-        var displayText: String {
-            switch self {
-            case .taken:   return NSLocalizedString("Taken", comment: "")
-            case .skipped: return NSLocalizedString("Skipped", comment: "")
-            case .snoozed: return NSLocalizedString("Snoozed", comment: "")
-            case .overdue: return NSLocalizedString("Overdue", comment: "")
-            case .dueSoon: return NSLocalizedString("Due now", comment: "")
-            case .none:    return NSLocalizedString("Later", comment: "")
-            }
-        }
-
-        var tint: Color {
-            switch self {
-            case .taken:   return AppColor.success
-            case .skipped: return AppColor.textSecondary
-            case .snoozed: return AppColor.primary
-            case .overdue: return AppColor.warning
-            case .dueSoon: return AppColor.warning
-            case .none:    return AppColor.textSecondary
-            }
-        }
-
-        var iconName: String {
-            switch self {
-            case .taken:   return "checkmark"
-            case .skipped: return "xmark"
-            case .snoozed: return "zzz"
-            case .overdue: return "exclamationmark.triangle"
-            case .dueSoon: return "clock"
-            case .none:    return "clock"
-            }
-        }
-
-        var isFinal: Bool {
-            switch self {
-            case .taken, .skipped: return true
-            default: return false
-            }
-        }
-    }
-
-    private struct MissedDoseRecoveryGuidance {
-        let title: String
-        let message: String
-        let compactText: String
-        let icon: String
-        let tint: Color
-    }
-
-    private enum HomeMode {
-        case quietAccumulation
-        case lightPrep(DoctorVisit, daysUntil: Int)
-        case activePrep(DoctorVisit, daysUntil: Int)
-        case visitDay(DoctorVisit)
-        case postVisitCapture(DoctorVisit)
-    }
-
-    private enum QuickFeeling: String, CaseIterable, Identifiable {
-        case good
-        case okay
-        case unwell
-
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .good:
-                return NSLocalizedString("Good", comment: "Quick feeling option")
-            case .okay:
-                return NSLocalizedString("Okay", comment: "Quick feeling option")
-            case .unwell:
-                return NSLocalizedString("Unwell", comment: "Quick feeling option")
-            }
-        }
-
-        var iconName: String {
-            switch self {
-            case .good:
-                return "face.smiling"
-            case .okay:
-                return "minus.circle"
-            case .unwell:
-                return "heart.text.square"
-            }
-        }
-
-        var tint: Color {
-            switch self {
-            case .good:
-                return AppColor.success
-            case .okay:
-                return AppColor.textSecondary
-            case .unwell:
-                return AppColor.warning
-            }
-        }
-
-        var symptomTag: String {
-            switch self {
-            case .good:
-                return NSLocalizedString("Felt good", comment: "Quick feeling symptom tag")
-            case .okay:
-                return NSLocalizedString("Felt okay", comment: "Quick feeling symptom tag")
-            case .unwell:
-                return NSLocalizedString("Felt unwell", comment: "Quick feeling symptom tag")
-            }
-        }
-    }
-
-    private struct TodayState {
-        let schedules: [MedSchedule]
-        let statusCache: [String: TodayMedStatus]
-        let takenCount: Int
-        let skippedCount: Int
-        let totalCount: Int
-        let overdueCount: Int
-        let remainingCount: Int
-        let actionableSchedules: [MedSchedule]
-        let currentAction: MedSchedule?
-        let nextUpcoming: MedSchedule?
-        let prnMeds: [Medication]
-    }
 
     private struct FollowUpReportRoute: Identifiable {
         enum Kind: String {
@@ -191,6 +45,67 @@ struct DashboardView: View {
 
         var id: String {
             "\(kind.rawValue).\(visitID?.uuidString ?? "current")"
+        }
+    }
+
+    /// A single attention-worthy item on Home. Only the highest-priority alert is
+    /// shown as a full card; the rest collapse into one quiet "more to review" row
+    /// so the user is never asked to act on several things at once.
+    private enum HomeAlert: Identifiable {
+        case dose(MedSchedule)
+        case agent(FollowUpAgentNextAction)
+        case safety(MedicationRules.DailySafetySummary)
+        case reminderRepair
+        case inactivity(Int)
+
+        var id: String {
+            switch self {
+            case .dose(let item): return "dose.\(item.id)"
+            case .agent(let action): return "agent.\(action.id)"
+            case .safety: return "safety"
+            case .reminderRepair: return "reminderRepair"
+            case .inactivity: return "inactivity"
+            }
+        }
+
+        /// Higher wins the single primary slot. Safety gaps and urgent follow-up
+        /// actions outrank a routine due dose; gentle nudges sit at the bottom.
+        var priority: Int {
+            switch self {
+            case .safety: return 100
+            case .agent(let action):
+                switch action.severity {
+                case .urgent: return 95
+                case .caution: return 60
+                case .information: return 40
+                }
+            case .dose: return 90
+            case .reminderRepair: return 70
+            case .inactivity: return 30
+            }
+        }
+
+        var summaryTitle: String {
+            switch self {
+            case .dose: return NSLocalizedString("Medication due now", comment: "Home alert summary")
+            case .agent(let action): return action.title
+            case .safety(let summary):
+                return summary.missEscalations.isEmpty
+                    ? NSLocalizedString("Schedule overlap", comment: "Home alert summary")
+                    : NSLocalizedString("Medication record gap", comment: "Home alert summary")
+            case .reminderRepair: return NSLocalizedString("Reminder setup needs attention", comment: "Home alert summary")
+            case .inactivity: return NSLocalizedString("No recent activity", comment: "Home alert summary")
+            }
+        }
+
+        var summaryIcon: String {
+            switch self {
+            case .dose: return "pills.fill"
+            case .agent(let action): return action.systemImage
+            case .safety: return "exclamationmark.triangle"
+            case .reminderRepair: return "bell.badge"
+            case .inactivity: return "exclamationmark.triangle"
+            }
         }
     }
 
@@ -261,45 +176,56 @@ struct DashboardView: View {
                     case .quietAccumulation:
                         dailyStatusHero(state: state)
                     case .lightPrep(let visit, let days):
-                        lightPrepHero(visit: visit, daysUntil: days, state: state)
+                        visitPrepHero(visit: visit, daysUntil: days)
                         visitDataReadinessCard(visit: visit)
                     case .activePrep(let visit, let days):
-                        lightPrepHero(visit: visit, daysUntil: days, state: state)
+                        visitPrepHero(visit: visit, daysUntil: days)
                         visitDataReadinessCard(visit: visit)
                     case .visitDay(let visit):
-                        visitDayBoardingPass(visit: visit)
+                        VisitDayBoardingPass(
+                            visit: visit,
+                            onOpenReport: { openPrimaryVisitReport(visitID: visit.id) },
+                            onEditVisit: { editingDoctorVisit = visit },
+                            onMarkDoneAndCapture: { markVisitDoneAndOpenCapture(visit) }
+                        )
                     case .postVisitCapture(let visit):
-                        postVisitCaptureCard(visit: visit)
+                        PostVisitCaptureCard(
+                            visit: visit,
+                            onContinueCapture: { capturingDoctorVisit = visit },
+                            onUpdateMedications: {
+                                if let onOpenMedications {
+                                    onOpenMedications()
+                                } else {
+                                    showAddMedication = true
+                                }
+                            }
+                        )
                     }
 
-                    if !placesMedicationAtBottom,
-                       shouldShowSeparateDoseAction(for: mode),
-                       let currentAction {
-                        currentDoseActionCard(item: currentAction, mode: mode)
-                    }
+                    let alerts = homeAlerts(
+                        state: state,
+                        mode: mode,
+                        agentNextAction: agentNextAction,
+                        currentAction: currentAction,
+                        placesMedicationAtBottom: placesMedicationAtBottom
+                    )
 
-                    if let agentNextAction {
-                        agentNextActionCard(agentNextAction)
-                    }
+                    if let primary = alerts.first {
+                        homeAlertCard(primary, state: state, mode: mode)
 
-                    let safety = safetySummary
-                    if safety.hasIssues {
-                        safetyNoticeCard(summary: safety, state: state)
-                    }
-
-                    if shouldShowReminderRepairCard(for: mode) {
-                        reminderRepairCard()
-                    }
-
-                    if shouldShowInactivityWarning(for: mode),
-                       let gap = daysSinceLastLog,
-                       gap >= 2,
-                       !store.medications.isEmpty {
-                        inactivityWarningCard(daysSince: gap)
+                        let secondary = Array(alerts.dropFirst())
+                        if !secondary.isEmpty {
+                            secondaryAlertsDisclosure(secondary, state: state, mode: mode)
+                        }
                     }
 
                     if placesMedicationAtBottom, let currentAction {
-                        currentDoseActionCard(item: currentAction, mode: mode)
+                        CurrentDoseActionCard(
+                            medicationName: currentAction.med.name,
+                            doseTimeText: doseTimeText(dose: currentAction.med.dose, time: currentAction.time),
+                            onTake: { beginTakeFlow(for: currentAction) },
+                            onSkip: { skipDose(for: currentAction) }
+                        )
                     }
 
                     routineMedicationContent(state: state, mode: mode)
@@ -685,11 +611,20 @@ private extension DashboardView {
 
             editorialDivider()
 
-            dailyMeasurementInlineSection()
+            MeasurementInlineSection(
+                bloodPressureStatus: todayMeasurementStatus(for: .bloodPressure),
+                bloodGlucoseStatus: todayMeasurementStatus(for: .bloodGlucose),
+                onLog: { onLogMeasurement?($0) }
+            )
 
             editorialDivider()
 
-            dailyFeelingCheckIn()
+            FeelingCheckIn(
+                symptomLoggedToday: todaySymptomCount > 0,
+                confirmation: quickFeelingConfirmation,
+                onAddDetail: { showSymptomLog = true },
+                onSelectFeeling: { handleQuickFeeling($0) }
+            )
         }
     }
 
@@ -724,35 +659,161 @@ private extension DashboardView {
         }
     }
 
-    private func currentDoseActionCard(item: MedSchedule, mode: HomeMode) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: EditorialSpacing.md) {
-                Label(NSLocalizedString("Medication due now", comment: "Current medication action title"), systemImage: "pills.fill")
-                    .appFont(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(EditorialPalette.textPrimary)
+    /// Collects every active attention item and ranks it. The mode hero and the
+    /// bottom-placed dose card (visit-prep layouts) are intentionally excluded —
+    /// they have their own deliberate placement.
+    private func homeAlerts(
+        state: TodayState,
+        mode: HomeMode,
+        agentNextAction: FollowUpAgentNextAction?,
+        currentAction: MedSchedule?,
+        placesMedicationAtBottom: Bool
+    ) -> [HomeAlert] {
+        var items: [HomeAlert] = []
 
-                VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
-                    Text(item.med.name)
-                        .appFont(.headline)
-                        .foregroundStyle(EditorialPalette.textPrimary)
-                    Text(doseTimeText(dose: item.med.dose, time: item.time))
-                        .appFont(.caption)
-                        .foregroundStyle(EditorialPalette.textSecondary)
+        if !placesMedicationAtBottom,
+           shouldShowSeparateDoseAction(for: mode),
+           let currentAction {
+            items.append(.dose(currentAction))
+        }
+
+        if let agentNextAction {
+            items.append(.agent(agentNextAction))
+        }
+
+        let safety = safetySummary
+        if safety.hasIssues {
+            items.append(.safety(safety))
+        }
+
+        if shouldShowReminderRepairCard(for: mode) {
+            items.append(.reminderRepair)
+        }
+
+        if shouldShowInactivityWarning(for: mode),
+           let gap = daysSinceLastLog,
+           gap >= 2,
+           !store.medications.isEmpty {
+            items.append(.inactivity(gap))
+        }
+
+        return items.sorted { $0.priority > $1.priority }
+    }
+
+    @ViewBuilder
+    private func homeAlertCard(_ alert: HomeAlert, state: TodayState, mode: HomeMode) -> some View {
+        switch alert {
+        case .dose(let item):
+            CurrentDoseActionCard(
+                medicationName: item.med.name,
+                doseTimeText: doseTimeText(dose: item.med.dose, time: item.time),
+                onTake: { beginTakeFlow(for: item) },
+                onSkip: { skipDose(for: item) }
+            )
+        case .agent(let action):
+            agentNextActionCard(action)
+        case .safety(let summary):
+            SafetyNoticeCard(
+                summary: summary,
+                state: state,
+                onTakeDose: { beginTakeFlow(for: $0) },
+                onShowTodaysDoses: {
+                    withAnimation(.easeInOut(duration: 0.2)) { showFullTodaySchedule = true }
+                },
+                onUpdatePlan: { medID in
+                    if let medication = store.medications.first(where: { $0.id == medID }) {
+                        reminderFixTarget = medication
+                    } else if let onOpenMedications {
+                        onOpenMedications()
+                    } else {
+                        showAddMedication = true
+                    }
                 }
+            )
+        case .reminderRepair:
+            ReminderRepairCard(
+                notificationStatus: notificationStatus,
+                untimedScheduledMeds: untimedScheduledMeds,
+                disabledReminderMeds: disabledReminderMeds,
+                onRepair: handleReminderRepair
+            )
+        case .inactivity(let gap):
+            InactivityWarningCard(
+                daysSince: gap,
+                onShowTodaysDoses: {
+                    withAnimation(.easeInOut(duration: 0.2)) { showFullTodaySchedule = true }
+                },
+                onUpdatePlan: {
+                    if let onOpenMedications {
+                        onOpenMedications()
+                    } else {
+                        showAddMedication = true
+                    }
+                }
+            )
+        }
+    }
 
-                HStack(spacing: EditorialSpacing.sm) {
-                    EditorialButton(NSLocalizedString("Take", comment: ""), kind: .primary) {
-                        beginTakeFlow(for: item)
+    /// One quiet, collapsed row standing in for every lower-priority alert. Tapping
+    /// it reveals the full cards — so secondary concerns stay reachable without
+    /// competing with the single primary action above.
+    @ViewBuilder
+    private func secondaryAlertsDisclosure(_ alerts: [HomeAlert], state: TodayState, mode: HomeMode) -> some View {
+        VStack(alignment: .leading, spacing: EditorialSpacing.md) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showSecondaryAlerts.toggle()
+                }
+                Haptics.impact(.light)
+            } label: {
+                HStack(spacing: EditorialSpacing.md) {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 17, weight: .regular))
+                        .foregroundStyle(AppColor.textSecondary)
+                        .frame(width: 24, height: 24)
+
+                    VStack(alignment: .leading, spacing: EditorialSpacing.xxs) {
+                        Text(String(format: NSLocalizedString("%lld more to review", comment: "Home secondary alerts disclosure"), alerts.count))
+                            .appFont(.headline)
+                            .foregroundStyle(AppColor.textPrimary)
+
+                        if !showSecondaryAlerts {
+                            Text(alerts.map { $0.summaryTitle }.joined(separator: " · "))
+                                .appFont(.caption)
+                                .foregroundStyle(AppColor.textSecondary)
+                                .lineLimit(1)
+                        }
                     }
 
-                    EditorialButton(NSLocalizedString("Skip", comment: ""), kind: .secondary) {
-                        skipDose(for: item)
-                    }
+                    Spacer(minLength: EditorialSpacing.sm)
+
+                    Image(systemName: showSecondaryAlerts ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppColor.textSecondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(EditorialSpacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(EditorialPalette.surface)
+                    .shadow(color: .black.opacity(0.04), radius: 10, x: 0, y: 4)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(EditorialPalette.divider.opacity(0.65), lineWidth: 0.8)
+            )
+
+            if showSecondaryAlerts {
+                ForEach(alerts) { alert in
+                    homeAlertCard(alert, state: state, mode: mode)
                 }
             }
         }
     }
+
 
     private func agentNextActionCard(_ action: FollowUpAgentNextAction) -> some View {
         let tint = agentActionTint(action)
@@ -852,147 +913,8 @@ private extension DashboardView {
         }
     }
 
-    private func dailyMeasurementInlineSection() -> some View {
-        VStack(spacing: EditorialSpacing.sm) {
-            measurementPromptRow(
-                title: NSLocalizedString("Blood pressure", comment: "Measurement quick prompt"),
-                value: todayMeasurementStatus(for: .bloodPressure),
-                type: .bloodPressure
-            )
-            measurementPromptRow(
-                title: NSLocalizedString("Blood glucose", comment: "Measurement quick prompt"),
-                value: todayMeasurementStatus(for: .bloodGlucose),
-                type: .bloodGlucose
-            )
-        }
-    }
-
-    private func measurementPromptRow(title: String, value: String, type: MeasurementType) -> some View {
-        Button {
-            Haptics.impact(.light)
-            onLogMeasurement?(type)
-        } label: {
-            HStack {
-                Text(title)
-                    .appFont(.body)
-                    .foregroundStyle(EditorialPalette.textPrimary)
-                Spacer()
-                Text(value)
-                    .appFont(.caption)
-                    .foregroundStyle(EditorialPalette.textSecondary)
-                Image(systemName: "plus")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(EditorialPalette.primary)
-                    .frame(width: 32, height: 32)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(EditorialPalette.divider, lineWidth: 1)
-                    )
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
     private func editorialDivider() -> some View {
         AppDivider()
-    }
-
-    private func dailyFeelingCheckIn() -> some View {
-        VStack(alignment: .leading, spacing: EditorialSpacing.md) {
-            HStack {
-                Text(NSLocalizedString("Body check-in", comment: "Quick daily feeling header"))
-                    .appFont(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(EditorialPalette.textPrimary)
-
-                Spacer()
-
-                HStack(spacing: EditorialSpacing.sm) {
-                    if todaySymptomCount > 0 {
-                        Text(NSLocalizedString("Logged today", comment: "Quick feeling logged status"))
-                            .appFont(.caption)
-                            .foregroundStyle(EditorialPalette.textSecondary)
-                    }
-
-                    Button {
-                        Haptics.impact(.light)
-                        showSymptomLog = true
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(EditorialPalette.primary)
-                            .frame(width: 34, height: 34)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .stroke(EditorialPalette.divider, lineWidth: 1)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(NSLocalizedString("Add symptom detail", comment: "Body check-in detail action"))
-                }
-            }
-
-            HStack(spacing: EditorialSpacing.sm) {
-                ForEach(QuickFeeling.allCases) { feeling in
-                    quickFeelingButton(feeling)
-                }
-            }
-
-            if let quickFeelingConfirmation {
-                Text(quickFeelingConfirmation)
-                    .appFont(.caption)
-                    .foregroundStyle(EditorialPalette.textSecondary)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        }
-    }
-
-    private func quickFeelingButton(_ feeling: QuickFeeling) -> some View {
-        Button {
-            Haptics.impact(.light)
-            handleQuickFeeling(feeling)
-        } label: {
-            HStack(spacing: EditorialSpacing.sm) {
-                Image(systemName: feeling.iconName)
-                    .font(.system(size: 16, weight: .regular))
-                    .foregroundStyle(feeling.tint)
-                Text(feeling.title)
-                    .appFont(.body)
-                    .fontWeight(.medium)
-                    .lineLimit(1)
-            }
-            .foregroundStyle(EditorialPalette.textPrimary)
-            .frame(maxWidth: .infinity, minHeight: 46, alignment: .center)
-            .padding(.horizontal, EditorialSpacing.sm)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(EditorialPalette.divider, lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(feeling.title)
-    }
-
-    private func dailyMetricPill(value: String, label: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value)
-                .appFont(.headline)
-                .fontWeight(.bold)
-                .foregroundStyle(EditorialPalette.textPrimary)
-                .monospacedDigit()
-            Text(label)
-                .appFont(.caption)
-                .foregroundStyle(EditorialPalette.textSecondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, EditorialSpacing.sm)
-    }
-
-    private var todayMeasurementCount: Int {
-        store.measurements.filter { Calendar.current.isDateInToday($0.date) }.count
     }
 
     private func todayMeasurementStatus(for type: MeasurementType) -> String {
@@ -1110,214 +1032,12 @@ private extension DashboardView {
         return EditorialPalette.primary
     }
 
-    private func lightPrepHero(visit: DoctorVisit, daysUntil: Int, state: TodayState) -> some View {
-        VStack(alignment: .leading, spacing: EditorialSpacing.lg) {
-            editorialDivider()
-
-            VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
-                Text(NSLocalizedString("Preparing for your visit", comment: "Visit prep editorial title"))
-                    .appFont(.micro)
-                    .textCase(.uppercase)
-                    .tracking(0.7)
-                    .foregroundStyle(AppColor.textSecondary)
-
-                Text(String(format: NSLocalizedString("%lld days", comment: "Visit countdown hero number"), daysUntil))
-                    .appFontNumeric(.heroNumber)
-                    .foregroundStyle(AppColor.primary)
-
-                Text(visitSupportingLine(visit))
-                    .appFont(.caption)
-                    .foregroundStyle(AppColor.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Button {
-                openPrimaryVisitReport(visitID: visit.id)
-            } label: {
-                HStack {
-                    Text(NSLocalizedString("Open visit report", comment: "Visit prep summary action"))
-                        .appFont(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundStyle(AppColor.textPrimary)
-                    Spacer()
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundStyle(AppColor.primary)
-                }
-                .padding(EditorialSpacing.md)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(AppColor.surface)
-                        .shadow(color: .black.opacity(0.04), radius: 10, x: 0, y: 4)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(AppColor.divider.opacity(0.65), lineWidth: 0.8)
-                )
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    private func visitDayBoardingPass(visit: DoctorVisit) -> some View {
-        return VStack(alignment: .leading, spacing: EditorialSpacing.lg) {
-            VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
-                Text(NSLocalizedString("Today is your appointment", comment: "Visit day hero title"))
-                    .appFont(.displayTitle)
-                    .fontWeight(.bold)
-                    .foregroundStyle(EditorialPalette.textPrimary)
-                Text(visit.scheduledDate.formatted(date: .omitted, time: .shortened))
-                    .appFontNumeric(.heroNumber)
-                    .foregroundStyle(AppColor.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.78)
-            }
-
-            AppDivider()
-
-            visitDayPlaceSummary(visit)
-
-            Button {
-                openPrimaryVisitReport(visitID: visit.id)
-            } label: {
-                Label(NSLocalizedString("Show Visit Report", comment: "Visit day primary action"), systemImage: "doc.text.magnifyingglass")
-                    .fontWeight(.semibold)
-                    .frame(maxWidth: .infinity, minHeight: 52)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(EditorialPalette.primary)
-
-            VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
-                Text(NSLocalizedString("Before you leave", comment: "Visit day checklist title"))
-                    .appFont(.micro)
-                    .textCase(.uppercase)
-                    .tracking(0.7)
-                    .foregroundStyle(AppColor.textSecondary)
-
-                ForEach(Array(visitDayChecklistItems(for: visit).enumerated()), id: \.element.id) { index, item in
-                    visitDayChecklistRow(visit: visit, item: item)
-                    if index < visitDayChecklistItems(for: visit).count - 1 {
-                        AppDivider()
-                    }
-                }
-            }
-
-            AppDivider()
-
-            VStack(spacing: EditorialSpacing.sm) {
-                Button {
-                    markVisitDoneAndOpenCapture(visit)
-                } label: {
-                    Label(NSLocalizedString("After the visit, record doctor's plan", comment: "Visit day post appointment action"), systemImage: "square.and.pencil")
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity, minHeight: 46)
-                }
-                .buttonStyle(.bordered)
-                .tint(EditorialPalette.primary)
-            }
-        }
-        .padding(.vertical, EditorialSpacing.sm)
-    }
-
-    @ViewBuilder
-    private func visitDayPlaceSummary(_ visit: DoctorVisit) -> some View {
-        let place = [visit.hospital, visit.department, visit.doctorName]
-            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: ", ")
-
-        if place.isEmpty {
-            Button {
-                editingDoctorVisit = visit
-            } label: {
-                Label(NSLocalizedString("Add clinic details", comment: "Visit day missing appointment details"), systemImage: "square.and.pencil")
-                    .appFont(.body)
-                    .foregroundStyle(AppColor.primary)
-            }
-            .buttonStyle(.plain)
-        } else {
-            Label(place, systemImage: "building.2")
-                .appFont(.body)
-                .fontWeight(.semibold)
-                .foregroundStyle(AppColor.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private struct VisitDayChecklistItem {
-        let id: String
-        let title: String
-        let detail: String
-        let systemImage: String
-    }
-
-    private func visitDayChecklistItems(for visit: DoctorVisit) -> [VisitDayChecklistItem] {
-        [
-            VisitDayChecklistItem(
-                id: "cards",
-                title: NSLocalizedString("ID and insurance card", comment: "Visit day checklist item"),
-                detail: "",
-                systemImage: "person.text.rectangle"
-            ),
-            VisitDayChecklistItem(
-                id: "meds",
-                title: NSLocalizedString("Medication list", comment: "Visit day checklist item"),
-                detail: "",
-                systemImage: "pills"
-            ),
-            VisitDayChecklistItem(
-                id: "readings",
-                title: NSLocalizedString("Home readings", comment: "Visit day checklist item"),
-                detail: "",
-                systemImage: "waveform.path.ecg"
-            )
-        ]
-    }
-
-    private func visitDayChecklistRow(visit: DoctorVisit, item: VisitDayChecklistItem) -> some View {
-        let _ = visitDayChecklistRevision
-        let isDone = visitDayChecklistDone(visitID: visit.id, itemID: item.id)
-
-        return Button {
-            setVisitDayChecklistDone(!isDone, visitID: visit.id, itemID: item.id)
-        } label: {
-            HStack(alignment: .top, spacing: EditorialSpacing.sm) {
-                Image(systemName: isDone ? "checkmark" : item.systemImage)
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundStyle(isDone ? AppColor.success : AppColor.primary)
-                    .frame(width: 22, alignment: .center)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.title)
-                        .appFont(.body)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(AppColor.textPrimary)
-                    if !item.detail.isEmpty {
-                        Text(item.detail)
-                            .appFont(.caption)
-                            .foregroundStyle(AppColor.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                Spacer(minLength: EditorialSpacing.sm)
-            }
-            .padding(.vertical, EditorialSpacing.xs)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func visitDayChecklistDone(visitID: UUID, itemID: String) -> Bool {
-        UserDefaults.standard.bool(forKey: visitDayChecklistKey(visitID: visitID, itemID: itemID))
-    }
-
-    private func setVisitDayChecklistDone(_ done: Bool, visitID: UUID, itemID: String) {
-        UserDefaults.standard.set(done, forKey: visitDayChecklistKey(visitID: visitID, itemID: itemID))
-        visitDayChecklistRevision += 1
-    }
-
-    private func visitDayChecklistKey(visitID: UUID, itemID: String) -> String {
-        "visitDayChecklist.\(visitID.uuidString).\(itemID)"
+    private func visitPrepHero(visit: DoctorVisit, daysUntil: Int) -> some View {
+        VisitPrepHero(
+            daysUntil: daysUntil,
+            supportingLine: visitSupportingLine(visit),
+            onOpenReport: { openPrimaryVisitReport(visitID: visit.id) }
+        )
     }
 
     private func markVisitDoneAndOpenCapture(_ visit: DoctorVisit) {
@@ -1327,68 +1047,6 @@ private extension DashboardView {
         } else {
             capturingDoctorVisit = visit
         }
-    }
-
-    private func postVisitCaptureCard(visit: DoctorVisit) -> some View {
-        VStack(alignment: .leading, spacing: EditorialSpacing.lg) {
-            VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
-                Text(NSLocalizedString("Record today's visit", comment: "Post visit capture title"))
-                    .appFont(.displayTitle)
-                    .fontWeight(.bold)
-                    .foregroundStyle(EditorialPalette.textPrimary)
-            }
-
-            AppDivider()
-
-            postVisitCaptureSummary(visit)
-
-            VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
-                Button {
-                    capturingDoctorVisit = visit
-                } label: {
-                    Label(NSLocalizedString("Continue visit record", comment: "Post visit capture action"), systemImage: "square.and.pencil")
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity, minHeight: 52)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(EditorialPalette.primary)
-
-                if visit.hasMedicationPlan {
-                    Button {
-                        if let onOpenMedications {
-                            onOpenMedications()
-                        } else {
-                            showAddMedication = true
-                        }
-                    } label: {
-                        Label(NSLocalizedString("Update Medication List", comment: "Post visit medication action"), systemImage: "pills.fill")
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity, minHeight: 48)
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(EditorialPalette.primary)
-                }
-            }
-        }
-        .padding(.vertical, EditorialSpacing.sm)
-    }
-
-    private func postVisitCaptureSummary(_ visit: DoctorVisit) -> some View {
-        let missingItems = visit.postVisitMissingItems
-        let text = missingItems.isEmpty
-            ? NSLocalizedString("Post-visit plan saved.", comment: "Post visit capture complete state")
-            : String(format: NSLocalizedString("Still needs: %@", comment: "Post visit capture missing summary"), missingItems.joined(separator: ", "))
-
-        return Label {
-            Text(text)
-                .appFont(.body)
-                .foregroundStyle(AppColor.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-        } icon: {
-            Image(systemName: missingItems.isEmpty ? "checkmark.circle.fill" : "checklist")
-                .foregroundStyle(missingItems.isEmpty ? AppColor.success : AppColor.warning)
-        }
-        .padding(.vertical, EditorialSpacing.xs)
     }
 
     private func visitDataReadinessCard(visit: DoctorVisit) -> some View {
@@ -1621,53 +1279,6 @@ private extension DashboardView {
         }
 
         return .hypertension
-    }
-
-    private func inactivityWarningCard(daysSince: Int) -> some View {
-        TintedCard(tint: AppColor.warning) {
-            VStack(alignment: .leading, spacing: EditorialSpacing.sm) {
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.system(size: 18, weight: .regular))
-                        .foregroundStyle(AppColor.warning)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(NSLocalizedString("No recent activity", comment: ""))
-                            .appFont(.headline)
-                        Text(String(format: NSLocalizedString("No scheduled dose has been recorded in the last %lld days. If the medication plan changed, update the medication list.", comment: "Dashboard medication inactivity warning"), daysSince))
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 4)
-                }
-
-                HStack(spacing: EditorialSpacing.sm) {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showFullTodaySchedule = true
-                        }
-                    } label: {
-                        Text(NSLocalizedString("Show today's doses", comment: "Medication inactivity action"))
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-
-                    Button {
-                        if let onOpenMedications {
-                            onOpenMedications()
-                        } else {
-                            showAddMedication = true
-                        }
-                    } label: {
-                        Text(NSLocalizedString("Update medication plan", comment: "Medication inactivity action"))
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-            }
-        }
     }
 
     @ViewBuilder
@@ -2093,58 +1704,6 @@ private extension DashboardView {
     }
 
 
-    private func reminderRepairCard() -> some View {
-        let issueText: String = {
-            if notificationStatus == .denied {
-                return NSLocalizedString("System notifications are blocked. Scheduled medication reminders cannot fire.", comment: "")
-            }
-            if let first = untimedScheduledMeds.first {
-                return String(format: NSLocalizedString("%@ needs a reminder time before it can notify you.", comment: ""), first.name)
-            }
-            if disabledReminderMeds.count == 1, let first = disabledReminderMeds.first {
-                return String(format: NSLocalizedString("%@ has reminder times, but reminders are turned off.", comment: ""), first.name)
-            }
-            return String(format: NSLocalizedString("%lld medications have reminders turned off.", comment: ""), disabledReminderMeds.count)
-        }()
-
-        let actionTitle: String = {
-            if notificationStatus == .denied {
-                return NSLocalizedString("Open Settings", comment: "")
-            }
-            if !untimedScheduledMeds.isEmpty {
-                return NSLocalizedString("Set Time", comment: "")
-            }
-            return NSLocalizedString("Turn On", comment: "")
-        }()
-
-        return TintedCard(tint: AppColor.warning) {
-            HStack(alignment: .center, spacing: 12) {
-                Image(systemName: "bell.badge")
-                    .font(.system(size: 18, weight: .regular))
-                    .foregroundStyle(AppColor.warning)
-                    .frame(width: 24, height: 24)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(NSLocalizedString("Reminder Setup Needs Attention", comment: ""))
-                        .appFont(.headline)
-                    Text(issueText)
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 8)
-
-                Button(actionTitle) {
-                    handleReminderRepair()
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(AppColor.warning)
-                .controlSize(.small)
-            }
-        }
-    }
-
     private func latestTodayLogMap(now: Date = Date()) -> [ScheduleLookupKey: IntakeLog] {
         let cal = Calendar.current
         let start = cal.startOfDay(for: now)
@@ -2437,117 +1996,6 @@ private extension DashboardView {
             intakeLogs: store.intakeLogs,
             consecutiveMissedDaysProvider: { store.consecutiveMissedDays(for: $0) }
         )
-    }
-
-    @ViewBuilder
-    private func safetyNoticeCard(summary: MedicationRules.DailySafetySummary, state: TodayState) -> some View {
-        let tint: Color = AppColor.warning
-        let title = summary.missEscalations.isEmpty
-            ? NSLocalizedString("Schedule overlap", comment: "")
-            : NSLocalizedString("Medication record gap", comment: "Medication safety card title")
-
-        TintedCard(tint: tint) {
-            VStack(alignment: .leading, spacing: EditorialSpacing.md) {
-                if let primary = summary.missEscalations.first {
-                    medicationRecordGapHeader(primary, extraCount: summary.missEscalations.count - 1, tint: tint)
-                    medicationRecordGapActions(for: primary, state: state)
-                } else {
-                    safetyNoticeHeader(title: title, detail: summary.timingConflicts.first ?? "", tint: tint)
-                }
-            }
-        }
-    }
-
-    private func medicationRecordGapHeader(
-        _ escalation: MedicationRules.DailySafetySummary.MissEscalation,
-        extraCount: Int,
-        tint: Color
-    ) -> some View {
-        let detail = extraCount > 0
-            ? "\(escalation.message) \(String(format: NSLocalizedString("%lld more medications need review.", comment: "Medication safety extra count"), Int64(extraCount)))"
-            : escalation.message
-
-        return safetyNoticeHeader(
-            title: NSLocalizedString("Medication record gap", comment: "Medication safety card title"),
-            detail: detail,
-            tint: tint
-        )
-    }
-
-    private func safetyNoticeHeader(title: String, detail: String, tint: Color) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 17, weight: .regular))
-                .foregroundStyle(tint)
-                .frame(width: 22, height: 22)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .appFont(.headline)
-                    .foregroundStyle(AppColor.textPrimary)
-                if !detail.isEmpty {
-                    Text(detail)
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-    }
-
-    @ViewBuilder
-    private func medicationRecordGapActions(
-        for escalation: MedicationRules.DailySafetySummary.MissEscalation,
-        state: TodayState
-    ) -> some View {
-        HStack(spacing: EditorialSpacing.sm) {
-            if let dose = attentionSchedule(for: escalation, state: state) {
-                Button {
-                    beginTakeFlow(for: dose)
-                } label: {
-                    Text(NSLocalizedString("I took today's dose", comment: "Medication safety action"))
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .tint(AppColor.primary)
-            } else {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showFullTodaySchedule = true
-                    }
-                } label: {
-                    Text(NSLocalizedString("Show today's doses", comment: "Medication safety action"))
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .tint(AppColor.primary)
-            }
-
-            Button {
-                if let medication = store.medications.first(where: { $0.id == escalation.medicationID }) {
-                    reminderFixTarget = medication
-                } else if let onOpenMedications {
-                    onOpenMedications()
-                } else {
-                    showAddMedication = true
-                }
-            } label: {
-                Text(NSLocalizedString("Update plan", comment: "Medication safety compact action"))
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-        }
-    }
-
-    private func attentionSchedule(
-        for escalation: MedicationRules.DailySafetySummary.MissEscalation,
-        state: TodayState
-    ) -> MedSchedule? {
-        state.actionableSchedules.first { $0.med.id == escalation.medicationID }
     }
 
     private func timeUntilText(_ target: Date) -> String {
