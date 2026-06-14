@@ -14,11 +14,7 @@ struct DashboardView: View {
     @State private var showAddMedication = false
     @State private var reminderFixTarget: Medication? = nil
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
-    @State private var showTakenConfirmation = false
-    @State private var takenMedName: String = ""
-    @State private var pendingNoteItem: MedSchedule?
-    @State private var showDuplicateAlert = false
-    @State private var duplicateAlertMinutes: Int = 0
+    @State private var undoToken: DataStore.IntakeUndoToken?
     @AppStorage("units.glucose") private var glucoseUnitRaw: String = GlucoseUnit.mgdL.rawValue
     @AppStorage("prefs.graceMinutes") private var graceMinutes: Int = 30
     @State private var tick = false
@@ -302,22 +298,17 @@ struct DashboardView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             .onReceive(refreshTimer) { _ in tick.toggle() }
-            // Rule 1: Duplicate taken confirmation
-            .alert(NSLocalizedString("Already Taken", comment: ""), isPresented: $showDuplicateAlert) {
-                Button(NSLocalizedString("Take Again", comment: ""), role: .destructive) {
-                    commitTaken(note: nil)
-                }
-                Button(NSLocalizedString("Cancel", comment: ""), role: .cancel) {
-                    pendingNoteItem = nil
-                }
-            } message: {
-                Text(String(format: NSLocalizedString("You took this %lld minutes ago. Are you sure you want to log another dose?", comment: ""), duplicateAlertMinutes))
-            }
-            .overlay {
-                if showTakenConfirmation {
-                    TakenConfirmationOverlay(medicationName: takenMedName)
-                        .transition(.opacity)
-                        .zIndex(100)
+            .overlay(alignment: .bottom) {
+                if let undoToken {
+                    UndoSnackbar(
+                        medicationName: undoToken.medicationName,
+                        wasDuplicate: undoToken.wasDuplicate,
+                        onUndo: { performUndo() }
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(100)
                 }
             }
             .onAppear {
@@ -358,31 +349,53 @@ struct DashboardView: View {
     }
 }
 
-// MARK: - Taken Confirmation Overlay
-private struct TakenConfirmationOverlay: View {
+// MARK: - Undo Snackbar
+/// Non-blocking confirmation that a dose was logged, with a brief window to undo.
+/// Replaces the interrupting "Already Taken / Take Again?" alert on the core path.
+private struct UndoSnackbar: View {
     let medicationName: String
+    let wasDuplicate: Bool
+    var onUndo: () -> Void
+
+    private var message: String {
+        wasDuplicate
+            ? String(format: NSLocalizedString("%@ logged again", comment: "Undo snackbar duplicate dose"), medicationName)
+            : String(format: NSLocalizedString("%@ logged", comment: "Undo snackbar dose logged"), medicationName)
+    }
+
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "checkmark")
-                .font(.system(size: 72, weight: .bold))
+        HStack(spacing: EditorialSpacing.md) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 18, weight: .regular))
                 .foregroundStyle(AppColor.success)
-                .symbolRenderingMode(.hierarchical)
-            Text(medicationName)
-                .appFont(.headline)
-                .foregroundStyle(.primary)
-            Text(NSLocalizedString("Taken!", comment: ""))
-                .appFont(.title)
-                .fontWeight(.bold)
-                .foregroundStyle(AppColor.success)
+
+            Text(message)
+                .appFont(.body)
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+
+            Spacer(minLength: EditorialSpacing.sm)
+
+            Button {
+                onUndo()
+            } label: {
+                Text(NSLocalizedString("Undo", comment: "Undo a just-logged dose"))
+                    .appFont(.body)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(NSLocalizedString("Reverses logging this dose", comment: "Undo accessibility hint"))
         }
-        .padding(40)
+        .padding(.horizontal, EditorialSpacing.lg)
+        .padding(.vertical, EditorialSpacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(.ultraThickMaterial)
-                .shadow(color: .black.opacity(0.15), radius: 20, y: 10)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(red: 0.16, green: 0.17, blue: 0.20))
+                .shadow(color: .black.opacity(0.18), radius: 16, y: 6)
         )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black.opacity(0.25).ignoresSafeArea())
     }
 }
 
@@ -1804,20 +1817,36 @@ private extension DashboardView {
 
     private func beginTakeFlow(for item: MedSchedule) {
         let comps = Calendar.current.dateComponents([.hour, .minute], from: item.time)
-        let dupCheck = MedicationRules.checkDuplicateTaken(
+        guard let token = store.recordTakenDoseUndoable(
             medicationID: item.med.id,
             scheduleTime: comps,
-            intakeLogs: store.intakeLogs
-        )
-        if case .blocked(let mins) = dupCheck {
-            pendingNoteItem = item
-            duplicateAlertMinutes = mins
-            showDuplicateAlert = true
-            Haptics.notification(.warning)
-        } else {
-            pendingNoteItem = item
-            commitTaken(note: nil)
+            scheduledDate: item.time
+        ) else { return }
+        NotificationManager.shared.suppressToday(for: item.med.id, timeComponents: comps)
+        NotificationManager.shared.cancelDoseNotifications(for: item.med.id, timeComponents: comps, scheduledDate: item.time, now: item.time)
+        store.syncNotifications()
+        Haptics.success()
+        presentUndo(token)
+    }
+
+    /// Shows the Undo snackbar and schedules its auto-dismiss. The generation
+    /// check keeps a later dose's snackbar from being cleared by an earlier timer.
+    private func presentUndo(_ token: DataStore.IntakeUndoToken) {
+        withAnimation(.easeInOut(duration: 0.25)) { undoToken = token }
+        let shownID = token.id
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            if undoToken?.id == shownID {
+                withAnimation(.easeInOut(duration: 0.3)) { undoToken = nil }
+            }
         }
+    }
+
+    private func performUndo() {
+        guard let token = undoToken else { return }
+        store.revertIntake(token)
+        store.syncNotifications()
+        Haptics.impact(.light)
+        withAnimation(.easeInOut(duration: 0.25)) { undoToken = nil }
     }
 
     private func prnMedRow(med: Medication) -> some View {
@@ -1879,27 +1908,6 @@ private extension DashboardView {
     }
 
 
-
-    private func commitTaken(note: String?) {
-        guard let item = pendingNoteItem else { return }
-        let comps = Calendar.current.dateComponents([.hour, .minute], from: item.time)
-        store.recordTakenDose(
-            medicationID: item.med.id,
-            scheduleTime: comps,
-            scheduledDate: item.time,
-            note: note
-        )
-        NotificationManager.shared.suppressToday(for: item.med.id, timeComponents: comps)
-        NotificationManager.shared.cancelDoseNotifications(for: item.med.id, timeComponents: comps, scheduledDate: item.time, now: item.time)
-        store.syncNotifications()
-        Haptics.success()
-        takenMedName = item.med.name
-        withAnimation(.easeInOut(duration: 0.25)) { showTakenConfirmation = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.3) {
-            withAnimation(.easeInOut(duration: 0.3)) { showTakenConfirmation = false }
-        }
-        pendingNoteItem = nil
-    }
 
     private func handleReminderRepair() {
         if notificationStatus == .denied {

@@ -464,6 +464,47 @@ struct ChronicCareTests {
         #expect(sameDayLogs.count == 2)
     }
 
+    @MainActor
+    @Test func undoTakeRemovesLoggedDose() {
+        let store = DataStore()
+        store.clearAll()
+        let med = Medication(name: "Lisinopril", dose: "10mg", timesOfDay: [DateComponents(hour: 8, minute: 0)], remindersEnabled: true)
+        store.addMedication(med)
+        let comps = DateComponents(hour: 8, minute: 0)
+
+        let token = store.recordTakenDoseUndoable(medicationID: med.id, scheduleTime: comps)
+        #expect(token != nil)
+        #expect(token?.wasDuplicate == false)
+        #expect(store.intakeLogs.contains { $0.medicationID == med.id && $0.status == .taken })
+
+        store.revertIntake(token!)
+        #expect(!store.intakeLogs.contains { $0.medicationID == med.id })
+    }
+
+    @MainActor
+    @Test func undoDuplicateTakeRestoresOriginalLog() {
+        let store = DataStore()
+        store.clearAll()
+        let med = Medication(name: "Metformin", dose: "500mg", timesOfDay: [DateComponents(hour: 8, minute: 0)], remindersEnabled: true)
+        store.addMedication(med)
+        let comps = DateComponents(hour: 8, minute: 0)
+
+        // First take establishes the original log.
+        store.recordTakenDose(medicationID: med.id, scheduleTime: comps)
+        let originalLog = store.intakeLogs.first { $0.medicationID == med.id && $0.status == .taken }
+        #expect(originalLog != nil)
+
+        // Logging again is flagged as a duplicate and replaces the original.
+        let token = store.recordTakenDoseUndoable(medicationID: med.id, scheduleTime: comps)
+        #expect(token?.wasDuplicate == true)
+
+        // Undo must restore the original log exactly, not leave the dose unlogged.
+        store.revertIntake(token!)
+        let remaining = store.intakeLogs.filter { $0.medicationID == med.id && $0.status == .taken }
+        #expect(remaining.count == 1)
+        #expect(remaining.first?.id == originalLog?.id)
+    }
+
     @Test func medicationLabelParserExtractsNameDoseAndInstructions() {
         let result = MedicationLabelParser.parse(recognizedLines: [
             "AMLODIPINE BESYLATE 5 mg tablets",
