@@ -1769,6 +1769,8 @@
 "Readings" = "测量";
 "Feelings" = "感觉";
 "of %lld items" = "共 %lld 项";
+"Start today's record" = "开始今天的记录";
+"Log a reading or how you feel to begin." = "记录一次测量或当前感受,即可开始。";
 "Next item %@" = "下一项 %@";
 "Today's medication · %lld/%lld" = "今日用药 · %lld/%lld";
 "Today's medication (%lld/%lld)" = "今日用药（%lld/%lld）";

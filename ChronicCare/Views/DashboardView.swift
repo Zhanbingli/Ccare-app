@@ -590,27 +590,40 @@ private extension DashboardView {
                     .appFont(.headline)
                     .foregroundStyle(EditorialPalette.textPrimary)
 
-                HStack(alignment: .firstTextBaseline, spacing: EditorialSpacing.md) {
-                    Text("\(state.takenCount + state.skippedCount)")
-                        .appFontNumeric(.heroNumber)
-                        .foregroundStyle(EditorialPalette.textPrimary)
+                if state.totalCount > 0 {
+                    HStack(alignment: .firstTextBaseline, spacing: EditorialSpacing.md) {
+                        Text("\(state.takenCount + state.skippedCount)")
+                            .appFontNumeric(.heroNumber)
+                            .foregroundStyle(EditorialPalette.textPrimary)
 
-                    VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
-                        Rectangle()
-                            .fill(EditorialPalette.textPrimary)
-                            .frame(width: 48, height: 1)
-                        Text(String(format: NSLocalizedString("of %lld items", comment: "Daily dose progress denominator"), state.totalCount))
+                        VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
+                            Rectangle()
+                                .fill(EditorialPalette.textPrimary)
+                                .frame(width: 48, height: 1)
+                            Text(String(format: NSLocalizedString("of %lld items", comment: "Daily dose progress denominator"), state.totalCount))
+                                .appFont(.caption)
+                                .foregroundStyle(EditorialPalette.textSecondary)
+                        }
+                    }
+
+                    if let current = state.currentAction ?? state.nextUpcoming {
+                        nextDoseEditorialLine(item: current, isActionable: state.currentAction != nil)
+                    } else {
+                        Text(dailyStatusTitle(state: state))
                             .appFont(.caption)
                             .foregroundStyle(EditorialPalette.textSecondary)
                     }
-                }
-
-                if let current = state.currentAction ?? state.nextUpcoming {
-                    nextDoseEditorialLine(item: current, isActionable: state.currentAction != nil)
                 } else {
-                    Text(dailyStatusTitle(state: state))
+                    // No scheduled doses today: a hollow "0 of 0" reads as failure.
+                    // Orient toward the low-friction first action instead.
+                    Text(NSLocalizedString("Start today's record", comment: "Daily hero zero-state headline"))
+                        .appFont(.title)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(EditorialPalette.textPrimary)
+                    Text(NSLocalizedString("Log a reading or how you feel to begin.", comment: "Daily hero zero-state subtitle"))
                         .appFont(.caption)
                         .foregroundStyle(EditorialPalette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if let progressLine = quietVisitProgressLine() {
