@@ -395,7 +395,7 @@ struct MedicationFormView: View {
         VStack(alignment: .leading, spacing: EditorialSpacing.md) {
             Button {
                 Haptics.impact(.light)
-                withAnimation(.easeInOut(duration: 0.18)) { showMoreDetails.toggle() }
+                withAnimation(.easeInOut(duration: 0.22)) { showMoreDetails.toggle() }
             } label: {
                 HStack(alignment: .center, spacing: EditorialSpacing.md) {
                     VStack(alignment: .leading, spacing: EditorialSpacing.xs) {
@@ -423,10 +423,9 @@ struct MedicationFormView: View {
 
             if showMoreDetails {
                 moreDetailsContent
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.18), value: showMoreDetails)
     }
 
     @ViewBuilder

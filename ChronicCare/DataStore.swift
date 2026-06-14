@@ -313,6 +313,58 @@ final class DataStore: ObservableObject {
         )
     }
 
+    /// Captures what a single "taken" log replaced, so it can be reversed
+    /// exactly — restoring any prior log and pill supply.
+    struct IntakeUndoToken: Identifiable {
+        let id = UUID()
+        let medicationName: String
+        let wasDuplicate: Bool
+        let newLogID: UUID
+        let replacedLogs: [IntakeLog]
+    }
+
+    /// Records a taken dose and returns a token to undo it. The token snapshots
+    /// the logs `upsertIntake` removed (one final status per med/day/key) so a
+    /// later revert can put them back rather than just deleting.
+    func recordTakenDoseUndoable(
+        medicationID: UUID,
+        scheduleTime: DateComponents?,
+        scheduledDate: Date? = nil,
+        note: String? = nil
+    ) -> IntakeUndoToken? {
+        let priorLogs = intakeLogs
+        let priorIDs = Set(priorLogs.map(\.id))
+        recordTakenDose(
+            medicationID: medicationID,
+            scheduleTime: scheduleTime,
+            scheduledDate: scheduledDate,
+            note: note
+        )
+        let afterIDs = Set(intakeLogs.map(\.id))
+        guard let newLog = intakeLogs.first(where: { !priorIDs.contains($0.id) }) else { return nil }
+        let replaced = priorLogs.filter { !afterIDs.contains($0.id) }
+        let name = medications.first(where: { $0.id == medicationID })?.name ?? ""
+        return IntakeUndoToken(
+            medicationName: name,
+            wasDuplicate: replaced.contains { $0.status == .taken },
+            newLogID: newLog.id,
+            replacedLogs: replaced
+        )
+    }
+
+    /// Reverses a `recordTakenDoseUndoable`: drops the new log (restoring pills
+    /// via removeIntakeLog) and re-applies whatever it replaced.
+    func revertIntake(_ token: IntakeUndoToken) {
+        if let newLog = intakeLogs.first(where: { $0.id == token.newLogID }) {
+            removeIntakeLog(newLog)
+        }
+        for log in token.replacedLogs {
+            intakeLogs.append(log)
+            if log.status == .taken { decrementPills(for: log.medicationID) }
+        }
+        markReportDataChanged()
+    }
+
     /// Decrement pill supply when a dose is taken
     func decrementPills(for medicationID: UUID) {
         guard let idx = medications.firstIndex(where: { $0.id == medicationID }),
